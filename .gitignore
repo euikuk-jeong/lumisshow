@@ -1,5 +1,9 @@
 # Claude Code settings
 .claude/
+CLAUDE.md
+
+# Project docs (local only)
+doc/
 
 # Python
 __pycache__/
