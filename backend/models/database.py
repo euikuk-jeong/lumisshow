@@ -1,9 +1,6 @@
 import os
 import aiosqlite
 
-DATA_DIR = os.getenv("DATA_DIR", "./testdata/data")
-DB_PATH = os.path.join(DATA_DIR, "db", "app.db")
-
 _DDL = """
 PRAGMA foreign_keys = ON;
 
@@ -46,16 +43,21 @@ CREATE TABLE IF NOT EXISTS thumbnail_cache (
 """
 
 
+def _db_path() -> str:
+    data_dir = os.getenv("DATA_DIR", "./testdata/data")
+    return os.path.join(data_dir, "db", "app.db")
+
+
 async def init_db() -> None:
-    db_dir = os.path.dirname(DB_PATH)
-    os.makedirs(db_dir, exist_ok=True)
-    async with aiosqlite.connect(DB_PATH) as db:
+    path = _db_path()
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    async with aiosqlite.connect(path) as db:
         await db.executescript(_DDL)
         await db.commit()
 
 
 async def get_db():
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with aiosqlite.connect(_db_path()) as db:
         await db.execute("PRAGMA foreign_keys = ON")
         db.row_factory = aiosqlite.Row
         yield db

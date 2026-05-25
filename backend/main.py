@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from backend.models.database import init_db
-from backend.routers import auth
+from backend.routers import admin_browse, auth
 
 
 @asynccontextmanager
@@ -16,6 +16,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="LumisShow", version="0.1.0", lifespan=lifespan)
 
 app.include_router(auth.router)
+app.include_router(admin_browse.router)
 
 
 @app.get("/health")
