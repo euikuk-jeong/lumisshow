@@ -1,16 +1,15 @@
 import os
 from datetime import datetime, timedelta, timezone
 
+import bcrypt as _bcrypt
 from fastapi import Depends, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
-from passlib.context import CryptContext
 
 _ALGORITHM = "HS256"
 _ADMIN_JWT_EXPIRE_HOURS = 8
 _SHARE_SESSION_EXPIRE_HOURS = 24
 
-_pwd = CryptContext(schemes=["bcrypt"], deprecated="auto")
 _bearer = HTTPBearer()
 
 
@@ -24,10 +23,10 @@ def verify_admin_password(plain: str) -> bool:
     return plain == os.getenv("ADMIN_PASSWORD", "dev_password")
 
 def hash_password(plain: str) -> str:
-    return _pwd.hash(plain)
+    return _bcrypt.hashpw(plain.encode(), _bcrypt.gensalt()).decode()
 
 def verify_password(plain: str, hashed: str) -> bool:
-    return _pwd.verify(plain, hashed)
+    return _bcrypt.checkpw(plain.encode(), hashed.encode())
 
 
 # ── JWT ───────────────────────────────────────────────────────────────────────

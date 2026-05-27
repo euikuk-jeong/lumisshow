@@ -2,7 +2,6 @@
 
 ## 미완료
 
-- [ ] 공유 링크 관리 API 구현 (`routers/admin_links.py`) + 단위 테스트 <!-- 2026-05-26 추가 -->
 - [ ] 공개 공유 링크 뷰어 API (`routers/share.py`) + 단위 테스트 <!-- 2026-05-26 추가 -->
 - [ ] 미디어 서빙 API (`routers/media.py`: /thumb/, /media/, /music/) + 단위 테스트 <!-- 2026-05-26 추가 -->
 - [ ] E2E 테스트 설정 및 수행 (Playwright 또는 pytest + 실서버 기반, 주요 사용자 플로우 커버) <!-- 2026-05-26 추가 -->
@@ -11,6 +10,7 @@
 
 ## 완료
 
+- [x] 공유 링크 관리 API 구현 (`routers/admin_links.py`) + 단위 테스트 <!-- 2026-05-28 완료 -->
 - [x] 앨범 CRUD API 구현 (`routers/admin_albums.py`) + 단위 테스트 <!-- 2026-05-28 완료 -->
 - [x] Python 개발 환경 설정 (.venv, requirements.txt, pytest.ini) <!-- 2026-05-26 완료 -->
 - [x] phase1 브랜치 생성 및 GitHub push <!-- 2026-05-26 완료 -->
