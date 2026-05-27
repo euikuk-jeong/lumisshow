@@ -109,7 +109,7 @@ class LinkResponse(BaseModel):
 # ── Share (public viewer) ─────────────────────────────────────────────────────
 
 class ShareAuthRequest(BaseModel):
-    password: str
+    password: Optional[str] = None
 
 class ShareAlbumResponse(BaseModel):
     album_name: str

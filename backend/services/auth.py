@@ -1,5 +1,6 @@
 import os
 from datetime import datetime, timedelta, timezone
+from typing import Optional
 
 import bcrypt as _bcrypt
 from fastapi import Depends, HTTPException
@@ -69,3 +70,15 @@ def get_share_session_verifier(share_token: str):
             raise HTTPException(status_code=401, detail="Invalid share session")
         return share_token
     return _verify
+
+
+def verify_share_session_cookie(share_token: str, cookie: Optional[str]) -> None:
+    """httpOnly 쿠키 기반 공유 세션 검증. 실패 시 HTTPException(401) 발생."""
+    if not cookie:
+        raise HTTPException(status_code=401, detail="Share session required")
+    try:
+        payload = _decode(cookie)
+        if payload.get("sub") != f"share:{share_token}":
+            raise ValueError
+    except (JWTError, ValueError):
+        raise HTTPException(status_code=401, detail="Invalid share session")
