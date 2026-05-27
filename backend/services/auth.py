@@ -1,3 +1,4 @@
+import hmac
 import os
 from datetime import datetime, timedelta, timezone
 from typing import Optional
@@ -21,7 +22,8 @@ def _secret() -> str:
 # ── 비밀번호 ──────────────────────────────────────────────────────────────────
 
 def verify_admin_password(plain: str) -> bool:
-    return plain == os.getenv("ADMIN_PASSWORD", "dev_password")
+    expected = os.getenv("ADMIN_PASSWORD", "dev_password")
+    return hmac.compare_digest(plain.encode(), expected.encode())
 
 def hash_password(plain: str) -> str:
     return _bcrypt.hashpw(plain.encode(), _bcrypt.gensalt()).decode()
@@ -56,20 +58,6 @@ async def get_current_admin(
     except (JWTError, ValueError):
         raise HTTPException(status_code=401, detail="Invalid or expired token")
     return "admin"
-
-
-def get_share_session_verifier(share_token: str):
-    async def _verify(
-        cred: HTTPAuthorizationCredentials = Depends(_bearer),
-    ) -> str:
-        try:
-            payload = _decode(cred.credentials)
-            if payload.get("sub") != f"share:{share_token}":
-                raise ValueError
-        except (JWTError, ValueError):
-            raise HTTPException(status_code=401, detail="Invalid share session")
-        return share_token
-    return _verify
 
 
 def verify_share_session_cookie(share_token: str, cookie: Optional[str]) -> None:

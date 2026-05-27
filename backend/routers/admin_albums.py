@@ -34,6 +34,8 @@ async def _fetch_album(album_id: int, db) -> dict:
         (album_id,),
     ) as cur:
         row = await cur.fetchone()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Album not found")
     return dict(row)
 
 
@@ -137,15 +139,12 @@ async def add_photos(
     db=Depends(get_db),
 ):
     await _get_album_or_404(album_id, db)
-    async with db.execute(
-        "SELECT COALESCE(MAX(sort_order), -1) FROM album_photos WHERE album_id = ?",
-        (album_id,),
-    ) as cur:
-        row = await cur.fetchone()
-    next_order = row[0] + 1
     await db.executemany(
-        "INSERT OR IGNORE INTO album_photos (album_id, file_path, sort_order) VALUES (?, ?, ?)",
-        [(album_id, path, next_order + i) for i, path in enumerate(body.photo_paths)],
+        """
+        INSERT OR IGNORE INTO album_photos (album_id, file_path, sort_order)
+        VALUES (?, ?, (SELECT COALESCE(MAX(sort_order), -1) + 1 FROM album_photos WHERE album_id = ?))
+        """,
+        [(album_id, path, album_id) for path in body.photo_paths],
     )
     await db.commit()
 

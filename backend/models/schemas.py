@@ -50,6 +50,7 @@ class AlbumUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
     cover_path: Optional[str] = None
+    music_path: Optional[str] = None
 
 class AlbumPhotoResponse(BaseModel):
     id: int

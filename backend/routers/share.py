@@ -1,3 +1,4 @@
+import os
 from datetime import datetime, timezone
 from urllib.parse import quote
 
@@ -65,12 +66,14 @@ async def auth_link(
             raise HTTPException(status_code=401, detail="Invalid password")
 
     session_jwt = create_share_session_token(token)
+    base_url = os.getenv("BASE_URL", "")
     response.set_cookie(
         key=_COOKIE_NAME,
         value=session_jwt,
         httponly=True,
         max_age=_COOKIE_MAX_AGE,
         samesite="lax",
+        secure=base_url.startswith("https://"),
     )
     return {"ok": True}
 
@@ -95,6 +98,9 @@ async def get_album(token: str, request: Request, db=Depends(get_db)):
         (token,),
     ) as cur:
         row = await cur.fetchone()
+
+    if row is None:
+        raise HTTPException(status_code=404, detail="Album not found")
 
     return {
         "album_name": row["name"],
