@@ -2,7 +2,6 @@
 
 ## 미완료
 
-- [ ] 앨범 CRUD API 구현 (`routers/admin_albums.py`) + 단위 테스트 <!-- 2026-05-26 추가 -->
 - [ ] 공유 링크 관리 API 구현 (`routers/admin_links.py`) + 단위 테스트 <!-- 2026-05-26 추가 -->
 - [ ] 공개 공유 링크 뷰어 API (`routers/share.py`) + 단위 테스트 <!-- 2026-05-26 추가 -->
 - [ ] 미디어 서빙 API (`routers/media.py`: /thumb/, /media/, /music/) + 단위 테스트 <!-- 2026-05-26 추가 -->
@@ -12,6 +11,7 @@
 
 ## 완료
 
+- [x] 앨범 CRUD API 구현 (`routers/admin_albums.py`) + 단위 테스트 <!-- 2026-05-28 완료 -->
 - [x] Python 개발 환경 설정 (.venv, requirements.txt, pytest.ini) <!-- 2026-05-26 완료 -->
 - [x] phase1 브랜치 생성 및 GitHub push <!-- 2026-05-26 완료 -->
 - [x] SQLite 데이터 모델 구현 (database.py: 4개 테이블 DDL) <!-- 2026-05-26 완료 -->

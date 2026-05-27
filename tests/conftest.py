@@ -10,6 +10,9 @@ async def client(tmp_path, monkeypatch):
     monkeypatch.setenv("JWT_SECRET", "testsecret")
     (tmp_path / "photos").mkdir(parents=True, exist_ok=True)
 
+    from backend.models.database import init_db
+    await init_db()
+
     from backend.main import app
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
         yield c
