@@ -52,6 +52,10 @@ async def serve_media(file_path: str, request: Request, db=Depends(get_db)):
     return FileResponse(file_path)
 
 
+def _music_dir() -> str:
+    return os.path.join(os.getenv("DATA_DIR", "./testdata/data"), "music")
+
+
 @router.get("/music/{token}")
 async def serve_music(token: str, request: Request, db=Depends(get_db)):
     verify_share_session_cookie(token, request.cookies.get(_COOKIE))
@@ -60,6 +64,7 @@ async def serve_music(token: str, request: Request, db=Depends(get_db)):
         SELECT a.music_path FROM share_links sl
         JOIN albums a ON a.id = sl.album_id
         WHERE sl.token = ? AND sl.is_active = 1
+          AND (sl.expires_at IS NULL OR sl.expires_at > datetime('now'))
         """,
         (token,),
     ) as cur:
@@ -67,6 +72,10 @@ async def serve_music(token: str, request: Request, db=Depends(get_db)):
     if row is None or row["music_path"] is None:
         raise HTTPException(status_code=404, detail="Music not found")
     music_path = row["music_path"]
-    if not os.path.isfile(music_path):
+    allowed_dir = os.path.realpath(_music_dir())
+    resolved = os.path.realpath(music_path)
+    if resolved != allowed_dir and not resolved.startswith(allowed_dir + os.sep):
+        raise HTTPException(status_code=403, detail="Access denied")
+    if not os.path.isfile(resolved):
         raise HTTPException(status_code=404, detail="Music file not found")
-    return FileResponse(music_path)
+    return FileResponse(resolved)

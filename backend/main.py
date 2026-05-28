@@ -1,3 +1,4 @@
+import logging
 import os
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -10,10 +11,29 @@ from backend.models.database import init_db
 from backend.routers import admin_albums, admin_browse, admin_links, auth, media, share
 
 _FRONTEND_DIR = Path(__file__).parent.parent / "frontend"
+_logger = logging.getLogger(__name__)
+_INSECURE_DEFAULTS = {"dev_secret_key", "dev_password"}
+
+
+def _validate_env() -> None:
+    issues = [
+        name
+        for name, key, default in [
+            ("JWT_SECRET", "JWT_SECRET", "dev_secret_key"),
+            ("ADMIN_PASSWORD", "ADMIN_PASSWORD", "dev_password"),
+        ]
+        if os.getenv(key, default) in _INSECURE_DEFAULTS
+    ]
+    if issues:
+        _logger.warning(
+            "INSECURE CONFIGURATION: %s use default dev values — set secure values before production use.",
+            ", ".join(issues),
+        )
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    _validate_env()
     await init_db()
     yield
 

@@ -92,7 +92,7 @@ async def get_album(token: str, request: Request, db=Depends(get_db)):
         FROM share_links sl
         JOIN albums a ON a.id = sl.album_id
         LEFT JOIN album_photos ap ON ap.album_id = a.id
-        WHERE sl.token = ?
+        WHERE sl.token = ? AND sl.is_active = 1
         GROUP BY a.id
         """,
         (token,),
@@ -122,7 +122,7 @@ async def get_photos(token: str, request: Request, db=Depends(get_db)):
         SELECT ap.id, ap.file_path
         FROM share_links sl
         JOIN album_photos ap ON ap.album_id = sl.album_id
-        WHERE sl.token = ?
+        WHERE sl.token = ? AND sl.is_active = 1
         ORDER BY ap.sort_order, ap.id
         """,
         (token,),

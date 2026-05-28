@@ -82,7 +82,6 @@ async def get_album(
     _: str = Depends(get_current_admin),
     db=Depends(get_db),
 ):
-    await _get_album_or_404(album_id, db)
     album = await _fetch_album(album_id, db)
 
     async with db.execute(
@@ -102,7 +101,6 @@ async def update_album(
     _: str = Depends(get_current_admin),
     db=Depends(get_db),
 ):
-    await _get_album_or_404(album_id, db)
     updates = {
         k: v
         for k, v in body.model_dump(exclude_unset=True).items()

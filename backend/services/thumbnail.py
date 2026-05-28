@@ -47,13 +47,18 @@ def generate_thumbnail(file_path: str, size: str) -> str:
     return out_path
 
 
+_EXIF_ORIENTATION = 274
+_ROTATE_SWAP_ORIENTATIONS = {5, 6, 7, 8}
+
+
 def get_image_meta(file_path: str) -> dict:
     """EXIF에서 촬영일, 해상도 추출. 실패 시 None 반환."""
     try:
         with Image.open(file_path) as img:
-            img = ImageOps.exif_transpose(img)
             width, height = img.size
             exif = img.getexif()
+            if exif.get(_EXIF_ORIENTATION) in _ROTATE_SWAP_ORIENTATIONS:
+                width, height = height, width
             raw_dt: Optional[str] = exif.get(_EXIF_DATETIME_ORIGINAL) or exif.get(_EXIF_DATETIME)
             taken_at: Optional[datetime] = None
             if raw_dt:
