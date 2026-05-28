@@ -34,3 +34,29 @@ export const api = {
   put:    (path, body)  => request('PUT',    path, body),
   delete: (path, body)  => request('DELETE', path, body),
 };
+
+// Share viewer용: admin Bearer 토큰 불첨부, 401 시 admin 리다이렉트 없음
+async function shareRequest(method, path, body) {
+  const headers = {};
+  if (body !== undefined) headers['Content-Type'] = 'application/json';
+
+  const res = await fetch(path, {
+    method,
+    headers,
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+    credentials: 'include',
+  });
+
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.detail || `오류 ${res.status}`);
+  }
+
+  if (res.status === 204) return null;
+  return res.json();
+}
+
+export const shareApi = {
+  get:  (path)       => shareRequest('GET',  path),
+  post: (path, body) => shareRequest('POST', path, body),
+};

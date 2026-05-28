@@ -3,17 +3,21 @@ import { renderAdminLogin } from './pages/admin-login.js';
 import { renderAdminAlbums } from './pages/admin-albums.js';
 import { renderAdminAlbumEdit } from './pages/admin-album-edit.js';
 import { renderAdminBrowse } from './pages/admin-browse.js';
+import { renderShareAuth } from './pages/share-auth.js';
+import { renderAlbumView } from './pages/album-view.js';
 
 const ROUTES = [
-  { path: '/admin/login',     render: () => renderAdminLogin(),      public: true  },
-  { path: '/admin',           render: () => renderAdminAlbums(),     public: false },
-  { path: '/admin/',          render: () => renderAdminAlbums(),     public: false },
-  { path: '/admin/browse',    render: () => renderAdminBrowse(),     public: false },
+  { path: '/admin/login',     render: () => renderAdminLogin(),         public: true  },
+  { path: '/admin',           render: () => renderAdminAlbums(),        public: false },
+  { path: '/admin/',          render: () => renderAdminAlbums(),        public: false },
+  { path: '/admin/browse',    render: () => renderAdminBrowse(),        public: false },
   { path: '/admin/albums/new',render: () => renderAdminAlbumEdit(null), public: false },
 ];
 
 const DYNAMIC_ROUTES = [
-  { pattern: /^\/admin\/albums\/(\d+)$/, render: (m) => renderAdminAlbumEdit(m[1]), public: false },
+  { pattern: /^\/admin\/albums\/(\d+)$/,  render: (m) => renderAdminAlbumEdit(m[1]), public: false },
+  { pattern: /^\/s\/([^/]+)\/view$/,      render: (m) => renderAlbumView(m[1]),      public: true  },
+  { pattern: /^\/s\/([^/]+)$/,            render: (m) => renderShareAuth(m[1]),      public: true  },
 ];
 
 let _renderGen = 0;
