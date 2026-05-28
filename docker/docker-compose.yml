@@ -1,0 +1,20 @@
+services:
+  lumisshow:
+    image: lumisshow:latest
+    container_name: lumisshow
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-8080}:${APP_PORT:-8080}"
+    volumes:
+      - /volume1/photo:/mnt/photos:ro        # NAS 사진 폴더 (읽기 전용)
+      - /volume1/docker/lumisshow:/data      # DB, 썸네일, 음악 저장
+    environment:
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:?ADMIN_PASSWORD is required}
+      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET is required}
+      - PHOTO_ROOT=/mnt/photos
+      - DATA_DIR=/data
+      - BASE_URL=${BASE_URL:-http://localhost:8080}
+      - APP_PORT=${APP_PORT:-8080}
