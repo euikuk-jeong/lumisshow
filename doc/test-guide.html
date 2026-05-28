@@ -1,0 +1,1101 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LumisShow — Backend 테스트 가이드</title>
+  <style>
+    :root {
+      --bg: #0f1117;
+      --surface: #1a1d27;
+      --surface2: #222638;
+      --border: #2e3250;
+      --accent: #7c8cf8;
+      --accent2: #a78bfa;
+      --green: #4ade80;
+      --yellow: #fbbf24;
+      --red: #f87171;
+      --blue: #60a5fa;
+      --text: #e2e8f0;
+      --muted: #94a3b8;
+      --code-bg: #12141f;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      font-size: 14px;
+      line-height: 1.7;
+    }
+
+    /* layout */
+    .layout { display: flex; min-height: 100vh; }
+    nav {
+      width: 260px;
+      min-width: 260px;
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      padding: 24px 0;
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow-y: auto;
+    }
+    main {
+      flex: 1;
+      padding: 40px 48px;
+      max-width: 960px;
+    }
+
+    /* nav */
+    .nav-brand {
+      padding: 0 20px 20px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 12px;
+    }
+    .nav-brand h2 { font-size: 15px; color: var(--accent); letter-spacing: .5px; }
+    .nav-brand p  { font-size: 11px; color: var(--muted); margin-top: 2px; }
+    .nav-section { padding: 6px 20px 2px; font-size: 10px; font-weight: 700; letter-spacing: 1px; color: var(--muted); text-transform: uppercase; margin-top: 8px; }
+    nav a {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 20px;
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 13px;
+      border-left: 2px solid transparent;
+      transition: all .15s;
+    }
+    nav a:hover { color: var(--text); background: var(--surface2); }
+    nav a.active { color: var(--accent); border-left-color: var(--accent); background: rgba(124,140,248,.07); }
+    .nav-badge {
+      margin-left: auto;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      font-size: 10px;
+      padding: 1px 7px;
+      color: var(--muted);
+    }
+
+    /* heading */
+    h1 { font-size: 28px; font-weight: 700; color: var(--text); margin-bottom: 8px; }
+    h2 { font-size: 20px; font-weight: 600; color: var(--text); margin: 40px 0 16px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+    h3 { font-size: 15px; font-weight: 600; color: var(--accent); margin: 28px 0 10px; }
+    h4 { font-size: 13px; font-weight: 600; color: var(--muted); margin: 18px 0 8px; text-transform: uppercase; letter-spacing: .5px; }
+
+    /* paragraph / misc */
+    p { margin-bottom: 12px; color: var(--muted); }
+    strong { color: var(--text); }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    /* code */
+    code {
+      font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+      font-size: 12.5px;
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 1px 5px;
+      color: #c9d1d9;
+    }
+    pre {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 18px 20px;
+      overflow-x: auto;
+      margin: 12px 0 20px;
+      position: relative;
+    }
+    pre code {
+      background: none;
+      border: none;
+      padding: 0;
+      font-size: 12.5px;
+      line-height: 1.6;
+      color: #c9d1d9;
+    }
+    .comment { color: #6e7681; }
+    .kw { color: var(--accent2); }
+    .str { color: #a5d6ff; }
+    .fn  { color: #d2a8ff; }
+    .num { color: #79c0ff; }
+    .op  { color: var(--accent); }
+
+    /* badge */
+    .badge {
+      display: inline-block;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 2px 8px;
+      margin-right: 4px;
+    }
+    .badge-get    { background: rgba(96,165,250,.15); color: #93c5fd; border: 1px solid rgba(96,165,250,.3); }
+    .badge-post   { background: rgba(74,222,128,.15); color: #86efac; border: 1px solid rgba(74,222,128,.3); }
+    .badge-put    { background: rgba(251,191,36,.15);  color: #fcd34d; border: 1px solid rgba(251,191,36,.3); }
+    .badge-patch  { background: rgba(251,191,36,.1);   color: #fde68a; border: 1px solid rgba(251,191,36,.2); }
+    .badge-delete { background: rgba(248,113,113,.15); color: #fca5a5; border: 1px solid rgba(248,113,113,.3); }
+    .badge-pass   { background: rgba(74,222,128,.15);  color: #86efac; border: 1px solid rgba(74,222,128,.3); }
+    .badge-401    { background: rgba(248,113,113,.12); color: #fca5a5; border: 1px solid rgba(248,113,113,.25); }
+    .badge-403    { background: rgba(251,191,36,.12);  color: #fcd34d; border: 1px solid rgba(251,191,36,.25); }
+    .badge-404    { background: rgba(148,163,184,.12); color: #cbd5e1; border: 1px solid rgba(148,163,184,.25); }
+    .badge-e2e    { background: rgba(167,139,250,.15); color: #c4b5fd; border: 1px solid rgba(167,139,250,.3); }
+
+    /* summary card */
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+      gap: 12px;
+      margin: 20px 0 32px;
+    }
+    .summary-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px;
+      text-align: center;
+    }
+    .summary-card .num {
+      font-size: 28px;
+      font-weight: 700;
+      color: var(--accent);
+      line-height: 1;
+    }
+    .summary-card .label {
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: 4px;
+    }
+
+    /* table */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 12px 0 24px;
+      font-size: 13px;
+    }
+    th {
+      background: var(--surface2);
+      padding: 10px 14px;
+      text-align: left;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: .5px;
+      border-bottom: 1px solid var(--border);
+    }
+    td {
+      padding: 9px 14px;
+      border-bottom: 1px solid rgba(46,50,80,.5);
+      vertical-align: top;
+    }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: rgba(255,255,255,.02); }
+    td.test-name { font-family: 'Cascadia Code','Fira Code','Consolas',monospace; font-size: 12px; color: #c9d1d9; }
+    td.desc { color: var(--muted); }
+
+    /* callout */
+    .callout {
+      border-radius: 8px;
+      padding: 14px 18px;
+      margin: 16px 0;
+      border-left: 3px solid;
+      font-size: 13px;
+    }
+    .callout-info  { background: rgba(96,165,250,.07);  border-color: #60a5fa; }
+    .callout-warn  { background: rgba(251,191,36,.07);  border-color: #fbbf24; }
+    .callout-tip   { background: rgba(74,222,128,.07);  border-color: #4ade80; }
+    .callout p { margin: 0; color: var(--text); }
+
+    /* module header */
+    .module-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px 20px;
+      margin: 32px 0 16px;
+    }
+    .module-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      flex-shrink: 0;
+    }
+    .module-header .info h3 { margin: 0; font-size: 14px; }
+    .module-header .info p  { margin: 2px 0 0; font-size: 12px; }
+    .module-count {
+      margin-left: auto;
+      font-size: 22px;
+      font-weight: 700;
+      color: var(--accent);
+    }
+    .module-count span { font-size: 12px; font-weight: 400; color: var(--muted); }
+
+    /* section divider */
+    .section-tag {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 2px 8px;
+      margin-bottom: 8px;
+    }
+
+    /* footer */
+    footer {
+      padding: 32px 48px;
+      border-top: 1px solid var(--border);
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    /* scrollbar */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  </style>
+</head>
+<body>
+<div class="layout">
+
+<!-- ── nav ── -->
+<nav>
+  <div class="nav-brand">
+    <h2>LumisShow</h2>
+    <p>Backend 테스트 가이드</p>
+  </div>
+
+  <div class="nav-section">개요</div>
+  <a href="#overview">전체 현황</a>
+  <a href="#setup">환경 설정</a>
+  <a href="#run">테스트 실행</a>
+  <a href="#fixture">Fixture 구조</a>
+
+  <div class="nav-section">단위 테스트</div>
+  <a href="#auth">인증 (auth) <span class="nav-badge">6</span></a>
+  <a href="#thumbnail">썸네일 서비스 <span class="nav-badge">11</span></a>
+  <a href="#browse">탐색 / 검색 <span class="nav-badge">19</span></a>
+  <a href="#albums">앨범 CRUD <span class="nav-badge">25</span></a>
+  <a href="#links">공유 링크 <span class="nav-badge">18</span></a>
+  <a href="#share">Share 뷰어 API <span class="nav-badge">16</span></a>
+  <a href="#media">미디어 서빙 <span class="nav-badge">15</span></a>
+
+  <div class="nav-section">E2E 테스트</div>
+  <a href="#e2e">사용자 플로우 <span class="nav-badge">4</span></a>
+
+  <div class="nav-section">참고</div>
+  <a href="#coverage">커버리지 측정</a>
+  <a href="#tips">디버깅 팁</a>
+</nav>
+
+<!-- ── main ── -->
+<main>
+
+<!-- overview -->
+<section id="overview">
+  <h1>Backend 테스트 가이드</h1>
+  <p>LumisShow 백엔드(FastAPI) 전체 테스트 스위트 문서. 단위 테스트 110개 + E2E 4개, 총 <strong>114개</strong> 테스트를 다룬다.</p>
+
+  <div class="summary-grid">
+    <div class="summary-card">
+      <div class="num">114</div>
+      <div class="label">전체 테스트</div>
+    </div>
+    <div class="summary-card">
+      <div class="num">110</div>
+      <div class="label">단위 테스트</div>
+    </div>
+    <div class="summary-card">
+      <div class="num">4</div>
+      <div class="label">E2E 플로우</div>
+    </div>
+    <div class="summary-card">
+      <div class="num">8</div>
+      <div class="label">테스트 파일</div>
+    </div>
+    <div class="summary-card">
+      <div class="num">7</div>
+      <div class="label">API 그룹</div>
+    </div>
+  </div>
+
+  <table>
+    <thead>
+      <tr><th>파일</th><th>대상</th><th>테스트 수</th><th>방식</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>test_auth.py</code></td><td>로그인·로그아웃·JWT 검증</td><td>6</td><td>ASGI (httpx)</td></tr>
+      <tr><td><code>test_thumbnail.py</code></td><td>썸네일 생성·캐시·EXIF</td><td>11</td><td>서비스 직접 호출</td></tr>
+      <tr><td><code>test_browse.py</code></td><td>탐색·검색·Admin 썸네일</td><td>19</td><td>ASGI (httpx)</td></tr>
+      <tr><td><code>test_admin_albums.py</code></td><td>앨범 CRUD + 사진 관리</td><td>25</td><td>ASGI (httpx)</td></tr>
+      <tr><td><code>test_admin_links.py</code></td><td>공유 링크 CRUD</td><td>18</td><td>ASGI (httpx)</td></tr>
+      <tr><td><code>test_share.py</code></td><td>공유 뷰어 API + 쿠키 인증</td><td>16</td><td>ASGI (httpx)</td></tr>
+      <tr><td><code>test_media.py</code></td><td>원본·썸네일·음악 서빙</td><td>15</td><td>ASGI (httpx)</td></tr>
+      <tr><td><code>test_e2e.py</code></td><td>전체 사용자 플로우</td><td>4</td><td>실 uvicorn 서버</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- setup -->
+<section id="setup">
+  <h2>환경 설정</h2>
+
+  <h3>필수 패키지 설치</h3>
+  <pre><code><span class="comment"># 가상환경 생성 (최초 1회)</span>
+python -m venv .venv
+
+<span class="comment"># 활성화 (Windows PowerShell)</span>
+.venv\Scripts\Activate.ps1
+
+<span class="comment"># 의존성 설치</span>
+pip install -r backend/requirements.txt</code></pre>
+
+  <h3>테스트 전용 추가 패키지</h3>
+  <pre><code>pip install pytest pytest-asyncio httpx uvicorn</code></pre>
+
+  <h3>pytest.ini 설정</h3>
+  <pre><code>[pytest]
+asyncio_mode = auto    <span class="comment"># 모든 async def test_* 자동으로 코루틴 실행</span>
+testpaths = tests      <span class="comment"># 테스트 탐색 루트</span></code></pre>
+
+  <div class="callout callout-info">
+    <p><strong>asyncio_mode = auto</strong> — <code>@pytest.mark.asyncio</code> 데코레이터 없이도 <code>async def</code> 테스트가 자동 실행된다. pytest-asyncio 0.21+ 필요.</p>
+  </div>
+
+  <h3>환경변수</h3>
+  <p>단위 테스트는 <code>conftest.py</code>의 fixture가 <code>monkeypatch</code>로 환경변수를 주입한다. 별도 <code>.env</code> 파일 불필요.</p>
+  <table>
+    <thead><tr><th>변수</th><th>테스트 픽스처 값</th><th>용도</th></tr></thead>
+    <tbody>
+      <tr><td><code>ADMIN_PASSWORD</code></td><td><code>testpass</code></td><td>Admin 로그인 패스워드</td></tr>
+      <tr><td><code>JWT_SECRET</code></td><td><code>testsecret</code></td><td>JWT 서명 키</td></tr>
+      <tr><td><code>DATA_DIR</code></td><td><code>tmp_path/data</code></td><td>DB·썸네일 캐시 경로</td></tr>
+      <tr><td><code>PHOTO_ROOT</code></td><td><code>tmp_path/photos</code></td><td>사진 루트 경로</td></tr>
+      <tr><td><code>BASE_URL</code></td><td><code>http://localhost:8080</code></td><td>공유 링크 URL 생성</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- run -->
+<section id="run">
+  <h2>테스트 실행</h2>
+
+  <h3>전체 실행</h3>
+  <pre><code>.venv\Scripts\python -m pytest</code></pre>
+
+  <h3>파일 단위 실행</h3>
+  <pre><code><span class="comment"># 특정 모듈만</span>
+.venv\Scripts\python -m pytest tests/test_auth.py
+.venv\Scripts\python -m pytest tests/test_media.py
+
+<span class="comment"># E2E 제외하고 빠르게</span>
+.venv\Scripts\python -m pytest --ignore=tests/test_e2e.py</code></pre>
+
+  <h3>테스트 이름으로 필터</h3>
+  <pre><code><span class="comment"># 이름에 "password"가 포함된 테스트만</span>
+.venv\Scripts\python -m pytest -k "password"
+
+<span class="comment"># 특정 테스트 하나</span>
+.venv\Scripts\python -m pytest tests/test_auth.py::test_login_success</code></pre>
+
+  <h3>상세 출력</h3>
+  <pre><code><span class="comment"># 각 테스트 이름 표시</span>
+.venv\Scripts\python -m pytest -v
+
+<span class="comment"># 실패 시 즉시 중단 + 로컬 변수 출력</span>
+.venv\Scripts\python -m pytest -x -l</code></pre>
+
+  <h3>예상 출력</h3>
+  <pre><code>========================= test session starts ==========================
+platform win32 -- Python 3.12.x
+asyncio_mode: auto
+collected 114 items
+
+tests/test_auth.py ......                                        [  5%]
+tests/test_thumbnail.py ...........                              [ 15%]
+tests/test_browse.py ...................                          [ 31%]
+tests/test_admin_albums.py .........................              [ 53%]
+tests/test_admin_links.py ..................                      [ 69%]
+tests/test_share.py ................                             [ 83%]
+tests/test_media.py ...............                              [ 96%]
+tests/test_e2e.py ....                                          [100%]
+
+========================= <span style="color:#4ade80">114 passed</span> in 8.xx s ==========================</code></pre>
+</section>
+
+<!-- fixture -->
+<section id="fixture">
+  <h2>Fixture 구조</h2>
+
+  <h3>공통 Fixture (conftest.py)</h3>
+  <pre><code><span class="comment"># tests/conftest.py</span>
+
+<span class="kw">@pytest_asyncio.fixture</span>
+<span class="kw">async def</span> <span class="fn">client</span>(tmp_path, monkeypatch):
+    <span class="comment">"""비인증 ASGI 클라이언트. 모든 테스트의 베이스."""</span>
+    monkeypatch.setenv(<span class="str">"DATA_DIR"</span>, str(tmp_path / <span class="str">"data"</span>))
+    monkeypatch.setenv(<span class="str">"PHOTO_ROOT"</span>, str(tmp_path / <span class="str">"photos"</span>))
+    monkeypatch.setenv(<span class="str">"ADMIN_PASSWORD"</span>, <span class="str">"testpass"</span>)
+    monkeypatch.setenv(<span class="str">"JWT_SECRET"</span>, <span class="str">"testsecret"</span>)
+    (tmp_path / <span class="str">"photos"</span>).mkdir(parents=True, exist_ok=True)
+
+    <span class="kw">from</span> backend.models.database <span class="kw">import</span> init_db
+    <span class="kw">await</span> init_db()
+
+    <span class="kw">from</span> backend.main <span class="kw">import</span> app
+    <span class="kw">async with</span> AsyncClient(transport=ASGITransport(app=app),
+                            base_url=<span class="str">"http://test"</span>) <span class="kw">as</span> c:
+        <span class="kw">yield</span> c
+
+
+<span class="kw">@pytest_asyncio.fixture</span>
+<span class="kw">async def</span> <span class="fn">admin_client</span>(client):
+    <span class="comment">"""Admin JWT가 헤더에 설정된 클라이언트."""</span>
+    r = <span class="kw">await</span> client.post(<span class="str">"/api/auth/login"</span>, json={<span class="str">"password"</span>: <span class="str">"testpass"</span>})
+    client.headers[<span class="str">"Authorization"</span>] = <span class="fn">f</span><span class="str">"Bearer {r.json()['access_token']}"</span>
+    <span class="kw">yield</span> client</code></pre>
+
+  <div class="callout callout-tip">
+    <p><strong>function scope (기본)</strong> — 각 테스트마다 새 SQLite DB(in-memory, tmp_path 기반)가 생성된다. 테스트 간 상태 오염 없음.</p>
+  </div>
+
+  <h3>Fixture 의존 관계</h3>
+  <table>
+    <thead><tr><th>Fixture</th><th>의존</th><th>제공 내용</th></tr></thead>
+    <tbody>
+      <tr><td><code>client</code></td><td>tmp_path, monkeypatch</td><td>비인증 AsyncClient + 격리된 DB</td></tr>
+      <tr><td><code>admin_client</code></td><td>client</td><td>Authorization 헤더 자동 첨부</td></tr>
+      <tr><td><code>media_env</code></td><td>admin_client, tmp_path</td><td>이미지 파일 + 앨범 + 링크 + 세션 쿠키</td></tr>
+      <tr><td><code>music_env</code></td><td>admin_client, tmp_path</td><td>MP3 파일 + 앨범 + 링크 + 세션 쿠키</td></tr>
+      <tr><td><code>live_server</code></td><td>tmp_path_factory</td><td>실 uvicorn 서버 (module scope)</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ── 단위 테스트 ── -->
+
+<!-- auth -->
+<section id="auth">
+  <div class="module-header">
+    <div class="module-icon" style="background:rgba(96,165,250,.15)">🔐</div>
+    <div class="info">
+      <h3>test_auth.py</h3>
+      <p style="color:var(--muted)">Admin 로그인·로그아웃·JWT 검증</p>
+    </div>
+    <div class="module-count">6 <span>tests</span></div>
+  </div>
+
+  <p>Admin 인증 흐름: <code>POST /api/auth/login</code> → JWT 발급 → <code>GET /api/auth/me</code> 검증 → 로그아웃.</p>
+
+  <table>
+    <thead><tr><th>테스트</th><th>검증 내용</th><th>결과</th></tr></thead>
+    <tbody>
+      <tr>
+        <td class="test-name">test_login_success</td>
+        <td class="desc">올바른 패스워드로 로그인 → <code>access_token</code>, <code>token_type: bearer</code> 반환</td>
+        <td><span class="badge badge-pass">200</span></td>
+      </tr>
+      <tr>
+        <td class="test-name">test_login_wrong_password</td>
+        <td class="desc">잘못된 패스워드 → 인증 실패</td>
+        <td><span class="badge badge-401">401</span></td>
+      </tr>
+      <tr>
+        <td class="test-name">test_me_with_valid_token</td>
+        <td class="desc">유효한 Bearer 토큰으로 <code>/api/auth/me</code> → <code>user: "admin"</code></td>
+        <td><span class="badge badge-pass">200</span></td>
+      </tr>
+      <tr>
+        <td class="test-name">test_me_without_token</td>
+        <td class="desc">Authorization 헤더 없음 → HTTPBearer 거부</td>
+        <td><span class="badge badge-401">401</span></td>
+      </tr>
+      <tr>
+        <td class="test-name">test_me_with_invalid_token</td>
+        <td class="desc">위조 토큰(<code>invalid.token.here</code>) → JWT 검증 실패</td>
+        <td><span class="badge badge-401">401</span></td>
+      </tr>
+      <tr>
+        <td class="test-name">test_logout</td>
+        <td class="desc">로그아웃 엔드포인트 정상 응답 (클라이언트 측 토큰 폐기용)</td>
+        <td><span class="badge badge-pass">200</span></td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- thumbnail -->
+<section id="thumbnail">
+  <div class="module-header">
+    <div class="module-icon" style="background:rgba(167,139,250,.15)">🖼️</div>
+    <div class="info">
+      <h3>test_thumbnail.py</h3>
+      <p style="color:var(--muted)">썸네일 서비스 — 생성·크기·캐시·EXIF·메타</p>
+    </div>
+    <div class="module-count">11 <span>tests</span></div>
+  </div>
+
+  <p>FastAPI를 거치지 않고 <code>backend.services.thumbnail</code>의 함수를 직접 호출한다.</p>
+
+  <div class="section-tag">썸네일 생성</div>
+  <table>
+    <thead><tr><th>테스트</th><th>검증 내용</th></tr></thead>
+    <tbody>
+      <tr><td class="test-name">test_generate_thumbnail_small</td><td class="desc">small 사이즈 생성 → 300×200 이내 JPEG 파일 존재</td></tr>
+      <tr><td class="test-name">test_generate_thumbnail_medium</td><td class="desc">medium 사이즈 생성 → 800×600 이내</td></tr>
+      <tr><td class="test-name">test_thumbnail_aspect_ratio_preserved</td><td class="desc">1000×800 원본 → small 박스 내 비율 유지 → 250×200 (5:4 비율 정확히 맞음)</td></tr>
+      <tr><td class="test-name">test_thumbnail_cached_not_regenerated</td><td class="desc">같은 경로로 두 번 호출 → mtime 동일 (캐시 hit, 재생성 없음)</td></tr>
+      <tr><td class="test-name">test_thumbnail_output_is_jpeg</td><td class="desc">출력 파일 포맷 = JPEG</td></tr>
+    </tbody>
+  </table>
+
+  <div class="section-tag">이미지 메타</div>
+  <table>
+    <thead><tr><th>테스트</th><th>검증 내용</th></tr></thead>
+    <tbody>
+      <tr><td class="test-name">test_get_image_meta_dimensions</td><td class="desc">width=1000, height=800 정확히 반환</td></tr>
+      <tr><td class="test-name">test_get_image_meta_no_exif</td><td class="desc">EXIF 없는 파일 → <code>taken_at: null</code></td></tr>
+      <tr><td class="test-name">test_get_image_meta_with_exif</td><td class="desc">EXIF DateTimeOriginal(36867) 주입 → <code>datetime(2024,3,15,10,30,0)</code> 파싱</td></tr>
+      <tr><td class="test-name">test_get_image_meta_invalid_file</td><td class="desc">손상된 JPEG → <code>{width:null, height:null, taken_at:null}</code> 안전 반환</td></tr>
+    </tbody>
+  </table>
+
+  <div class="section-tag">경로 결정론</div>
+  <table>
+    <thead><tr><th>테스트</th><th>검증 내용</th></tr></thead>
+    <tbody>
+      <tr><td class="test-name">test_thumb_path_deterministic</td><td class="desc">같은 경로+사이즈 → 항상 동일한 캐시 파일 경로 (MD5 기반)</td></tr>
+      <tr><td class="test-name">test_thumb_path_different_sizes</td><td class="desc">small ≠ medium 캐시 경로</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- browse -->
+<section id="browse">
+  <div class="module-header">
+    <div class="module-icon" style="background:rgba(74,222,128,.15)">📁</div>
+    <div class="info">
+      <h3>test_browse.py</h3>
+      <p style="color:var(--muted)">폴더 탐색·파일 검색·Admin 썸네일 API</p>
+    </div>
+    <div class="module-count">19 <span>tests</span></div>
+  </div>
+
+  <div class="callout callout-info">
+    <p>이 모듈은 별도 <code>photo_root</code> fixture를 사용한다. <code>photos/</code> 아래 JPEG 3개 + <code>photos/sub/nested.jpg</code> 1개 + <code>not_an_image.txt</code> 1개를 Pillow로 생성한다.</p>
+  </div>
+
+  <div class="section-tag">GET /api/admin/browse</div>
+  <table>
+    <thead><tr><th>테스트</th><th>검증 내용</th><th>결과</th></tr></thead>
+    <tbody>
+      <tr><td class="test-name">test_browse_root_folders_and_photos</td><td class="desc">루트: 폴더 1개(sub), 사진 3개 반환</td><td><span class="badge badge-pass">200</span></td></tr>
+      <tr><td class="test-name">test_browse_skips_non_images</td><td class="desc"><code>.txt</code> 파일 결과에서 제외</td><td><span class="badge badge-pass">200</span></td></tr>
+      <tr><td class="test-name">test_browse_subfolder</td><td class="desc"><code>?path=sub</code> → nested.jpg 1개</td><td><span class="badge badge-pass">200</span></td></tr>
+      <tr><td class="test-name">test_browse_child_count</td><td class="desc">sub 폴더의 <code>child_count == 1</code></td><td><span class="badge badge-pass">200</span></td></tr>
+      <tr><td class="test-name">test_browse_photo_has_thumb_url</td><td class="desc">각 사진에 <code>thumb_url</code> 포함, <code>/api/admin/thumb</code>로 시작</td><td><span class="badge badge-pass">200</span></td></tr>
+      <tr><td class="test-name">test_browse_path_traversal_blocked</td><td class="desc"><code>?path=../../etc</code> → Path traversal 차단</td><td><span class="badge badge-401">400</span></td></tr>
+      <tr><td class="test-name">test_browse_nonexistent_path</td><td class="desc">존재하지 않는 경로</td><td><span class="badge badge-404">404</span></td></tr>
+      <tr><td class="test-name">test_browse_requires_auth</td><td class="desc">인증 없이 요청</td><td><span class="badge badge-401">401</span></td></tr>
+    </tbody>
+  </table>
+
+  <div class="section-tag">GET /api/admin/search</div>
+  <table>
+    <thead><tr><th>테스트</th><th>검증 내용</th><th>결과</th></tr></thead>
+    <tbody>
+      <tr><td class="test-name">test_search_all</td><td class="desc">쿼리 없음 → 전체 4개, page=1</td><td><span class="badge badge-pass">200</span></td></tr>
+      <tr><td class="test-name">test_search_by_name</td><td class="desc"><code>?q=photo0</code> → 1건 정확히 일치</td><td><span class="badge badge-pass">200</span></td></tr>
+      <tr><td class="test-name">test_search_by_name_case_insensitive</td><td class="desc"><code>?q=PHOTO</code> (대문자) → 3건 (대소문자 무시)</td><td><span class="badge badge-pass">200</span></td></tr>
+      <tr><td class="test-name">test_search_in_subfolder</td><td class="desc"><code>?folder=sub</code> → nested.jpg 1건</td><td><span class="badge badge-pass">200</span></td></tr>
+      <tr><td class="test-name">test_search_pagination</td><td class="desc"><code>?size=2&amp;page=2</code> → total=4, items 2개, page=2</td><td><span class="badge badge-pass">200</span></td></tr>
+      <tr><td class="test-name">test_search_requires_auth</td><td class="desc">인증 없이 요청</td><td><span class="badge badge-401">401</span></td></tr>
+    </tbody>
+  </table>
+
+  <div class="section-tag">GET /api/admin/thumb</div>
+  <table>
+    <thead><tr><th>테스트</th><th>검증 내용</th><th>결과</th></tr></thead>
+    <tbody>
+      <tr><td class="test-name">test_thumb_returns_image</td><td class="desc"><code>size=small</code> → <code>image/jpeg</code> 반환</td><td><span class="badge badge-pass">200</span></td></tr>
+      <tr><td class="test-name">test_thumb_invalid_size</td><td class="desc"><code>size=huge</code> → 유효하지 않은 size</td><td><span class="badge badge-401">400</span></td></tr>
+      <tr><td class="test-name">test_thumb_path_traversal_blocked</td><td class="desc"><code>path=../../etc/passwd</code> → 차단</td><td><span class="badge badge-401">400</span></td></tr>
+      <tr><td class="test-name">test_thumb_nonexistent_file</td><td class="desc">존재하지 않는 파일명</td><td><span class="badge badge-404">404</span></td></tr>
+      <tr><td class="test-name">test_thumb_requires_auth</td><td class="desc">인증 없이 요청</td><td><span class="badge badge-401">401</span></td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- albums -->
+<section id="albums">
+  <div class="module-header">
+    <div class="module-icon" style="background:rgba(251,191,36,.15)">📚</div>
+    <div class="info">
+      <h3>test_admin_albums.py</h3>
+      <p style="color:var(--muted)">앨범 CRUD + 사진 추가/제거/순서 변경</p>
+    </div>
+    <div class="module-count">25 <span>tests</span></div>
+  </div>
+
+  <div class="section-tag">목록 & 생성 — POST /api/admin/albums</div>
+  <table>
+    <thead><tr><th>테스트</th><th>검증 내용</th><th>결과</th></tr></thead>
+    <tbody>
+      <tr><td class="test-name">test_list_albums_empty</td><td class="desc">초기 상태 → 빈 배열</td><td><span class="badge badge-pass">200</span></td></tr>
+      <tr><td class="test-name">test_create_album_minimal</td><td class="desc">이름만 → <code>id</code>, <code>photo_count: 0</code>, <code>name</code> 포함</td><td><span class="badge badge-pass">201</span></td></tr>
+      <tr><td class="test-name">test_create_album_with_description</td><td class="desc"><code>description</code> 포함 생성 → 응답에 반영</td><td><span class="badge badge-pass">201</span></td></tr>
+      <tr><td class="test-name">test_create_album_with_photos</td><td class="desc"><code>photo_paths</code> 2개 → <code>photo_count: 2</code></td><td><span class="badge badge-pass">201</span></td></tr>
+      <tr><td class="test-name">test_list_albums_returns_all</td><td class="desc">2개 생성 후 목록 조회 → 2건</td><td><span class="badge badge-pass">200</span></td></tr>
+    </tbody>
+  </table>
+
+  <div class="section-tag">상세 조회 — GET /api/admin/albums/{id}</div>
+  <table>
+    <thead><tr><th>테스트</th><th>검증 내용</th><th>결과</th></tr></thead>
+    <tbody>
+      <tr><td class="test-name">test_get_album_detail</td><td class="desc">사진 1개 포함 앨범 → photos 배열에 <code>file_path</code> 포함</td><td><span class="badge badge-pass">200</span></td></tr>
+      <tr><td class="test-name">test_get_album_photos_sorted_by_sort_order</td><td class="desc">삽입 순서대로 정렬 (first.jpg &lt; second.jpg)</td><td><span class="badge badge-pass">200</span></td></tr>
+      <tr><td class="test-name">test_get_album_not_found</td><td class="desc">존재하지 않는 ID(9999)</td><td><span class="badge badge-404">404</span></td></tr>
+    </tbody>
+  </table>
+
+  <div class="section-tag">수정 — PATCH /api/admin/albums/{id}</div>
+  <table>
+    <thead><tr><th>테스트</th><th>검증 내용</th><th>결과</th></tr></thead>
+    <tbody>
+      <tr><td class="test-name">test_update_album_name</td><td class="desc">이름 변경 → 응답에 새 이름 반영</td><td><span class="badge badge-pass">200</span></td></tr>
+      <tr><td class="test-name">test_update_album_cover_path</td><td class="desc"><code>cover_path</code> 설정 → 응답에 반영</td><td><span class="badge badge-pass">200</span></td></tr>
+      <tr><td class="test-name">test_update_album_empty_body_is_noop</td><td class="desc">빈 body 전송 → 기존 값 유지</td><td><span class="badge badge-pass">200</span></td></tr>
+      <tr><td class="test-name">test_update_album_not_found</td><td class="desc">존재하지 않는 ID</td><td><span class="badge badge-404">404</span></td></tr>
+    </tbody>
+  </table>
+
+  <div class="section-tag">삭제 — DELETE /api/admin/albums/{id}</div>
+  <table>
+    <thead><tr><th>테스트</th><th>검증 내용</th><th>결과</th></tr></thead>
+    <tbody>
+      <tr><td class="test-name">test_delete_album</td><td class="desc">삭제 후 GET → 404</td><td><span class="badge badge-pass">204</span></td></tr>
+      <tr><td class="test-name">test_delete_album_cascades_photos</td><td class="desc">앨범 삭제 시 album_photos cascade 삭제 확인</td><td><span class="badge badge-pass">204</span></td></tr>
+      <tr><td class="test-name">test_delete_album_not_found</td><td class="desc">존재하지 않는 ID</td><td><span class="badge badge-404">404</span></td></tr>
+    </tbody>
+  </table>
+
+  <div class="section-tag">사진 추가 — POST /api/admin/albums/{id}/photos</div>
+  <table>
+    <thead><tr><th>테스트</th><th>검증 내용</th><th>결과</th></tr></thead>
+    <tbody>
+      <tr><td class="test-name">test_add_photos</td><td class="desc">2개 추가 → <code>photo_count: 2</code></td><td><span class="badge badge-pass">204</span></td></tr>
+      <tr><td class="test-name">test_add_photos_deduplication</td><td class="desc">같은 경로 중복 추가 → <code>photo_count: 1</code> (중복 무시)</td><td><span class="badge badge-pass">204</span></td></tr>
+      <tr><td class="test-name">test_add_photos_appends_sort_order</td><td class="desc">기존 사진 뒤에 추가 → sort_order 순서 유지</td><td><span class="badge badge-pass">204</span></td></tr>
+      <tr><td class="test-name">test_add_photos_to_nonexistent_album</td><td class="desc">존재하지 않는 앨범</td><td><span class="badge badge-404">404</span></td></tr>
+    </tbody>
+  </table>
+
+  <div class="section-tag">사진 제거 / 순서 변경</div>
+  <table>
+    <thead><tr><th>테스트</th><th>검증 내용</th><th>결과</th></tr></thead>
+    <tbody>
+      <tr><td class="test-name">test_remove_photos</td><td class="desc">f.jpg 제거 후 g.jpg만 남음</td><td><span class="badge badge-pass">204</span></td></tr>
+      <tr><td class="test-name">test_remove_nonexistent_photo_is_noop</td><td class="desc">없는 경로 제거 요청 → 오류 없이 204</td><td><span class="badge badge-pass">204</span></td></tr>
+      <tr><td class="test-name">test_reorder_photos</td><td class="desc">sort_order 교체 → 이후 목록 순서 변경 확인</td><td><span class="badge badge-pass">204</span></td></tr>
+    </tbody>
+  </table>
+
+  <div class="section-tag">인증 필요</div>
+  <table>
+    <thead><tr><th>테스트</th><th>검증</th><th>결과</th></tr></thead>
+    <tbody>
+      <tr><td class="test-name">test_list_albums_requires_auth</td><td class="desc">GET /api/admin/albums 무인증</td><td><span class="badge badge-401">401</span></td></tr>
+      <tr><td class="test-name">test_create_album_requires_auth</td><td class="desc">POST /api/admin/albums 무인증</td><td><span class="badge badge-401">401</span></td></tr>
+      <tr><td class="test-name">test_delete_album_requires_auth</td><td class="desc">DELETE /api/admin/albums/1 무인증</td><td><span class="badge badge-401">401</span></td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- links -->
+<section id="links">
+  <div class="module-header">
+    <div class="module-icon" style="background:rgba(248,113,113,.15)">🔗</div>
+    <div class="info">
+      <h3>test_admin_links.py</h3>
+      <p style="color:var(--muted)">공유 링크 CRUD — 생성·수정·삭제·cascade</p>
+    </div>
+    <div class="module-count">18 <span>tests</span></div>
+  </div>
+
+  <div class="section-tag">목록 & 생성 — GET·POST /api/admin/albums/{id}/links</div>
+  <table>
+    <thead><tr><th>테스트</th><th>검증 내용</th><th>결과</th></tr></thead>
+    <tbody>
+      <tr><td class="test-name">test_list_links_empty</td><td class="desc">생성 전 링크 목록 → 빈 배열</td><td><span class="badge badge-pass">200</span></td></tr>
+      <tr><td class="test-name">test_create_link_minimal</td><td class="desc">빈 body → UUID v4 token, <code>has_password:false</code>, <code>is_active:true</code>, <code>share_url</code>에 <code>/s/</code> 포함</td><td><span class="badge badge-pass">201</span></td></tr>
+      <tr><td class="test-name">test_create_link_with_password</td><td class="desc"><code>password</code> 포함 → <code>has_password:true</code></td><td><span class="badge badge-pass">201</span></td></tr>
+      <tr><td class="test-name">test_create_link_with_expiry</td><td class="desc"><code>expires_at</code> 설정 → 응답에 반영</td><td><span class="badge badge-pass">201</span></td></tr>
+      <tr><td class="test-name">test_create_multiple_links</td><td class="desc">같은 앨범에 2개 생성 → 목록 2건</td><td><span class="badge badge-pass">200</span></td></tr>
+      <tr><td class="test-name">test_links_are_unique_tokens</td><td class="desc">두 링크의 token 값 다름 (UUID 충돌 없음)</td><td><span class="badge badge-pass">201</span></td></tr>
+      <tr><td class="test-name">test_create_link_album_not_found</td><td class="desc">존재하지 않는 앨범(9999)</td><td><span class="badge badge-404">404</span></td></tr>
+      <tr><td class="test-name">test_list_links_album_not_found</td><td class="desc">목록 조회도 404</td><td><span class="badge badge-404">404</span></td></tr>
+    </tbody>
+  </table>
+
+  <div class="section-tag">수정 — PATCH /api/admin/albums/{id}/links/{link_id}</div>
+  <table>
+    <thead><tr><th>테스트</th><th>검증 내용</th><th>결과</th></tr></thead>
+    <tbody>
+      <tr><td class="test-name">test_update_link_deactivate</td><td class="desc"><code>is_active:false</code> → 비활성화 확인</td><td><span class="badge badge-pass">200</span></td></tr>
+      <tr><td class="test-name">test_update_link_set_password</td><td class="desc">패스워드 없던 링크에 패스워드 추가</td><td><span class="badge badge-pass">200</span></td></tr>
+      <tr><td class="test-name">test_update_link_clear_password</td><td class="desc"><code>password:null</code> → 패스워드 제거, <code>has_password:false</code></td><td><span class="badge badge-pass">200</span></td></tr>
+      <tr><td class="test-name">test_update_link_not_found</td><td class="desc">존재하지 않는 link_id</td><td><span class="badge badge-404">404</span></td></tr>
+      <tr><td class="test-name">test_update_link_wrong_album</td><td class="desc">다른 앨범의 link_id로 수정 시도 → 소유권 검증 실패</td><td><span class="badge badge-404">404</span></td></tr>
+    </tbody>
+  </table>
+
+  <div class="section-tag">삭제 & Cascade</div>
+  <table>
+    <thead><tr><th>테스트</th><th>검증 내용</th><th>결과</th></tr></thead>
+    <tbody>
+      <tr><td class="test-name">test_delete_link</td><td class="desc">삭제 후 목록 → 빈 배열</td><td><span class="badge badge-pass">204</span></td></tr>
+      <tr><td class="test-name">test_delete_link_not_found</td><td class="desc">없는 link_id</td><td><span class="badge badge-404">404</span></td></tr>
+      <tr><td class="test-name">test_album_delete_cascades_links</td><td class="desc">앨범 삭제 → 링크 목록 GET → 앨범 404 (cascade 확인)</td><td><span class="badge badge-404">404</span></td></tr>
+    </tbody>
+  </table>
+
+  <div class="section-tag">인증 필요</div>
+  <table>
+    <thead><tr><th>테스트</th><th>결과</th></tr></thead>
+    <tbody>
+      <tr><td class="test-name">test_list_links_requires_auth</td><td><span class="badge badge-401">401</span></td></tr>
+      <tr><td class="test-name">test_create_link_requires_auth</td><td><span class="badge badge-401">401</span></td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- share -->
+<section id="share">
+  <div class="module-header">
+    <div class="module-icon" style="background:rgba(74,222,128,.12)">👁️</div>
+    <div class="info">
+      <h3>test_share.py</h3>
+      <p style="color:var(--muted)">공유 뷰어 API — 링크 조회·쿠키 인증·앨범/사진 접근</p>
+    </div>
+    <div class="module-count">16 <span>tests</span></div>
+  </div>
+
+  <div class="callout callout-warn">
+    <p><strong>주의:</strong> Share 뷰어 인증은 httpOnly <code>share_session</code> 쿠키 기반이다. <code>POST /api/share/{token}/auth</code> 호출 후 httpx가 자동으로 쿠키를 첨부한다.</p>
+  </div>
+
+  <div class="section-tag">링크 정보 — GET /api/share/{token}</div>
+  <table>
+    <thead><tr><th>테스트</th><th>검증 내용</th><th>결과</th></tr></thead>
+    <tbody>
+      <tr><td class="test-name">test_get_link_info_no_password</td><td class="desc">패스워드 없는 링크 → <code>requires_password:false</code></td><td><span class="badge badge-pass">200</span></td></tr>
+      <tr><td class="test-name">test_get_link_info_with_password</td><td class="desc">패스워드 있는 링크 → <code>requires_password:true</code></td><td><span class="badge badge-pass">200</span></td></tr>
+      <tr><td class="test-name">test_get_link_info_not_found</td><td class="desc">존재하지 않는 token</td><td><span class="badge badge-404">404</span></td></tr>
+    </tbody>
+  </table>
+
+  <div class="section-tag">인증 (쿠키 발급) — POST /api/share/{token}/auth</div>
+  <table>
+    <thead><tr><th>테스트</th><th>검증 내용</th><th>결과</th></tr></thead>
+    <tbody>
+      <tr><td class="test-name">test_auth_no_password_link</td><td class="desc">패스워드 없는 링크 → 빈 body로 인증 → 쿠키 발급</td><td><span class="badge badge-pass">200</span></td></tr>
+      <tr><td class="test-name">test_auth_correct_password</td><td class="desc">올바른 패스워드 → 쿠키 발급</td><td><span class="badge badge-pass">200</span></td></tr>
+      <tr><td class="test-name">test_auth_wrong_password</td><td class="desc">잘못된 패스워드</td><td><span class="badge badge-401">401</span></td></tr>
+      <tr><td class="test-name">test_auth_missing_password_on_protected_link</td><td class="desc">보호된 링크에 패스워드 생략</td><td><span class="badge badge-401">401</span></td></tr>
+      <tr><td class="test-name">test_auth_expired_link</td><td class="desc">만료된 링크(<code>2000-01-01</code>)</td><td><span class="badge badge-404">404</span></td></tr>
+      <tr><td class="test-name">test_auth_inactive_link</td><td class="desc">비활성화된 링크</td><td><span class="badge badge-404">404</span></td></tr>
+    </tbody>
+  </table>
+
+  <div class="section-tag">앨범 정보 — GET /api/share/{token}/album</div>
+  <table>
+    <thead><tr><th>테스트</th><th>검증 내용</th><th>결과</th></tr></thead>
+    <tbody>
+      <tr><td class="test-name">test_get_album_after_auth</td><td class="desc">인증 후 → <code>album_name</code>, <code>photo_count:2</code>, <code>has_music:false</code></td><td><span class="badge badge-pass">200</span></td></tr>
+      <tr><td class="test-name">test_get_album_without_auth</td><td class="desc">쿠키 없이 요청</td><td><span class="badge badge-401">401</span></td></tr>
+      <tr><td class="test-name">test_get_album_wrong_token_cookie</td><td class="desc">token1 쿠키로 token2 앨범 접근 → 토큰 불일치</td><td><span class="badge badge-401">401</span></td></tr>
+    </tbody>
+  </table>
+
+  <div class="section-tag">사진 목록 — GET /api/share/{token}/photos</div>
+  <table>
+    <thead><tr><th>테스트</th><th>검증 내용</th><th>결과</th></tr></thead>
+    <tbody>
+      <tr><td class="test-name">test_get_photos_after_auth</td><td class="desc">인증 후 → <code>total:2</code>, 사진 2건</td><td><span class="badge badge-pass">200</span></td></tr>
+      <tr><td class="test-name">test_get_photos_urls_format</td><td class="desc">각 사진 <code>url</code>→<code>/media/</code>, <code>thumb_small_url</code>→<code>/thumb/?size=small</code> 형식</td><td><span class="badge badge-pass">200</span></td></tr>
+      <tr><td class="test-name">test_get_photos_without_auth</td><td class="desc">쿠키 없이 요청</td><td><span class="badge badge-401">401</span></td></tr>
+      <tr><td class="test-name">test_get_photos_empty_album</td><td class="desc">사진 없는 앨범 → <code>total:0</code>, <code>photos:[]</code></td><td><span class="badge badge-pass">200</span></td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- media -->
+<section id="media">
+  <div class="module-header">
+    <div class="module-icon" style="background:rgba(96,165,250,.15)">🎬</div>
+    <div class="info">
+      <h3>test_media.py</h3>
+      <p style="color:var(--muted)">원본 이미지·썸네일·음악 파일 서빙 (Share 세션 쿠키 검증)</p>
+    </div>
+    <div class="module-count">15 <span>tests</span></div>
+  </div>
+
+  <div class="callout callout-info">
+    <p><strong>인증 구조:</strong> <code>/thumb/</code>, <code>/media/</code> 엔드포인트는 URL에 토큰이 없다. 대신 <code>share_session</code> 쿠키의 JWT sub(<code>share:{token}</code>)에서 토큰을 추출해 DB에서 파일 소유권을 검증한다.</p>
+  </div>
+
+  <div class="section-tag">GET /thumb/{file_path}?size=small|medium</div>
+  <table>
+    <thead><tr><th>테스트</th><th>검증 내용</th><th>결과</th></tr></thead>
+    <tbody>
+      <tr><td class="test-name">test_thumb_small_returns_jpeg</td><td class="desc">유효 쿠키 + size=small → <code>image/jpeg</code></td><td><span class="badge badge-pass">200</span></td></tr>
+      <tr><td class="test-name">test_thumb_medium</td><td class="desc">size=medium → 200</td><td><span class="badge badge-pass">200</span></td></tr>
+      <tr><td class="test-name">test_thumb_invalid_size</td><td class="desc">size=huge → 잘못된 파라미터</td><td><span class="badge badge-401">400</span></td></tr>
+      <tr><td class="test-name">test_thumb_no_cookie</td><td class="desc">세션 쿠키 없이 요청</td><td><span class="badge badge-401">401</span></td></tr>
+      <tr><td class="test-name">test_thumb_file_not_in_album</td><td class="desc">앨범에 없는 파일 경로로 요청 → DB 소유권 검증 실패</td><td><span class="badge badge-403">403</span></td></tr>
+      <tr><td class="test-name">test_thumb_file_missing_on_disk</td><td class="desc">DB 등록은 됐으나 디스크에 없음</td><td><span class="badge badge-404">404</span></td></tr>
+    </tbody>
+  </table>
+
+  <div class="section-tag">GET /media/{file_path}</div>
+  <table>
+    <thead><tr><th>테스트</th><th>검증 내용</th><th>결과</th></tr></thead>
+    <tbody>
+      <tr><td class="test-name">test_media_returns_image_bytes</td><td class="desc">유효 쿠키 → 원본 이미지 바이트 반환</td><td><span class="badge badge-pass">200</span></td></tr>
+      <tr><td class="test-name">test_media_no_cookie</td><td class="desc">세션 쿠키 없이 요청</td><td><span class="badge badge-401">401</span></td></tr>
+      <tr><td class="test-name">test_media_file_not_in_album</td><td class="desc">앨범에 없는 파일</td><td><span class="badge badge-403">403</span></td></tr>
+      <tr><td class="test-name">test_media_file_missing_on_disk</td><td class="desc">DB 등록은 됐으나 디스크에 없음</td><td><span class="badge badge-404">404</span></td></tr>
+      <tr><td class="test-name">test_media_cross_token_denied</td><td class="desc"><strong>보안 핵심:</strong> token1 쿠키로 token2 앨범의 파일 요청 → 차단</td><td><span class="badge badge-403">403</span></td></tr>
+    </tbody>
+  </table>
+
+  <div class="section-tag">GET /music/{token}</div>
+  <table>
+    <thead><tr><th>테스트</th><th>검증 내용</th><th>결과</th></tr></thead>
+    <tbody>
+      <tr><td class="test-name">test_music_returns_file</td><td class="desc">유효 쿠키 + MP3 존재 → 200</td><td><span class="badge badge-pass">200</span></td></tr>
+      <tr><td class="test-name">test_music_no_cookie</td><td class="desc">세션 쿠키 없이 요청</td><td><span class="badge badge-401">401</span></td></tr>
+      <tr><td class="test-name">test_music_no_music_path</td><td class="desc">앨범에 음악 미설정</td><td><span class="badge badge-404">404</span></td></tr>
+      <tr><td class="test-name">test_music_file_missing_on_disk</td><td class="desc">DB 등록은 됐으나 파일 삭제된 상태</td><td><span class="badge badge-404">404</span></td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- e2e -->
+<section id="e2e">
+  <h2>E2E 테스트</h2>
+
+  <div class="module-header">
+    <div class="module-icon" style="background:rgba(167,139,250,.15)">🚀</div>
+    <div class="info">
+      <h3>test_e2e.py</h3>
+      <p style="color:var(--muted)">실 uvicorn 서버 + httpx — 전체 사용자 플로우 검증</p>
+    </div>
+    <div class="module-count">4 <span>flows</span></div>
+  </div>
+
+  <p>단위 테스트(ASGI mock)와 달리 <strong>실 TCP 소켓</strong>으로 uvicorn 서버를 띄워 HTTP 요청을 직접 검증한다.</p>
+
+  <h3>live_server Fixture</h3>
+  <pre><code><span class="comment"># scope="module" — 4개 테스트가 동일한 서버를 공유</span>
+<span class="kw">@pytest.fixture</span>(scope=<span class="str">"module"</span>)
+<span class="kw">def</span> <span class="fn">live_server</span>(tmp_path_factory):
+    port = _free_port()          <span class="comment"># OS가 사용 가능한 포트 자동 배정</span>
+    os.environ.update(env_patch) <span class="comment"># DATA_DIR, PHOTO_ROOT, JWT_SECRET, BASE_URL 주입</span>
+
+    config = uvicorn.Config(<span class="str">"backend.main:app"</span>, host=<span class="str">"127.0.0.1"</span>, port=port)
+    server = uvicorn.Server(config)
+    thread = threading.Thread(target=server.run, daemon=True)
+    thread.start()
+
+    <span class="comment"># /health 200 응답까지 최대 10초 대기</span>
+    deadline = time.time() + <span class="num">10.0</span>
+    <span class="kw">while</span> time.time() &lt; deadline:
+        <span class="kw">try</span>:
+            <span class="kw">if</span> httpx.get(<span class="fn">f</span><span class="str">"http://127.0.0.1:{port}/health"</span>).status_code == <span class="num">200</span>:
+                <span class="kw">break</span>
+        <span class="kw">except</span>: time.sleep(<span class="num">0.1</span>)
+    <span class="kw">else</span>:
+        pytest.fail(<span class="str">"E2E server failed to start within 10 seconds"</span>)
+
+    <span class="kw">yield</span> {<span class="str">"url"</span>: <span class="fn">f</span><span class="str">"http://127.0.0.1:{port}"</span>, <span class="str">"photo_path"</span>: photo_path}
+
+    server.should_exit = True     <span class="comment"># 종료 신호</span>
+    thread.join(timeout=5)
+    <span class="comment"># 환경변수 원복</span></code></pre>
+
+  <table>
+    <thead><tr><th>테스트</th><th>플로우 단계</th><th>검증 포인트</th></tr></thead>
+    <tbody>
+      <tr>
+        <td class="test-name" style="white-space:nowrap"><span class="badge badge-e2e">Flow 1</span><br>test_complete_album_<br>share_viewer_flow</td>
+        <td class="desc">
+          ① admin 로그인<br>
+          ② 앨범 생성 (사진 포함)<br>
+          ③ 공유 링크 생성<br>
+          ④ 링크 정보 조회<br>
+          ⑤ 뷰어 인증 → 쿠키 발급<br>
+          ⑥ 앨범 정보 조회<br>
+          ⑦ 사진 목록 조회<br>
+          ⑧ <code>/media/{path}</code> 원본 접근<br>
+          ⑨ <code>/thumb/{path}?size=small</code> 접근
+        </td>
+        <td class="desc">
+          share.py가 생성한 URL이 media.py까지 연결되는 전체 파이프라인 end-to-end 검증
+        </td>
+      </tr>
+      <tr>
+        <td class="test-name"><span class="badge badge-e2e">Flow 2</span><br>test_password_protected_<br>link_flow</td>
+        <td class="desc">
+          ① 패스워드 있는 링크 생성<br>
+          ② <code>requires_password:true</code> 확인<br>
+          ③ 잘못된 패스워드 → 401<br>
+          ④ 올바른 패스워드 → 쿠키 발급<br>
+          ⑤ 미디어 접근 성공
+        </td>
+        <td class="desc">
+          패스워드 보호 링크의 인증 거부/허용 분기 전체 검증
+        </td>
+      </tr>
+      <tr>
+        <td class="test-name"><span class="badge badge-e2e">Flow 3</span><br>test_link_deactivation_<br>blocks_viewer</td>
+        <td class="desc">
+          ① 링크 생성 후 인증 성공 확인<br>
+          ② admin이 링크 비활성화<br>
+          ③ 새 클라이언트로 동일 token 인증 시도 → 404
+        </td>
+        <td class="desc">
+          실시간 링크 폐기 시 새 세션 발급 차단 확인
+        </td>
+      </tr>
+      <tr>
+        <td class="test-name"><span class="badge badge-e2e">Flow 4</span><br>test_album_with_<br>music_flow</td>
+        <td class="desc">
+          ① 앨범 생성 + <code>music_path</code> 설정<br>
+          ② 공유 링크 생성 → 뷰어 인증<br>
+          ③ <code>has_music:true</code> 확인<br>
+          ④ <code>/music/{token}</code> 파일 접근
+        </td>
+        <td class="desc">
+          음악 포함 앨범의 배경음악 서빙 파이프라인 검증
+        </td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- coverage -->
+<section id="coverage">
+  <h2>커버리지 측정</h2>
+
+  <h3>설치 및 실행</h3>
+  <pre><code>pip install pytest-cov
+
+<span class="comment"># HTML 리포트 생성</span>
+.venv\Scripts\python -m pytest --cov=backend --cov-report=html
+
+<span class="comment"># 리포트 열기 (Windows)</span>
+start htmlcov\index.html</code></pre>
+
+  <h3>터미널 요약</h3>
+  <pre><code>.venv\Scripts\python -m pytest --cov=backend --cov-report=term-missing</code></pre>
+
+  <div class="callout callout-tip">
+    <p>커버리지 목표: 핵심 비즈니스 로직(<code>routers/</code>, <code>services/</code>) <strong>80% 이상</strong>. <code>database.py</code>의 DDL 부분은 테스트 픽스처에서 직접 호출하므로 자동으로 커버된다.</p>
+  </div>
+</section>
+
+<!-- tips -->
+<section id="tips">
+  <h2>디버깅 팁</h2>
+
+  <h3>단일 테스트 디버깅</h3>
+  <pre><code><span class="comment"># 실패 즉시 중단 + 로컬 변수 출력</span>
+.venv\Scripts\python -m pytest -x -l tests/test_media.py::test_media_cross_token_denied
+
+<span class="comment"># stdout 캡처 비활성화 (print 출력 보기)</span>
+.venv\Scripts\python -m pytest -s tests/test_e2e.py</code></pre>
+
+  <h3>E2E 서버 로그 보기</h3>
+  <pre><code><span class="comment"># test_e2e.py의 uvicorn.Config에서 log_level 변경</span>
+config = uvicorn.Config(<span class="str">"backend.main:app"</span>, ..., log_level=<span class="str">"info"</span>)
+<span class="comment"># 그 후 -s 옵션으로 실행</span>
+.venv\Scripts\python -m pytest -s tests/test_e2e.py</code></pre>
+
+  <h3>자주 발생하는 오류</h3>
+  <table>
+    <thead><tr><th>증상</th><th>원인</th><th>해결</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>모듈 임포트 오류</td>
+        <td>시스템 Python 사용 중</td>
+        <td><code>.venv\Scripts\python -m pytest</code> 사용</td>
+      </tr>
+      <tr>
+        <td>asyncio 관련 경고</td>
+        <td>pytest-asyncio 버전 불일치</td>
+        <td><code>pytest.ini</code>에 <code>asyncio_mode = auto</code> 확인</td>
+      </tr>
+      <tr>
+        <td>E2E 서버 시작 실패</td>
+        <td>포트 충돌 또는 uvicorn 미설치</td>
+        <td><code>pip install uvicorn</code>, 포트 자동 배정 로직 확인</td>
+      </tr>
+      <tr>
+        <td>썸네일 테스트 경로 오류</td>
+        <td>Windows 백슬래시 경로</td>
+        <td><code>Path(...).as_posix()</code> 사용 (이미 적용됨)</td>
+      </tr>
+      <tr>
+        <td>DB 이미 초기화됨 오류</td>
+        <td>테스트 간 DB 공유</td>
+        <td>각 테스트는 function-scope fixture 사용 — 문제 없음</td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+</main>
+</div>
+
+<footer>
+  LumisShow v0.1.0 &nbsp;·&nbsp; 총 114 tests &nbsp;·&nbsp;
+  <a href="lumisshow-openapi.json">OpenAPI Spec</a> &nbsp;·&nbsp;
+  <a href="../postman/LumisShow.postman_collection.json">Postman Collection</a>
+</footer>
+
+<script>
+  // 현재 섹션 nav 활성화
+  const sections = document.querySelectorAll('section[id]');
+  const navLinks = document.querySelectorAll('nav a[href^="#"]');
+  const io = new IntersectionObserver(entries => {
+    entries.forEach(e => {
+      if (e.isIntersecting) {
+        navLinks.forEach(a => a.classList.remove('active'));
+        const a = document.querySelector(`nav a[href="#${e.target.id}"]`);
+        if (a) a.classList.add('active');
+      }
+    });
+  }, { rootMargin: '-20% 0px -70% 0px' });
+  sections.forEach(s => io.observe(s));
+</script>
+</body>
+</html>
