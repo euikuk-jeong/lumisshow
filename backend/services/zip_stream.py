@@ -27,6 +27,4 @@ def _build_zip(paths: list[str]) -> bytes:
 
 async def zip_generator(paths: list[str]) -> AsyncGenerator[bytes, None]:
     data = await asyncio.get_running_loop().run_in_executor(None, _build_zip, paths)
-    chunk = 65536
-    for i in range(0, len(data), chunk):
-        yield data[i : i + chunk]
+    yield data

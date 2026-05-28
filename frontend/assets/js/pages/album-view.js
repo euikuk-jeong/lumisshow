@@ -1,4 +1,4 @@
-import { shareApi } from '../api.js';
+import { shareApi, ShareAuthError } from '../api.js';
 import { esc } from '../utils.js';
 
 const EFFECTS = ['random', 'fade', 'slide-left', 'slide-right', 'slide-up',
@@ -12,8 +12,12 @@ const EFFECT_LABELS = {
 const DEFAULT_SETTINGS = { interval: 5, order: 'sequential', music: true, volume: 60, effect: 'random' };
 
 function loadSettings() {
-  try { return { ...DEFAULT_SETTINGS, ...JSON.parse(localStorage.getItem('slideshow_settings') || '{}') }; }
-  catch { return { ...DEFAULT_SETTINGS }; }
+  try {
+    const s = { ...DEFAULT_SETTINGS, ...JSON.parse(localStorage.getItem('slideshow_settings') || '{}') };
+    if (!['sequential', 'random'].includes(s.order)) s.order = DEFAULT_SETTINGS.order;
+    if (!EFFECTS.includes(s.effect)) s.effect = DEFAULT_SETTINGS.effect;
+    return s;
+  } catch { return { ...DEFAULT_SETTINGS }; }
 }
 
 function saveSettings(s) {
@@ -31,7 +35,7 @@ export async function renderAlbumView(token) {
       shareApi.get(`/api/share/${token}/photos`),
     ]);
   } catch (e) {
-    if (e.message.includes('session') || e.message.includes('401') || e.message.includes('session required')) {
+    if (e instanceof ShareAuthError) {
       window.navigate(`/s/${token}`, true);
       return;
     }

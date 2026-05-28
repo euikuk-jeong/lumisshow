@@ -17,6 +17,12 @@ const ROUTES = [
 const DYNAMIC_ROUTES = [
   { pattern: /^\/admin\/albums\/(\d+)$/,  render: (m) => renderAdminAlbumEdit(m[1]), public: false },
   { pattern: /^\/s\/([^/]+)\/view$/,      render: (m) => renderAlbumView(m[1]),      public: true  },
+  { pattern: /^\/s\/([^/]+)\/slideshow$/, render: (m) => {
+      document.getElementById('app').innerHTML =
+        `<div style="padding:40px;text-align:center">` +
+        `<p style="color:var(--muted);margin-bottom:16px">슬라이드쇼를 준비 중입니다.</p>` +
+        `<button class="btn btn-ghost" onclick="history.back()">← 돌아가기</button></div>`;
+    }, public: true },
   { pattern: /^\/s\/([^/]+)$/,            render: (m) => renderShareAuth(m[1]),      public: true  },
 ];
 

@@ -158,6 +158,7 @@ async def download_zip(token: str, request: Request, db=Depends(get_db)):
         JOIN albums a ON a.id = sl.album_id
         JOIN album_photos ap ON ap.album_id = sl.album_id
         WHERE sl.token = ? AND sl.is_active = 1
+          AND (sl.expires_at IS NULL OR sl.expires_at > datetime('now'))
         ORDER BY ap.sort_order, ap.id
         """,
         (token,),

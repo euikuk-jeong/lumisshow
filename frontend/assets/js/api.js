@@ -35,7 +35,11 @@ export const api = {
   delete: (path, body)  => request('DELETE', path, body),
 };
 
-// Share viewer용: admin Bearer 토큰 불첨부, 401 시 admin 리다이렉트 없음
+export class ShareAuthError extends Error {
+  constructor(msg) { super(msg); this.name = 'ShareAuthError'; }
+}
+
+// Share viewer용: admin Bearer 토큰 불첨부, 401 시 ShareAuthError 발생
 async function shareRequest(method, path, body) {
   const headers = {};
   if (body !== undefined) headers['Content-Type'] = 'application/json';
@@ -46,6 +50,11 @@ async function shareRequest(method, path, body) {
     body: body !== undefined ? JSON.stringify(body) : undefined,
     credentials: 'include',
   });
+
+  if (res.status === 401) {
+    const data = await res.json().catch(() => ({}));
+    throw new ShareAuthError(data.detail || '인증이 필요합니다.');
+  }
 
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
