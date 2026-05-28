@@ -70,3 +70,17 @@ def verify_share_session_cookie(share_token: str, cookie: Optional[str]) -> None
             raise ValueError
     except (JWTError, ValueError):
         raise HTTPException(status_code=401, detail="Invalid share session")
+
+
+def get_share_token_from_cookie(cookie: Optional[str]) -> str:
+    """쿠키에서 share token 추출. 실패 시 HTTPException(401)."""
+    if not cookie:
+        raise HTTPException(status_code=401, detail="Share session required")
+    try:
+        payload = _decode(cookie)
+        sub = payload.get("sub", "")
+        if not sub.startswith("share:"):
+            raise ValueError
+        return sub[len("share:"):]
+    except (JWTError, ValueError):
+        raise HTTPException(status_code=401, detail="Invalid share session")
