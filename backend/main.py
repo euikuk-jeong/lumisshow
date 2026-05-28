@@ -59,6 +59,15 @@ if _assets_dir.is_dir():
     app.mount("/assets", StaticFiles(directory=str(_assets_dir)), name="assets")
 
 
+# SPA 라우트: /admin/* → index.html
+@app.get("/admin/{full_path:path}")
+async def admin_spa(full_path: str):
+    index = _FRONTEND_DIR / "index.html"
+    if index.is_file():
+        return FileResponse(str(index))
+    return {"message": "Frontend not yet implemented"}
+
+
 # SPA 라우트: /s/{token}/* → index.html
 @app.get("/s/{full_path:path}")
 async def share_spa(full_path: str):

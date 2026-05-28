@@ -7,10 +7,24 @@ from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import FileResponse
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from backend.models.schemas import BrowseResponse, FolderItem, PhotoItem, SearchResponse
-from backend.services.auth import get_current_admin
+from backend.services.auth import get_current_admin, verify_admin_token
 from backend.services.thumbnail import IMAGE_EXTENSIONS, generate_thumbnail, get_image_meta
+
+_bearer_optional = HTTPBearer(auto_error=False)
+
+
+async def _admin_image_auth(
+    cred: Optional[HTTPAuthorizationCredentials] = Depends(_bearer_optional),
+    token: Optional[str] = Query(default=None),
+) -> str:
+    """이미지 서빙용: Bearer 헤더 또는 ?token= query param으로 인증."""
+    raw = (cred.credentials if cred else None) or token
+    if raw and verify_admin_token(raw):
+        return "admin"
+    raise HTTPException(status_code=401, detail="Admin authentication required")
 
 router = APIRouter(prefix="/api/admin", tags=["admin-browse"])
 
@@ -138,7 +152,7 @@ async def search(
 async def admin_thumb(
     path: str = Query(...),
     size: str = Query(default="small"),
-    _: str = Depends(get_current_admin),
+    _: str = Depends(_admin_image_auth),
 ):
     if size not in ("small", "medium"):
         raise HTTPException(status_code=400, detail="size must be 'small' or 'medium'")
