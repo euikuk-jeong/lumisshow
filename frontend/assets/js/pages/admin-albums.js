@@ -1,6 +1,7 @@
 import { api } from '../api.js';
 import { getToken } from '../auth.js';
 import { renderAdminShell } from '../layout.js';
+import { esc } from '../utils.js';
 
 export async function renderAdminAlbums() {
   renderAdminShell(`
@@ -29,7 +30,8 @@ async function loadAlbums() {
         </div>`;
       return;
     }
-    el.innerHTML = `<div class="album-grid">${albums.map(albumCard).join('')}</div>`;
+    const token = getToken();
+    el.innerHTML = `<div class="album-grid">${albums.map(a => albumCard(a, token)).join('')}</div>`;
     el.querySelectorAll('.album-card').forEach((card, i) => {
       card.addEventListener('click', () => window.navigate(`/admin/albums/${albums[i].id}`));
     });
@@ -38,9 +40,9 @@ async function loadAlbums() {
   }
 }
 
-function albumCard(album) {
+function albumCard(album, token) {
   const cover = album.cover_path
-    ? `<img src="/api/admin/thumb?path=${encodeURIComponent(album.cover_path)}&size=small&token=${getToken()}" alt="" loading="lazy">`
+    ? `<img src="/api/admin/thumb?path=${encodeURIComponent(album.cover_path)}&size=small&token=${token}" alt="" loading="lazy">`
     : '🖼';
   const date = new Date(album.created_at).toLocaleDateString('ko-KR');
   return `
@@ -54,8 +56,4 @@ function albumCard(album) {
         </div>
       </div>
     </div>`;
-}
-
-function esc(s) {
-  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }

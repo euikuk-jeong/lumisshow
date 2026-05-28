@@ -1,6 +1,7 @@
 import { api } from '../api.js';
 import { getToken } from '../auth.js';
 import { renderAdminShell } from '../layout.js';
+import { esc } from '../utils.js';
 
 export async function renderAdminBrowse() {
   const params  = new URLSearchParams(location.search);
@@ -20,16 +21,15 @@ export async function renderAdminBrowse() {
     <div id="browse-content"><div class="loading"></div></div>
     <div class="browse-selection-bar" id="selection-bar">
       <span id="selection-count">0개 선택됨</span>
-      <button class="btn btn-primary" id="btn-add-selected">
-        ${albumId ? '선택 사진 추가' : '앨범 선택 필요'}
+      <button class="btn btn-primary" id="btn-add-selected" ${!albumId ? 'disabled' : ''}>
+        ${albumId ? '선택 사진 추가' : '앨범을 선택해 사진 추가'}
       </button>
     </div>
   `, '/admin/browse');
 
-  // State shared across renders
   const state = { path: '', selected: new Set() };
 
-  // Event delegation on browse-content for folder and breadcrumb navigation
+  // 폴더/브레드크럼 이벤트 위임
   document.getElementById('browse-content').addEventListener('click', e => {
     const folder = e.target.closest('.folder-item');
     if (folder) { loadBrowse(state, folder.dataset.path); return; }
@@ -81,7 +81,8 @@ async function doSearch(state) {
 }
 
 function renderBrowseResult(state, folders, photos, currentPath) {
-  const el = document.getElementById('browse-content');
+  const el    = document.getElementById('browse-content');
+  const token = getToken();
 
   const breadcrumbHTML = currentPath !== null ? buildBreadcrumb(currentPath) : '';
   const foldersHTML = folders.length
@@ -91,7 +92,7 @@ function renderBrowseResult(state, folders, photos, currentPath) {
     : '';
 
   const photosHTML = photos.length
-    ? `<div class="photo-grid">${photos.map(p => selectableThumb(p, state.selected.has(p.path))).join('')}</div>`
+    ? `<div class="photo-grid">${photos.map(p => selectableThumb(p, state.selected.has(p.path), token)).join('')}</div>`
     : '<p class="text-muted text-sm">사진이 없습니다</p>';
 
   el.innerHTML = `
@@ -100,7 +101,6 @@ function renderBrowseResult(state, folders, photos, currentPath) {
     ${photosHTML}
   `;
 
-  // Photo selection (event delegation on photo-grid)
   el.querySelectorAll('.photo-thumb.selectable').forEach(thumb => {
     thumb.addEventListener('click', () => toggleSelect(thumb, state));
   });
@@ -160,15 +160,12 @@ function buildBreadcrumb(currentPath) {
   return html;
 }
 
-function selectableThumb(photo, isSelected) {
-  const thumbUrl = photo.thumb_url ? `${photo.thumb_url}&token=${getToken()}` : '';
+function selectableThumb(photo, isSelected, token) {
+  const thumbUrl = photo.thumb_url ? `${photo.thumb_url}&token=${token}` : '';
+  // stopPropagation 없이 체크박스 클릭도 부모의 toggleSelect로 위임
   return `
     <div class="photo-thumb selectable${isSelected ? ' selected' : ''}" data-path="${esc(photo.path)}">
       ${thumbUrl ? `<img src="${thumbUrl}" alt="" loading="lazy" onerror="this.style.opacity='0.2'">` : ''}
-      <input type="checkbox" ${isSelected ? 'checked' : ''} onclick="event.stopPropagation()">
+      <input type="checkbox" ${isSelected ? 'checked' : ''}>
     </div>`;
-}
-
-function esc(s) {
-  return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }

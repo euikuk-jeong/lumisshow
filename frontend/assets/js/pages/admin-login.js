@@ -46,7 +46,9 @@ export async function renderAdminLogin() {
       setToken(access_token);
       window.navigate('/admin');
     } catch (err) {
-      errEl.textContent = err.message === '오류 401' ? '비밀번호가 올바르지 않습니다.' : err.message;
+      // api.js 401 핸들러는 로그인 페이지에서 navigate를 스킵하므로 이 catch가 정상 실행됨
+      const msg = err.message === '인증이 만료되었습니다.' ? '비밀번호가 올바르지 않습니다.' : err.message;
+      errEl.textContent = msg;
       errEl.style.display = 'block';
       btn.disabled = false;
       btn.textContent = '로그인';

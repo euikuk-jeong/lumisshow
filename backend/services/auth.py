@@ -65,7 +65,7 @@ def verify_admin_token(token: str) -> bool:
     try:
         payload = _decode(token)
         return payload.get("sub") == "admin"
-    except Exception:
+    except (JWTError, ValueError):
         return False
 
 

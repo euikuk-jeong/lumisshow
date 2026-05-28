@@ -1,6 +1,7 @@
 import { api } from '../api.js';
 import { getToken } from '../auth.js';
 import { renderAdminShell } from '../layout.js';
+import { esc } from '../utils.js';
 
 export async function renderAdminAlbumEdit(albumId) {
   const isNew = !albumId;
@@ -84,7 +85,8 @@ async function loadAlbum(albumId) {
 }
 
 function renderEditForm(album, links) {
-  const el = document.getElementById('edit-content');
+  const el    = document.getElementById('edit-content');
+  const token = getToken();
   el.innerHTML = `
     <div class="album-edit-layout">
       <!-- Left: Info + Photos -->
@@ -120,7 +122,7 @@ function renderEditForm(album, links) {
             <a href="/admin/browse?album_id=${album.id}" class="btn btn-ghost btn-sm" data-link>+ 사진 추가</a>
           </div>
           <div id="photo-grid" class="photo-grid">
-            ${album.photos.map(p => photoThumb(p)).join('') || '<p class="text-muted text-sm">사진이 없습니다</p>'}
+            ${album.photos.map(p => photoThumb(p, token)).join('') || '<p class="text-muted text-sm">사진이 없습니다</p>'}
           </div>
         </div>
       </div>
@@ -129,11 +131,11 @@ function renderEditForm(album, links) {
       <div>
         <div class="card">
           <p class="section-title">공유 링크</p>
-          <div id="links-container">${renderLinks(links, album.id)}</div>
+          <div id="links-container">${renderLinks(links)}</div>
           <hr class="divider">
           <button class="btn btn-ghost btn-sm w-full" id="btn-new-link">+ 새 링크 생성</button>
           <div id="link-form-area" style="display:none">
-            ${renderLinkForm(album.id)}
+            ${renderLinkForm()}
           </div>
         </div>
       </div>
@@ -201,15 +203,23 @@ function bindDeleteAlbum(albumId) {
 }
 
 function bindLinkActions(albumId, links) {
-  const formArea = document.getElementById('link-form-area');
+  const formArea    = document.getElementById('link-form-area');
+  const linksContainer = document.getElementById('links-container');
+
   document.getElementById('btn-new-link').addEventListener('click', () => {
     formArea.style.display = formArea.style.display === 'none' ? 'block' : 'none';
   });
 
+  // 복사 버튼 이벤트 위임 (links-container가 innerHTML 교체되어도 컨테이너는 유지됨)
+  linksContainer.addEventListener('click', e => {
+    const copyBtn = e.target.closest('.btn-copy-link');
+    if (copyBtn) navigator.clipboard.writeText(copyBtn.dataset.url).catch(() => {});
+  });
+
   document.getElementById('link-form-area').addEventListener('submit', async e => {
     e.preventDefault();
-    const pwd     = document.getElementById('lf-password')?.value || null;
-    const expires = document.getElementById('lf-expires')?.value || null;
+    const pwd     = document.getElementById('lf-password').value || null;
+    const expires = document.getElementById('lf-expires').value || null;
     const btn     = document.getElementById('btn-create-link');
     btn.disabled  = true;
     try {
@@ -218,7 +228,9 @@ function bindLinkActions(albumId, links) {
         expires_at: expires || null,
       });
       links.push(link);
-      document.getElementById('links-container').innerHTML = renderLinks(links, albumId);
+      document.getElementById('links-container').innerHTML = renderLinks(links);
+      document.getElementById('lf-password').value = '';
+      document.getElementById('lf-expires').value = '';
       formArea.style.display = 'none';
       bindLinkDeactivate(albumId);
     } catch (err) {
@@ -232,7 +244,8 @@ function bindLinkActions(albumId, links) {
 }
 
 function bindLinkDeactivate(albumId) {
-  document.querySelectorAll('.btn-deactivate-link').forEach(btn => {
+  // links-container 범위로 한정
+  document.getElementById('links-container').querySelectorAll('.btn-deactivate-link').forEach(btn => {
     btn.addEventListener('click', async () => {
       if (!confirm('이 공유 링크를 비활성화하시겠습니까?')) return;
       const linkId = btn.dataset.id;
@@ -249,9 +262,9 @@ function bindLinkDeactivate(albumId) {
 }
 
 /* ── Render helpers ─────────────────────────────────────── */
-function renderLinks(links, albumId) {
+function renderLinks(links) {
   if (!links.length) return '<p class="text-muted text-sm">링크가 없습니다</p>';
-  return `<div class="link-list">${links.map(l => renderLinkItem(l)).join('')}</div>`;
+  return `<div class="link-list">${links.map(renderLinkItem).join('')}</div>`;
 }
 
 function renderLinkItem(link) {
@@ -269,13 +282,13 @@ function renderLinkItem(link) {
         <span>${link.has_password ? '🔒 비밀번호' : '🔓 공개'}</span>
       </div>
       <div class="link-actions">
-        <button class="btn btn-ghost btn-sm" onclick="navigator.clipboard.writeText('${esc(link.share_url)}')">복사</button>
+        <button class="btn btn-ghost btn-sm btn-copy-link" data-url="${esc(link.share_url)}">복사</button>
         ${link.is_active ? `<button class="btn btn-danger btn-sm btn-deactivate-link" data-id="${link.id}">비활성화</button>` : ''}
       </div>
     </div>`;
 }
 
-function renderLinkForm(albumId) {
+function renderLinkForm() {
   return `
     <div class="link-form mt-3">
       <form id="new-link-form">
@@ -296,15 +309,11 @@ function renderLinkForm(albumId) {
     </div>`;
 }
 
-function photoThumb(photo) {
-  const thumbUrl = `/api/admin/thumb?path=${encodeURIComponent(photo.file_path)}&size=small&token=${getToken()}`;
+function photoThumb(photo, token) {
+  const thumbUrl = `/api/admin/thumb?path=${encodeURIComponent(photo.file_path)}&size=small&token=${token}`;
   return `
     <div class="photo-thumb">
       <img src="${thumbUrl}" alt="" loading="lazy" onerror="this.style.opacity='0.3'">
       <button class="photo-remove" data-path="${esc(photo.file_path)}" title="제외">✕</button>
     </div>`;
-}
-
-function esc(s) {
-  return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }

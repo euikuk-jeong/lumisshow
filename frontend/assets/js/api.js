@@ -15,7 +15,7 @@ async function request(method, path, body) {
 
   if (res.status === 401) {
     clearToken();
-    window.navigate('/admin/login');
+    if (location.pathname !== '/admin/login') window.navigate('/admin/login');
     throw new Error('인증이 만료되었습니다.');
   }
 
