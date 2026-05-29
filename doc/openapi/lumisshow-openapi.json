@@ -2211,8 +2211,8 @@
       "description": "로컬 개발 서버"
     },
     {
-      "url": "http://192.168.1.100:8080",
-      "description": "Synology NAS (예시)"
+      "url": "http://your-nas-ip:8080",
+      "description": "Synology NAS (예시 — 실제 IP로 교체)"
     }
   ]
 }
