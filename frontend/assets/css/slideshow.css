@@ -1,0 +1,162 @@
+/* ── Slideshow Overlay ─────────────────────────────────────── */
+
+.ss-wrap {
+  position: fixed;
+  inset: 0;
+  background: #000;
+  z-index: 50;
+  overflow: hidden;
+  user-select: none;
+}
+
+/* Image slots */
+.ss-slot {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+.ss-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transform-origin: center center;
+}
+
+/* Empty image hidden */
+.ss-img:not([src]), .ss-img[src=""] { opacity: 0; }
+
+/* Side arrow buttons */
+.ss-arrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  background: rgba(0,0,0,0.35);
+  border: none;
+  color: rgba(255,255,255,0.8);
+  font-size: 52px;
+  line-height: 1;
+  padding: 20px 14px;
+  cursor: pointer;
+  z-index: 10;
+  border-radius: 4px;
+  transition: background 0.15s, color 0.15s;
+}
+.ss-arrow:hover { background: rgba(0,0,0,0.65); color: #fff; }
+.ss-arrow-prev { left: 8px; }
+.ss-arrow-next { right: 8px; }
+
+/* Bottom toolbar */
+.ss-toolbar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 12px 16px;
+  background: linear-gradient(transparent, rgba(0,0,0,0.85));
+  z-index: 10;
+}
+
+.ss-tb-btn {
+  background: rgba(255,255,255,0.12);
+  border: none;
+  color: #fff;
+  padding: 7px 13px;
+  border-radius: 4px;
+  font-size: 15px;
+  cursor: pointer;
+  transition: background 0.15s;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  line-height: 1;
+  white-space: nowrap;
+}
+.ss-tb-btn:hover { background: rgba(255,255,255,0.28); }
+
+.ss-counter {
+  color: rgba(255,255,255,0.85);
+  font-size: 13px;
+  min-width: 64px;
+  text-align: center;
+  flex: 1;
+}
+
+.ss-vol {
+  width: 80px;
+  accent-color: rgba(255,255,255,0.8);
+  cursor: pointer;
+  vertical-align: middle;
+}
+
+/* ── Ken Burns keyframes (8 directions) ───────────────────── */
+
+@keyframes kb-tl { from { transform: scale(1.08) translate( 3%,  3%); } to { transform: scale(1.15) translate(-3%, -3%); } }
+@keyframes kb-tr { from { transform: scale(1.08) translate(-3%,  3%); } to { transform: scale(1.15) translate( 3%, -3%); } }
+@keyframes kb-bl { from { transform: scale(1.08) translate( 3%, -3%); } to { transform: scale(1.15) translate(-3%,  3%); } }
+@keyframes kb-br { from { transform: scale(1.08) translate(-3%, -3%); } to { transform: scale(1.15) translate( 3%,  3%); } }
+@keyframes kb-t  { from { transform: scale(1.08) translate( 0%,  3%); } to { transform: scale(1.15) translate( 0%, -3%); } }
+@keyframes kb-b  { from { transform: scale(1.08) translate( 0%, -3%); } to { transform: scale(1.15) translate( 0%,  3%); } }
+@keyframes kb-l  { from { transform: scale(1.08) translate( 3%,  0%); } to { transform: scale(1.15) translate(-3%,  0%); } }
+@keyframes kb-r  { from { transform: scale(1.08) translate(-3%,  0%); } to { transform: scale(1.15) translate( 3%,  0%); } }
+
+.kb-tl .ss-img { animation: kb-tl var(--kb-dur, 5s) linear forwards; }
+.kb-tr .ss-img { animation: kb-tr var(--kb-dur, 5s) linear forwards; }
+.kb-bl .ss-img { animation: kb-bl var(--kb-dur, 5s) linear forwards; }
+.kb-br .ss-img { animation: kb-br var(--kb-dur, 5s) linear forwards; }
+.kb-t  .ss-img { animation: kb-t  var(--kb-dur, 5s) linear forwards; }
+.kb-b  .ss-img { animation: kb-b  var(--kb-dur, 5s) linear forwards; }
+.kb-l  .ss-img { animation: kb-l  var(--kb-dur, 5s) linear forwards; }
+.kb-r  .ss-img { animation: kb-r  var(--kb-dur, 5s) linear forwards; }
+
+/* ── Transition keyframes ──────────────────────────────────── */
+
+@keyframes ss-fade-out     { to   { opacity: 0; } }
+@keyframes ss-fade-in      { from { opacity: 0; } }
+@keyframes ss-slide-l-out  { to   { transform: translateX(-100%); } }
+@keyframes ss-slide-l-in   { from { transform: translateX(100%); } }
+@keyframes ss-slide-r-out  { to   { transform: translateX(100%); } }
+@keyframes ss-slide-r-in   { from { transform: translateX(-100%); } }
+@keyframes ss-slide-u-out  { to   { transform: translateY(-100%); } }
+@keyframes ss-slide-u-in   { from { transform: translateY(100%); } }
+@keyframes ss-zoom-in-in   { from { transform: scale(0.85); opacity: 0; } }
+@keyframes ss-zoom-out-out { to   { transform: scale(1.15); opacity: 0; } }
+@keyframes ss-flip-out     { to   { transform: perspective(1200px) rotateY(90deg); } }
+@keyframes ss-flip-in      { from { transform: perspective(1200px) rotateY(-90deg); } }
+@keyframes ss-blur-out     { to   { filter: blur(16px); opacity: 0; } }
+@keyframes ss-blur-in      { from { filter: blur(16px); opacity: 0; } }
+
+/* Transition classes (applied to .ss-slot) — duration: 700ms */
+
+.ss-out-fade       { animation: ss-fade-out      0.7s ease         forwards; }
+.ss-in-fade        { animation: ss-fade-in        0.7s ease         forwards; }
+.ss-out-dissolve   { animation: ss-fade-out       0.7s ease         forwards; }
+.ss-in-dissolve    { animation: ss-fade-in        0.7s ease         forwards; }
+.ss-out-slide-left { animation: ss-slide-l-out    0.7s ease-in-out  forwards; }
+.ss-in-slide-left  { animation: ss-slide-l-in     0.7s ease-in-out  forwards; }
+.ss-out-slide-right{ animation: ss-slide-r-out    0.7s ease-in-out  forwards; }
+.ss-in-slide-right { animation: ss-slide-r-in     0.7s ease-in-out  forwards; }
+.ss-out-slide-up   { animation: ss-slide-u-out    0.7s ease-in-out  forwards; }
+.ss-in-slide-up    { animation: ss-slide-u-in     0.7s ease-in-out  forwards; }
+.ss-out-zoom-in    { animation: ss-fade-out        0.7s ease        forwards; }
+.ss-in-zoom-in     { animation: ss-zoom-in-in      0.7s ease        forwards; }
+.ss-out-zoom-out   { animation: ss-zoom-out-out    0.7s ease        forwards; }
+.ss-in-zoom-out    { animation: ss-fade-in         0.7s ease        forwards; }
+/* flip-h: two 0.35s halves */
+.ss-out-flip-h     { animation: ss-flip-out  0.35s ease-in  0s     forwards; }
+.ss-in-flip-h      { animation: ss-flip-in   0.35s ease-out 0.35s  both; }
+.ss-out-blur       { animation: ss-blur-out  0.7s ease             forwards; }
+.ss-in-blur        { animation: ss-blur-in   0.7s ease             forwards; }
+
+/* ── Mobile ────────────────────────────────────────────────── */
+
+@media (max-width: 600px) {
+  .ss-arrow { font-size: 38px; padding: 14px 10px; }
+  .ss-toolbar { gap: 2px; padding: 10px 10px; }
+  .ss-tb-btn  { padding: 6px 9px; font-size: 13px; }
+  .ss-vol { width: 60px; }
+}

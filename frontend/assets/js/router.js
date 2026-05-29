@@ -5,6 +5,7 @@ import { renderAdminAlbumEdit } from './pages/admin-album-edit.js';
 import { renderAdminBrowse } from './pages/admin-browse.js';
 import { renderShareAuth } from './pages/share-auth.js';
 import { renderAlbumView } from './pages/album-view.js';
+import { renderSlideshow } from './pages/slideshow.js';
 
 const ROUTES = [
   { path: '/admin/login',     render: () => renderAdminLogin(),         public: true  },
@@ -17,12 +18,7 @@ const ROUTES = [
 const DYNAMIC_ROUTES = [
   { pattern: /^\/admin\/albums\/(\d+)$/,  render: (m) => renderAdminAlbumEdit(m[1]), public: false },
   { pattern: /^\/s\/([^/]+)\/view$/,      render: (m) => renderAlbumView(m[1]),      public: true  },
-  { pattern: /^\/s\/([^/]+)\/slideshow$/, render: (m) => {
-      document.getElementById('app').innerHTML =
-        `<div style="padding:40px;text-align:center">` +
-        `<p style="color:var(--muted);margin-bottom:16px">슬라이드쇼를 준비 중입니다.</p>` +
-        `<button class="btn btn-ghost" onclick="history.back()">← 돌아가기</button></div>`;
-    }, public: true },
+  { pattern: /^\/s\/([^/]+)\/slideshow$/, render: (m) => renderSlideshow(m[1]), public: true },
   { pattern: /^\/s\/([^/]+)$/,            render: (m) => renderShareAuth(m[1]),      public: true  },
 ];
 
@@ -37,6 +33,9 @@ function navigate(path, replace = false) {
 window.navigate = navigate;
 
 async function renderRoute() {
+  window._pageCleanup?.();
+  window._pageCleanup = null;
+
   const gen  = ++_renderGen;
   const path = location.pathname;
   const app  = document.getElementById('app');

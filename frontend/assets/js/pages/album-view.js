@@ -124,10 +124,9 @@ export async function renderAlbumView(token) {
     document.getElementById('settings-overlay').style.display = 'flex';
   });
 
-  // 썸네일 클릭 → 해당 인덱스부터 슬라이드쇼 (Phase 4에서 구현)
   document.getElementById('thumb-grid')?.addEventListener('click', (e) => {
     const thumb = e.target.closest('.viewer-thumb');
-    if (thumb) window.navigate(`/s/${token}/slideshow`);
+    if (thumb) window.navigate(`/s/${token}/slideshow?i=${thumb.dataset.idx}`);
   });
 }
 
