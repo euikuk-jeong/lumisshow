@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi.responses import StreamingResponse
 
 from backend.models.database import get_db
 from backend.models.schemas import (
@@ -16,6 +17,7 @@ from backend.services.auth import (
     verify_password,
     verify_share_session_cookie,
 )
+from backend.services.zip_stream import zip_generator
 
 router = APIRouter(prefix="/api/share", tags=["share"])
 
@@ -141,3 +143,37 @@ async def get_photos(token: str, request: Request, db=Depends(get_db)):
         for r in rows
     ]
     return SharePhotosResponse(photos=photos, total=len(photos))
+
+
+@router.get("/{token}/download")
+async def download_zip(token: str, request: Request, db=Depends(get_db)):
+    """앨범 전체 ZIP 다운로드 (스트리밍)."""
+    verify_share_session_cookie(token, request.cookies.get(_COOKIE_NAME))
+    await _get_valid_link(token, db)
+
+    async with db.execute(
+        """
+        SELECT ap.file_path, a.name AS album_name
+        FROM share_links sl
+        JOIN albums a ON a.id = sl.album_id
+        JOIN album_photos ap ON ap.album_id = sl.album_id
+        WHERE sl.token = ? AND sl.is_active = 1
+          AND (sl.expires_at IS NULL OR sl.expires_at > datetime('now'))
+        ORDER BY ap.sort_order, ap.id
+        """,
+        (token,),
+    ) as cur:
+        rows = await cur.fetchall()
+
+    if not rows:
+        raise HTTPException(status_code=404, detail="No photos in album")
+
+    paths = [r["file_path"] for r in rows]
+    album_name = rows[0]["album_name"]
+    safe_name = "".join(c for c in album_name if c.isalnum() or c in " _-").strip() or "album"
+
+    return StreamingResponse(
+        zip_generator(paths),
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{safe_name}.zip"'},
+    )

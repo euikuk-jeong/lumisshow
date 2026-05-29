@@ -60,6 +60,15 @@ async def get_current_admin(
     return "admin"
 
 
+def verify_admin_token(token: str) -> bool:
+    """JWT 토큰 문자열을 직접 검증. 이미지 서빙용 query param 인증에서 사용."""
+    try:
+        payload = _decode(token)
+        return payload.get("sub") == "admin"
+    except (JWTError, ValueError):
+        return False
+
+
 def verify_share_session_cookie(share_token: str, cookie: Optional[str]) -> None:
     """httpOnly 쿠키 기반 공유 세션 검증. 실패 시 HTTPException(401) 발생."""
     if not cookie:

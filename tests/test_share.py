@@ -162,3 +162,29 @@ async def test_get_photos_empty_album(admin_client):
     data = (await admin_client.get(f"/api/share/{token}/photos")).json()
     assert data["total"] == 0
     assert data["photos"] == []
+
+
+# ── ZIP 다운로드 ──────────────────────────────────────────────────────────────
+
+async def test_download_zip_without_auth(admin_client):
+    token = await _setup_link(admin_client, with_photos=True)
+    r = await admin_client.get(f"/api/share/{token}/download")
+    assert r.status_code == 401
+
+
+async def test_download_zip_empty_album(admin_client):
+    token = await _setup_link(admin_client, with_photos=False)
+    await _auth(admin_client, token)
+    r = await admin_client.get(f"/api/share/{token}/download")
+    assert r.status_code == 404
+
+
+async def test_download_zip_with_photos(admin_client, tmp_path):
+    # 실제 파일이 없으면 ZIP에 포함 안 됨 — 여기선 헤더와 스트리밍만 검증
+    token = await _setup_link(admin_client, with_photos=True)
+    await _auth(admin_client, token)
+    r = await admin_client.get(f"/api/share/{token}/download")
+    # a.jpg, b.jpg가 실제로 존재하지 않으므로 ZIP은 비어있지만 200 반환
+    assert r.status_code == 200
+    assert r.headers["content-type"] == "application/zip"
+    assert "attachment" in r.headers["content-disposition"]

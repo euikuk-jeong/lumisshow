@@ -2,16 +2,22 @@
 
 ## 미완료
 
+- [ ] Admin UI 수동 테스트 및 버그 수정 <!-- 2026-05-29 추가 -->
+- [ ] Synology 배포 가이드 작성 (docker-compose 예시, 환경변수, 볼륨 설명) <!-- 2026-05-29 추가 -->
+- [ ] Phase 4 슬라이드쇼 개선: EFFECTS 배열 3-way sync 자동화, loadSettings 공유 모듈화, ?i=N URL 재생 중 정리 <!-- 2026-05-29 추가 -->
+- [ ] Admin Browse → Album 사진 추가 시 절대 경로 처리 버그 수정 (상대경로 → PHOTO_ROOT 결합) <!-- 2026-05-29 추가 -->
+
+## 완료
+
+- [x] Frontend Phase 4 - 슬라이드쇼 구현 + 코드 리뷰 + 버그 수정 3건 <!-- 2026-05-29 완료 -->
+- [x] Phase 3 공유 링크 뷰어 코드 리뷰 및 5건 수정 <!-- 2026-05-29 완료 -->
+- [x] Frontend Phase 3 - 공유 링크 뷰어 (패스워드 입력, 앨범 메인, ZIP 다운로드) <!-- 2026-05-29 완료 -->
+- [x] Phase 2 Admin UI 코드 리뷰 및 9건 수정 <!-- 2026-05-29 완료 -->
+- [x] Frontend SPA 구현 Phase 2 - Admin UI (로그인, 앨범 관리, 사진 탐색, 공유 링크) <!-- 2026-05-29 완료 -->
 - [x] 공개 공유 링크 뷰어 API (`routers/share.py`) + 단위 테스트 <!-- 2026-05-28 완료 -->
 - [x] 미디어 서빙 API (`routers/media.py`: /thumb/, /media/, /music/) + 단위 테스트 <!-- 2026-05-28 완료 -->
 - [x] E2E 테스트 설정 및 수행 (Playwright 또는 pytest + 실서버 기반, 주요 사용자 플로우 커버) <!-- 2026-05-28 완료 -->
 - [x] Docker 패키징 (Dockerfile, docker-compose.yml) <!-- 2026-05-28 완료 -->
-- [ ] Frontend SPA 구현 (Phase 2~4) <!-- 2026-05-26 추가 -->
-
-## 완료
-
-- [x] 미디어 서빙 API (`routers/media.py`: /thumb/, /media/, /music/) + 단위 테스트 <!-- 2026-05-28 완료 -->
-- [x] 공개 공유 링크 뷰어 API (`routers/share.py`) + 단위 테스트 <!-- 2026-05-28 완료 -->
 - [x] 공유 링크 관리 API 구현 (`routers/admin_links.py`) + 단위 테스트 <!-- 2026-05-28 완료 -->
 - [x] 앨범 CRUD API 구현 (`routers/admin_albums.py`) + 단위 테스트 <!-- 2026-05-28 완료 -->
 - [x] Python 개발 환경 설정 (.venv, requirements.txt, pytest.ini) <!-- 2026-05-26 완료 -->

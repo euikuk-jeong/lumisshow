@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "lumisshow-api-v1",
     "name": "LumisShow API",
-    "description": "LumisShow 백엔드 API 테스트 컬렉션\n\n## 권장 실행 순서\n1. [Auth] Admin 로그인 → `adminToken` 자동 저장\n2. [Admin/Browse] 폴더 탐색으로 실제 photoRelPath 확인\n3. [Admin/Albums] 앨범 생성 → `albumId` 자동 저장\n4. [Admin/Links] 공유 링크 생성 → `shareToken`, `linkId` 자동 저장\n5. [Viewer] 공유 뷰어 인증 → `share_session` 쿠키 자동 저장\n6. [Viewer] 사진 목록 → URL 확인 후 photoAbsPath 설정\n7. [Media] 썸네일/원본/음악 접근\n\n## 컬렉션 변수 (설정 필요)\n- `photoRelPath` : PHOTO_ROOT 기준 상대경로 (예: 2024/trip/img001.jpg)\n- `photoAbsPath` : Share Photos 응답의 url 경로 뒤 부분",
+    "description": "LumisShow 백엔드 API 테스트 컬렉션\n\n## 권장 실행 순서\n1. [Auth] Admin 로그인 → `adminToken` 자동 저장\n2. [Admin/Browse] 폴더 탐색으로 실제 photoRelPath 확인\n3. [Admin/Albums] 앨범 생성 → `albumId` 자동 저장\n4. [Admin/Links] 공유 링크 생성 → `shareToken`, `linkId` 자동 저장\n5. [Viewer] 공유 뷰어 인증 → `share_session` 쿠키 자동 저장\n6. [Viewer] 사진 목록 → URL 확인 후 photoAbsPath 설정\n7. [Media] 썸네일/원본/음악 접근\n\n## 컬렉션 변수 (설정 필요)\n- `photoRelPath` : PHOTO_ROOT 기준 상대경로 (예: 2024/album/sample.jpg)\n- `photoAbsPath` : Share Photos 응답의 url 경로 뒤 부분",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [

@@ -1,0 +1,186 @@
+/* ── Share Viewer ────────────────────────────────────────── */
+
+/* 전체 화면 중앙 정렬 (패스워드/오류 페이지) */
+.viewer-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 24px;
+}
+
+.viewer-auth-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 40px;
+  width: 100%;
+  max-width: 400px;
+  text-align: center;
+}
+
+.viewer-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+}
+
+.viewer-auth-title {
+  font-size: 20px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.viewer-auth-desc {
+  font-size: 13px;
+  margin-top: 8px;
+}
+
+/* ── 앨범 메인 뷰 ───────────────────────────────────────── */
+
+.viewer-page {
+  max-width: 900px;
+  margin: 0 auto;
+  padding-bottom: 60px;
+}
+
+.viewer-cover {
+  width: 100%;
+  height: 300px;
+  overflow: hidden;
+}
+
+.viewer-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.viewer-body {
+  padding: 32px 24px;
+}
+
+.viewer-title {
+  font-size: 28px;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.viewer-desc {
+  font-size: 14px;
+  margin-bottom: 16px;
+}
+
+.viewer-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 13px;
+  color: var(--muted);
+  margin-bottom: 28px;
+}
+
+.viewer-actions {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.btn-lg {
+  padding: 12px 24px;
+  font-size: 15px;
+}
+
+.viewer-download {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 32px;
+  text-decoration: none;
+}
+
+/* ── 썸네일 그리드 ──────────────────────────────────────── */
+
+.viewer-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 6px;
+}
+
+.viewer-thumb {
+  aspect-ratio: 1;
+  overflow: hidden;
+  border-radius: var(--radius);
+  cursor: pointer;
+  background: var(--surface);
+}
+
+.viewer-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.2s;
+}
+
+.viewer-thumb:hover img {
+  transform: scale(1.05);
+}
+
+/* ── 설정 패널 모달 ─────────────────────────────────────── */
+
+.settings-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  padding: 24px;
+}
+
+.settings-panel {
+  background: var(--elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 28px;
+  width: 100%;
+  max-width: 380px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.settings-title {
+  font-size: 18px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.settings-radios {
+  display: flex;
+  gap: 20px;
+  font-size: 14px;
+}
+
+.settings-radios label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.settings-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+/* ── 반응형 ─────────────────────────────────────────────── */
+
+@media (max-width: 600px) {
+  .viewer-cover { height: 200px; }
+  .viewer-title { font-size: 22px; }
+  .viewer-actions { flex-direction: column; }
+  .viewer-grid { grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); }
+}
