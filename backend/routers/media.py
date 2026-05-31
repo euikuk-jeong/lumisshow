@@ -29,12 +29,20 @@ async def _verify_file_in_album(token: str, file_path: str, db) -> None:
             raise HTTPException(status_code=403, detail="Access denied")
 
 
+def _assert_within_photo_root(file_path: str) -> None:
+    allowed_dir = os.path.realpath(os.getenv("PHOTO_ROOT", "./testdata/photos"))
+    resolved = os.path.realpath(file_path)
+    if resolved != allowed_dir and not resolved.startswith(allowed_dir + os.sep):
+        raise HTTPException(status_code=403, detail="Access denied")
+
+
 @router.get("/thumb/{file_path:path}")
 async def serve_thumb(file_path: str, request: Request, size: str = "small", db=Depends(get_db)):
     if size not in SIZES:
         raise HTTPException(status_code=400, detail=f"Invalid size. Use: {', '.join(SIZES)}")
     token = get_share_token_from_cookie(request.cookies.get(_COOKIE))
     await _verify_file_in_album(token, file_path, db)
+    _assert_within_photo_root(file_path)
     if not os.path.isfile(file_path):
         raise HTTPException(status_code=404, detail="File not found")
     out_path = await asyncio.get_running_loop().run_in_executor(
@@ -47,6 +55,7 @@ async def serve_thumb(file_path: str, request: Request, size: str = "small", db=
 async def serve_media(file_path: str, request: Request, db=Depends(get_db)):
     token = get_share_token_from_cookie(request.cookies.get(_COOKIE))
     await _verify_file_in_album(token, file_path, db)
+    _assert_within_photo_root(file_path)
     if not os.path.isfile(file_path):
         raise HTTPException(status_code=404, detail="File not found")
     return FileResponse(file_path)

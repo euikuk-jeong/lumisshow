@@ -62,7 +62,7 @@ async function loadBrowse(state, path) {
     const data = await api.get(`/api/admin/browse?path=${encodeURIComponent(path)}`);
     renderBrowseResult(state, data.folders, data.photos, path);
   } catch (e) {
-    el.innerHTML = `<div class="alert alert-error">${e.message}</div>`;
+    el.innerHTML = `<div class="alert alert-error">${esc(e.message)}</div>`;
   }
 }
 
@@ -76,7 +76,7 @@ async function doSearch(state) {
     const data = await api.get(`/api/admin/search?q=${encodeURIComponent(q)}&size=200`);
     renderBrowseResult(state, [], data.items, null);
   } catch (e) {
-    el.innerHTML = `<div class="alert alert-error">${e.message}</div>`;
+    el.innerHTML = `<div class="alert alert-error">${esc(e.message)}</div>`;
   }
 }
 

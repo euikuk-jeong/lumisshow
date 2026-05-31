@@ -1,4 +1,5 @@
 import { getToken } from './auth.js';
+import { esc } from './utils.js';
 import { renderAdminLogin } from './pages/admin-login.js';
 import { renderAdminAlbums } from './pages/admin-albums.js';
 import { renderAdminAlbumEdit } from './pages/admin-album-edit.js';
@@ -68,7 +69,7 @@ async function renderRoute() {
     if (gen !== _renderGen) return;
   } catch (e) {
     if (gen !== _renderGen) return;
-    app.innerHTML = `<div style="padding:40px;color:var(--error)">오류: ${e.message}</div>`;
+    app.innerHTML = `<div style="padding:40px;color:var(--error)">오류: ${esc(e.message)}</div>`;
   }
 }
 

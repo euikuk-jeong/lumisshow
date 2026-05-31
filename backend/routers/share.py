@@ -1,4 +1,5 @@
 import os
+import time
 from datetime import datetime, timezone
 from urllib.parse import quote
 
@@ -23,6 +24,33 @@ router = APIRouter(prefix="/api/share", tags=["share"])
 
 _COOKIE_NAME = "share_session"
 _COOKIE_MAX_AGE = 24 * 3600
+
+_MAX_ATTEMPTS = 5
+_LOCKOUT_SECONDS = 15 * 60
+# token -> (fail_count, locked_until: float)
+_fail_registry: dict[str, tuple[int, float]] = {}
+
+
+def _check_lockout(token: str) -> None:
+    entry = _fail_registry.get(token)
+    if entry is None:
+        return
+    count, locked_until = entry
+    if count >= _MAX_ATTEMPTS:
+        if time.time() < locked_until:
+            raise HTTPException(status_code=429, detail="Too many attempts. Try again later.")
+        del _fail_registry[token]
+
+
+def _record_failure(token: str) -> None:
+    count, _ = _fail_registry.get(token, (0, 0.0))
+    count += 1
+    locked_until = time.time() + _LOCKOUT_SECONDS if count >= _MAX_ATTEMPTS else 0.0
+    _fail_registry[token] = (count, locked_until)
+
+
+def _clear_failures(token: str) -> None:
+    _fail_registry.pop(token, None)
 
 
 async def _get_valid_link(token: str, db):
@@ -62,10 +90,13 @@ async def auth_link(
     db=Depends(get_db),
 ):
     """패스워드 검증 후 httpOnly 세션 쿠키 발급."""
+    _check_lockout(token)
     link = await _get_valid_link(token, db)
     if link["password_hash"]:
         if not body.password or not verify_password(body.password, link["password_hash"]):
+            _record_failure(token)
             raise HTTPException(status_code=401, detail="Invalid password")
+    _clear_failures(token)
 
     session_jwt = create_share_session_token(token)
     base_url = os.getenv("BASE_URL", "")

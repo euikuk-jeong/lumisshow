@@ -80,7 +80,7 @@ async function loadAlbum(albumId) {
     renderEditForm(album, links);
     bindDeleteAlbum(albumId);
   } catch (e) {
-    el.innerHTML = `<div class="alert alert-error">${e.message}</div>`;
+    el.innerHTML = `<div class="alert alert-error">${esc(e.message)}</div>`;
   }
 }
 

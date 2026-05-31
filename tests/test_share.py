@@ -77,6 +77,27 @@ async def test_auth_missing_password_on_protected_link(admin_client):
     assert r.status_code == 401
 
 
+async def test_auth_brute_force_lockout(admin_client):
+    """패스워드 5회 연속 실패 → 6번째 요청은 429."""
+    token = await _setup_link(admin_client, password="secret")
+    for _ in range(5):
+        r = await _auth(admin_client, token, password="wrong")
+        assert r.status_code == 401
+    r = await _auth(admin_client, token, password="wrong")
+    assert r.status_code == 429
+
+
+async def test_auth_lockout_resets_on_success(admin_client):
+    """4회 실패 후 올바른 패스워드 성공 → 카운터 리셋, 이후 재시도 가능."""
+    token = await _setup_link(admin_client, password="secret")
+    for _ in range(4):
+        await _auth(admin_client, token, password="wrong")
+    r = await _auth(admin_client, token, password="secret")
+    assert r.status_code == 200
+    r = await _auth(admin_client, token, password="wrong")
+    assert r.status_code == 401
+
+
 async def test_auth_expired_link(admin_client):
     token = await _setup_link(admin_client, expires_at="2000-01-01T00:00:00")
     r = await _auth(admin_client, token)

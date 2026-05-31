@@ -124,6 +124,60 @@ async def test_media_file_missing_on_disk(admin_client, media_env):
     assert r.status_code == 404
 
 
+async def test_media_relative_path_resolved(admin_client, tmp_path):
+    """Browse UI가 보내는 상대 경로(sub/p.jpg)로 추가한 사진을 /media/ 로 서빙 가능해야 한다."""
+    sub = tmp_path / "photos" / "sub"
+    sub.mkdir(parents=True, exist_ok=True)
+    photo = sub / "p.jpg"
+    Image.new("RGB", (50, 50)).save(str(photo), "JPEG")
+
+    # Browse API가 반환하는 것과 동일한 상대 경로로 추가
+    r = await admin_client.post("/api/admin/albums", json={"name": "RelTest", "photo_paths": ["sub/p.jpg"]})
+    album_id = r.json()["id"]
+    r = await admin_client.post(f"/api/admin/albums/{album_id}/links", json={})
+    token = r.json()["token"]
+    await admin_client.post(f"/api/share/{token}/auth", json={})
+
+    # DB에 저장된 절대 경로를 가져와서 미디어 서빙 요청
+    album_detail = (await admin_client.get(f"/api/admin/albums/{album_id}")).json()
+    stored_path = album_detail["photos"][0]["file_path"]
+    r = await admin_client.get(f"/media/{stored_path}")
+    assert r.status_code == 200
+
+
+async def test_thumb_path_traversal(admin_client, tmp_path):
+    """PHOTO_ROOT 밖 파일이 DB에 등록됐더라도 /thumb/ 접근 → 403."""
+    # tmp_path/photos 밖(sibling)에 파일 생성 — PHOTO_ROOT 범위 밖
+    secret = tmp_path / "secret.jpg"
+    Image.new("RGB", (50, 50)).save(str(secret), "JPEG")
+    secret_posix = secret.as_posix()
+
+    r = await admin_client.post("/api/admin/albums", json={"name": "Traversal T", "photo_paths": [secret_posix]})
+    album_id = r.json()["id"]
+    r = await admin_client.post(f"/api/admin/albums/{album_id}/links", json={})
+    token = r.json()["token"]
+    await admin_client.post(f"/api/share/{token}/auth", json={})
+
+    r = await admin_client.get(f"/thumb/{secret_posix}?size=small")
+    assert r.status_code == 403
+
+
+async def test_media_path_traversal(admin_client, tmp_path):
+    """PHOTO_ROOT 밖 파일이 DB에 등록됐더라도 /media/ 접근 → 403."""
+    secret = tmp_path / "secret2.jpg"
+    Image.new("RGB", (50, 50)).save(str(secret), "JPEG")
+    secret_posix = secret.as_posix()
+
+    r = await admin_client.post("/api/admin/albums", json={"name": "Traversal M", "photo_paths": [secret_posix]})
+    album_id = r.json()["id"]
+    r = await admin_client.post(f"/api/admin/albums/{album_id}/links", json={})
+    token = r.json()["token"]
+    await admin_client.post(f"/api/share/{token}/auth", json={})
+
+    r = await admin_client.get(f"/media/{secret_posix}")
+    assert r.status_code == 403
+
+
 async def test_media_cross_token_denied(admin_client, tmp_path):
     """token1 쿠키로 token2 앨범 파일에 접근 → 403."""
     p1 = (tmp_path / "photos" / "p1.jpg").as_posix()

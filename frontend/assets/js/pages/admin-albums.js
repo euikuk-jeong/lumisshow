@@ -36,7 +36,7 @@ async function loadAlbums() {
       card.addEventListener('click', () => window.navigate(`/admin/albums/${albums[i].id}`));
     });
   } catch (e) {
-    el.innerHTML = `<div class="alert alert-error">${e.message}</div>`;
+    el.innerHTML = `<div class="alert alert-error">${esc(e.message)}</div>`;
   }
 }
 

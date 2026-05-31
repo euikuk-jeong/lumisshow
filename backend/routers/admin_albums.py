@@ -1,3 +1,5 @@
+import os
+
 from fastapi import APIRouter, Depends, HTTPException
 
 from backend.models.database import get_db
@@ -12,6 +14,15 @@ from backend.models.schemas import (
 from backend.services.auth import get_current_admin
 
 router = APIRouter(prefix="/api/admin/albums", tags=["admin-albums"])
+
+
+def _resolve_paths(paths: list[str]) -> list[str]:
+    """상대 경로를 PHOTO_ROOT 기준 절대 경로로 변환. 절대 경로는 그대로 통과."""
+    root = os.getenv("PHOTO_ROOT", "./testdata/photos")
+    return [
+        os.path.normpath(os.path.join(root, p)) if not os.path.isabs(p) else p
+        for p in paths
+    ]
 
 _ALLOWED_UPDATE_COLS = {"name", "description", "cover_path", "music_path"}
 
@@ -69,7 +80,7 @@ async def create_album(
     if body.photo_paths:
         await db.executemany(
             "INSERT OR IGNORE INTO album_photos (album_id, file_path, sort_order) VALUES (?, ?, ?)",
-            [(album_id, path, i) for i, path in enumerate(body.photo_paths)],
+            [(album_id, path, i) for i, path in enumerate(_resolve_paths(body.photo_paths))],
         )
 
     await db.commit()
@@ -142,7 +153,7 @@ async def add_photos(
         INSERT OR IGNORE INTO album_photos (album_id, file_path, sort_order)
         VALUES (?, ?, (SELECT COALESCE(MAX(sort_order), -1) + 1 FROM album_photos WHERE album_id = ?))
         """,
-        [(album_id, path, album_id) for path in body.photo_paths],
+        [(album_id, path, album_id) for path in _resolve_paths(body.photo_paths)],
     )
     await db.commit()
 
@@ -157,7 +168,7 @@ async def remove_photos(
     await _get_album_or_404(album_id, db)
     await db.executemany(
         "DELETE FROM album_photos WHERE album_id = ? AND file_path = ?",
-        [(album_id, path) for path in body.photo_paths],
+        [(album_id, path) for path in _resolve_paths(body.photo_paths)],
     )
     await db.commit()
 

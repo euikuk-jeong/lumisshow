@@ -1,3 +1,5 @@
+import os
+
 import pytest
 
 
@@ -57,7 +59,7 @@ async def test_get_album_detail(admin_client):
     data = r.json()
     assert data["name"] == "Detail"
     assert len(data["photos"]) == 1
-    assert data["photos"][0]["file_path"] == "x.jpg"
+    assert os.path.basename(data["photos"][0]["file_path"]) == "x.jpg"
 
 
 async def test_get_album_photos_sorted_by_sort_order(admin_client):
@@ -67,8 +69,8 @@ async def test_get_album_photos_sorted_by_sort_order(admin_client):
     )
     album_id = r.json()["id"]
     data = (await admin_client.get(f"/api/admin/albums/{album_id}")).json()
-    assert data["photos"][0]["file_path"] == "first.jpg"
-    assert data["photos"][1]["file_path"] == "second.jpg"
+    assert os.path.basename(data["photos"][0]["file_path"]) == "first.jpg"
+    assert os.path.basename(data["photos"][1]["file_path"]) == "second.jpg"
 
 
 async def test_get_album_not_found(admin_client):
@@ -171,8 +173,8 @@ async def test_add_photos_appends_sort_order(admin_client):
         json={"photo_paths": ["second.jpg"]},
     )
     photos = (await admin_client.get(f"/api/admin/albums/{album_id}")).json()["photos"]
-    assert photos[0]["file_path"] == "first.jpg"
-    assert photos[1]["file_path"] == "second.jpg"
+    assert os.path.basename(photos[0]["file_path"]) == "first.jpg"
+    assert os.path.basename(photos[1]["file_path"]) == "second.jpg"
 
 
 async def test_add_photos_to_nonexistent_album(admin_client):
@@ -199,7 +201,7 @@ async def test_remove_photos(admin_client):
     assert r.status_code == 204
     data = (await admin_client.get(f"/api/admin/albums/{album_id}")).json()
     assert data["photo_count"] == 1
-    assert data["photos"][0]["file_path"] == "g.jpg"
+    assert os.path.basename(data["photos"][0]["file_path"]) == "g.jpg"
 
 
 async def test_remove_nonexistent_photo_is_noop(admin_client):
@@ -234,8 +236,8 @@ async def test_reorder_photos(admin_client):
     assert r.status_code == 204
 
     photos_after = (await admin_client.get(f"/api/admin/albums/{album_id}")).json()["photos"]
-    assert photos_after[0]["file_path"] == "i.jpg"
-    assert photos_after[1]["file_path"] == "h.jpg"
+    assert os.path.basename(photos_after[0]["file_path"]) == "i.jpg"
+    assert os.path.basename(photos_after[1]["file_path"]) == "h.jpg"
 
 
 # ── 인증 필요 ─────────────────────────────────────────────────────────────────

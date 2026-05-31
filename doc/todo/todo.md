@@ -2,13 +2,13 @@
 
 ## 미완료
 
-- [ ] serve_media/serve_thumb PHOTO_ROOT containment check 추가 (serve_music과 동일한 realpath+startswith 방어) <!-- 2026-05-30 추가 -->
-- [ ] 공유 링크 패스워드 브루트포스 방어: 토큰별 실패 횟수 추적, 5회 실패 시 일시 잠금 <!-- 2026-05-30 추가 -->
-- [ ] admin-albums.js:39, admin-album-edit.js:83 — innerHTML에 esc(e.message) 적용 <!-- 2026-05-30 추가 -->
+- [x] serve_media/serve_thumb PHOTO_ROOT containment check 추가 (serve_music과 동일한 realpath+startswith 방어) <!-- 2026-05-31 완료 -->
+- [x] 공유 링크 패스워드 브루트포스 방어: 토큰별 실패 횟수 추적, 5회 실패 시 일시 잠금 <!-- 2026-05-31 완료 -->
+- [x] admin-albums.js:39, admin-album-edit.js:83 — innerHTML에 esc(e.message) 적용 (admin-browse.js 2곳, router.js 1곳도 함께 수정) <!-- 2026-05-31 완료 -->
 - [ ] Admin UI 수동 테스트 및 버그 수정 <!-- 2026-05-29 추가 -->
-- [ ] Synology 배포 가이드 작성 (docker-compose 예시, 환경변수, 볼륨 설명) <!-- 2026-05-29 추가 -->
+- [x] Synology 배포 가이드 작성 (docker-compose 예시, 환경변수, 볼륨 설명) <!-- 2026-05-31 완료 -->
 - [ ] Phase 4 슬라이드쇼 개선: EFFECTS 배열 3-way sync 자동화, loadSettings 공유 모듈화, ?i=N URL 재생 중 정리 <!-- 2026-05-29 추가 -->
-- [ ] Admin Browse → Album 사진 추가 시 절대 경로 처리 버그 수정 (상대경로 → PHOTO_ROOT 결합) <!-- 2026-05-29 추가 -->
+- [x] Admin Browse → Album 사진 추가 시 절대 경로 처리 버그 수정 (상대경로 → PHOTO_ROOT 결합) <!-- 2026-05-31 완료 -->
 
 ## 완료
 
