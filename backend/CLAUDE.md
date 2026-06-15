@@ -1,0 +1,101 @@
+# backend/CLAUDE.md
+
+백엔드 상세 컨텍스트. 루트 → [`/CLAUDE.md`](../CLAUDE.md)
+
+---
+
+## 로컬 개발 명령
+
+환경변수는 루트 `.env.example`을 복사해 `.env`로 사용하거나, 아래처럼 직접 설정한다.
+
+```bash
+# 의존성 설치 (런타임)
+pip install -r backend/requirements.txt
+
+# 개발 의존성 설치 (테스트용)
+pip install pytest pytest-asyncio httpx
+
+# 환경변수 설정 — bash
+export ADMIN_PASSWORD=dev_password
+export JWT_SECRET=dev_secret_key
+export PHOTO_ROOT=./testdata/photos
+export DATA_DIR=./testdata/data
+export BASE_URL=http://localhost:8080
+
+# 환경변수 설정 — PowerShell
+$env:ADMIN_PASSWORD="dev_password"; $env:JWT_SECRET="dev_secret_key"
+$env:PHOTO_ROOT="./testdata/photos"; $env:DATA_DIR="./testdata/data"
+
+# 개발 서버 실행 (hot-reload)
+uvicorn backend.main:app --reload --host 0.0.0.0 --port 8080
+```
+
+## 테스트
+
+```bash
+# 전체 실행 (pytest.ini: asyncio_mode=auto, testpaths=tests)
+pytest
+
+# 특정 파일만
+pytest tests/test_auth.py
+
+# 상세 출력
+pytest -v
+```
+
+---
+
+## 파일 구조
+
+```
+main.py              # FastAPI app, 미들웨어, 라우터 등록
+routers/
+  auth.py            # POST /api/auth/login|logout, GET /api/auth/me
+  admin_browse.py    # GET /api/admin/browse|search|music
+  admin_albums.py    # CRUD /api/admin/albums/*
+  admin_links.py     # CRUD /api/admin/albums/{id}/links
+  share.py           # GET|POST /api/share/{token}/*
+  media.py           # /thumb/, /media/, /music/{token}?index=N 서빙
+models/
+  database.py        # SQLite 연결, 테이블 생성
+  schemas.py         # Pydantic 요청/응답 모델 + parse_music_paths()
+services/
+  thumbnail.py       # Pillow 썸네일 생성, EXIF 전체 메타 추출
+  auth.py            # JWT 생성/검증, bcrypt 해시 (ADMIN_PASSWORD_HASH 지원)
+  zip_stream.py      # 스트리밍 ZIP 생성
+```
+
+---
+
+## 데이터 영속성
+
+- `$DATA_DIR/db/app.db` — SQLite (albums, album_photos, share_links, thumbnail_cache)
+- `$DATA_DIR/thumbnails/` — `MD5(file_path)_{size}.jpg` 형식 캐시 (재시작 후에도 유지)
+- `$DATA_DIR/music/` — 배경음악 파일
+- `$PHOTO_ROOT` — NAS 원본 사진 (읽기 전용, 절대 수정하지 않음)
+
+---
+
+## 핵심 설계 결정
+
+### 시작 시 환경변수 경고
+`JWT_SECRET` 또는 `ADMIN_PASSWORD`가 기본 dev 값이면 시작 로그에 `INSECURE CONFIGURATION` 경고가 출력된다. 프로덕션 배포 전 반드시 교체할 것.
+
+### 인증 이중 구조
+- **Admin**: JWT Bearer 토큰 (exp 8h) → `/api/admin/*` 전체 보호
+- **공유 링크 사용자**: UUID 토큰으로 앨범 접근 → 패스워드 입력 후 httpOnly 세션 쿠키 발급 (exp 24h) → `/media/`, `/thumb/`, `/music/` 접근 허용
+
+### 관리자 패스워드 인증
+두 가지 방식 지원 — `ADMIN_PASSWORD_HASH`(bcrypt) 설정 시 우선 사용, 없으면 `ADMIN_PASSWORD` 평문 비교. 운영 환경에서는 bcrypt 해시 권장 (docker inspect 노출 위험 방지).
+
+### 공유 링크 토큰
+UUID v4. 브루트포스 불가 수준의 랜덤성. 만료일(`expires_at`)과 활성화 플래그(`is_active`)를 모두 확인해야 유효.
+
+### 배경음악 저장 구조
+`albums.music_path` TEXT 컬럼에 JSON 배열 문자열 저장 (`["path1", "path2"]`). `parse_music_paths()` (schemas.py)로 읽기 시 파싱. 기존 단일 경로 문자열은 자동으로 1-element 리스트로 처리 (하위 호환). 음악 파일은 `DATA_DIR/music/` 하위에만 허용.
+
+### 썸네일 및 EXIF
+두 가지 크기 — small(300×200, 그리드/탐색기), medium(800×600, 슬라이드쇼 프리로드). 최초 요청 시 on-demand 생성. EXIF 전체 메타 추출: 촬영일·해상도·제조사·카메라·소프트웨어·셔터·조리개·ISO·초점거리·촬영모드·플래시·측광·노출모드.
+
+### ZIP 다운로드
+`StreamingResponse` + `zipfile.ZipFile` 스트리밍으로 서버 메모리에 전체 파일을 올리지 않음. 응답 헤더에 `Content-Disposition: attachment` 설정.

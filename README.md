@@ -1,0 +1,167 @@
+# LumisShow
+
+Synology NAS용 Docker 기반 사진 앨범 & 슬라이드쇼 웹 앱.
+
+단일 컨테이너로 FastAPI(백엔드) + Vanilla JS(프론트엔드)를 서빙하며, NAS 사진 폴더를 읽기 전용으로 마운트해 앨범을 구성하고 공유 링크로 배포합니다.
+
+---
+
+## 주요 기능
+
+### 관리자 (Admin)
+- **사진 탐색** — NAS 사진 폴더를 트리 구조로 탐색, 파일명 검색
+- **앨범 관리** — 앨범 생성/편집/삭제, 사진 추가·제외
+- **배경음악** — 앨범별 다중 음악 파일 설정, 드래그앤드롭으로 순서 변경
+- **공유 링크** — 비밀번호·만료일 설정 가능한 공유 링크 생성
+
+### 공유 링크 뷰어
+- **패스워드 보호** — 비밀번호 설정 시 인증 후 접근 (Brute-force 잠금 포함)
+- **앨범 보기** — 썸네일 그리드, 사진 클릭으로 전체화면 뷰어
+- **ZIP 다운로드** — 앨범 전체 스트리밍 다운로드
+
+### 슬라이드쇼
+- **전환 효과 9종** — fade, slide, zoom, flip, blur, dissolve 등 랜덤/고정 선택
+- **Ken Burns 효과** — 8방향 랜덤 Pan·Zoom 애니메이션
+- **배경음악 플레이어**
+  - 다중 트랙 지원 (이전곡·다음곡 버튼, 자동 다음 곡)
+  - 음악 On/Off 토글, 음량 슬라이더
+  - 트랙 변경 시 파일명 토스트 알림 (3초 후 자동 사라짐)
+- **사진 정보 패널** — EXIF 전체 표시 (셔터·조리개·ISO·초점거리·플래시 등), 재생 중 음악 정보 함께 표시
+- **이미지 프리로드** — N+1, N+2 이미지 미리 로드, 메모리 자동 해제
+
+---
+
+## 스크린샷 구성 (화면 설명)
+
+| 화면 | 경로 | 설명 |
+|------|------|------|
+| Admin 로그인 | `/admin/login` | JWT 인증 |
+| 앨범 목록 | `/admin` | 앨범 카드 그리드 |
+| 앨범 편집 | `/admin/albums/:id` | 사진·음악·공유링크 관리 |
+| 사진 탐색 | `/admin/browse` | 폴더 트리 + 다중 선택 |
+| 공유 뷰어 | `/s/:token` | 패스워드 입력 → 앨범 |
+| 슬라이드쇼 | `/s/:token/slideshow` | 전체화면 슬라이드쇼 |
+
+---
+
+## 빠른 시작 (Docker)
+
+### 1. 이미지 빌드
+
+```bash
+git clone https://github.com/euikuk-jeong/lumisshow.git
+cd lumisshow
+docker build -f docker/Dockerfile -t lumisshow:latest .
+```
+
+### 2. 환경변수 설정
+
+```bash
+cp .env.example .env
+# .env를 열어 아래 값 설정
+```
+
+```dotenv
+# 관리자 패스워드 — 둘 중 하나만 설정
+ADMIN_PASSWORD=your_secure_password       # 개발/테스트용 평문
+# ADMIN_PASSWORD_HASH=$2b$12$...         # 운영 권장: bcrypt 해시
+
+JWT_SECRET=<openssl rand -hex 32 출력값>
+PHOTO_ROOT=/mnt/photos                   # 컨테이너 내부 경로
+DATA_DIR=/data
+BASE_URL=http://192.168.1.100:8080
+APP_PORT=8080
+```
+
+bcrypt 해시 생성:
+```bash
+python3 -c "import bcrypt; print(bcrypt.hashpw(b'your_password', bcrypt.gensalt()).decode())"
+```
+
+### 3. 실행
+
+```bash
+docker compose -f docker/docker-compose.yml up -d
+```
+
+브라우저에서 `http://localhost:8080/admin` 접속 후 로그인.
+
+---
+
+## 환경변수
+
+| 변수 | 필수 | 설명 |
+|------|------|------|
+| `ADMIN_PASSWORD` | △ | 관리자 평문 패스워드 (개발용) |
+| `ADMIN_PASSWORD_HASH` | △ | 관리자 bcrypt 해시 (운영 권장, 설정 시 ADMIN_PASSWORD 무시) |
+| `JWT_SECRET` | ✓ | JWT 서명 키 (32바이트 이상 랜덤값 권장) |
+| `PHOTO_ROOT` | ✓ | NAS 사진 폴더 마운트 경로 (컨테이너 내부) |
+| `DATA_DIR` | ✓ | DB·썸네일·음악 저장 경로 (컨테이너 내부) |
+| `BASE_URL` | | 공유 링크 URL 생성 베이스 주소 |
+| `APP_PORT` | | 서버 포트 (기본 `8080`) |
+
+`ADMIN_PASSWORD` 또는 `ADMIN_PASSWORD_HASH` 중 하나는 반드시 설정해야 합니다.
+
+---
+
+## 배경음악 설정
+
+1. 음악 파일(`.mp3`, `.flac`, `.ogg`, `.m4a`, `.wav` 등)을 `DATA_DIR/music/` 폴더에 복사
+2. Admin → 앨범 편집 → **배경음악** 섹션 → **음악 파일 선택** 버튼
+3. 체크박스로 다중 선택 후 확인
+4. 목록에서 드래그앤드롭으로 재생 순서 변경
+5. 저장
+
+슬라이드쇼 재생 중 툴바 왼쪽의 음악 컨트롤로 On/Off, 이전/다음 곡 조작 가능.
+
+---
+
+## 데이터 구조 (DATA_DIR)
+
+```
+$DATA_DIR/
+├── db/
+│   └── app.db          # SQLite — 앨범, 사진, 공유링크
+├── thumbnails/          # on-demand 생성 썸네일 캐시
+└── music/              # 배경음악 파일
+```
+
+---
+
+## Synology NAS 배포
+
+상세 가이드 → [`doc/synology-deploy.md`](doc/synology-deploy.md)
+
+요약:
+1. NAS SSH에서 소스 클론 후 Docker 이미지 빌드
+2. `/volume1/photo`를 `:ro`(읽기 전용)로 마운트
+3. `/volume1/docker/lumisshow`를 데이터 볼륨으로 마운트
+4. DSM 리버스 프록시로 HTTPS 적용 (선택)
+
+---
+
+## 기술 스택
+
+| 영역 | 기술 |
+|------|------|
+| Backend | Python 3.12, FastAPI, aiosqlite (SQLite), Pillow |
+| Frontend | Vanilla JS (ES Modules), 빌드 도구 없음 |
+| Auth | JWT (python-jose), bcrypt, httpOnly 세션 쿠키 |
+| Container | Docker, single-container (FastAPI가 정적파일 서빙) |
+
+---
+
+## 보안
+
+- Admin 패스워드: bcrypt 해시 저장 지원 (`ADMIN_PASSWORD_HASH`)
+- JWT: 8시간 만료, 안전한 서명 키 필수
+- 공유 링크: UUID v4 토큰, httpOnly 세션 쿠키 (24시간)
+- 미디어 접근: 세션 쿠키 검증 + 앨범 소속 여부 확인 + `PHOTO_ROOT` 경로 이탈 방지
+- 음악 파일: `DATA_DIR/music/` 범위 이탈 방지
+- Brute-force 방어: 5회 실패 시 15분 잠금
+
+---
+
+## 라이선스
+
+MIT
