@@ -62,8 +62,9 @@ export async function renderSlideshow(token) {
   }
 
   const cfg = loadSettings();
-  const rawI = parseInt(new URLSearchParams(location.search).get('i') ?? '0', 10);
-  const startIdx = isNaN(rawI) ? 0 : Math.max(0, Math.min(photos.length - 1, rawI));
+  const rawI = parseInt(new URLSearchParams(location.search).get('i') ?? '', 10);
+  const urlIdx = isNaN(rawI) ? null : Math.max(0, Math.min(photos.length - 1, rawI));
+  const startIdx = urlIdx ?? (album.cover_index ?? 0);
   const displayOrder = buildOrder(photos.length, cfg.order, startIdx);
 
   // ── Mutable state ────────────────────────────────────────────

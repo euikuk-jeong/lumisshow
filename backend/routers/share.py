@@ -123,7 +123,7 @@ async def get_album(token: str, request: Request, db=Depends(get_db)):
 
     async with db.execute(
         """
-        SELECT a.name, a.description, a.music_path, a.created_at,
+        SELECT a.name, a.description, a.music_path, a.cover_path, a.created_at,
                sl.expires_at, COUNT(ap.id) AS photo_count
         FROM share_links sl
         JOIN albums a ON a.id = sl.album_id
@@ -138,6 +138,24 @@ async def get_album(token: str, request: Request, db=Depends(get_db)):
     if row is None:
         raise HTTPException(status_code=404, detail="Album not found")
 
+    cover_index = None
+    if row["cover_path"]:
+        async with db.execute(
+            """
+            SELECT ap.file_path FROM album_photos ap
+            JOIN share_links sl ON sl.album_id = ap.album_id
+            WHERE sl.token = ?
+            ORDER BY ap.sort_order, ap.id
+            """,
+            (token,),
+        ) as cur2:
+            photo_rows = await cur2.fetchall()
+        paths = [r["file_path"] for r in photo_rows]
+        try:
+            cover_index = paths.index(row["cover_path"])
+        except ValueError:
+            pass
+
     music_paths = parse_music_paths(row["music_path"])
     return {
         "album_name": row["name"],
@@ -148,6 +166,7 @@ async def get_album(token: str, request: Request, db=Depends(get_db)):
         "has_music": len(music_paths) > 0,
         "music_count": len(music_paths),
         "music_names": [os.path.basename(p) for p in music_paths],
+        "cover_index": cover_index,
     }
 
 

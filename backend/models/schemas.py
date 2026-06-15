@@ -133,6 +133,7 @@ class ShareAlbumResponse(BaseModel):
     has_music: bool
     music_count: int
     music_names: list[str]
+    cover_index: Optional[int] = None
 
 class SharePhotoItem(BaseModel):
     id: int

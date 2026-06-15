@@ -44,7 +44,8 @@ export async function renderAlbumView(token) {
   }
 
   const photos = photosData.photos;
-  const coverUrl = photos.length > 0 ? photos[0].thumb_medium_url : null;
+  const coverPhoto = album.cover_index != null ? photos[album.cover_index] : photos[0];
+  const coverUrl = coverPhoto ? coverPhoto.thumb_medium_url : null;
 
   const expiryHtml = album.expires_at
     ? `<span>⏰ 만료: ${new Date(album.expires_at).toLocaleDateString('ko-KR')}</span>`

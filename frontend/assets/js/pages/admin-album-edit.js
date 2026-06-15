@@ -123,7 +123,7 @@ function renderEditForm(album, links) {
             <a href="/admin/browse?album_id=${album.id}" class="btn btn-ghost btn-sm" data-link>+ 사진 추가</a>
           </div>
           <div id="photo-grid" class="photo-grid">
-            ${album.photos.map(p => photoThumb(p, token)).join('') || '<p class="text-muted text-sm">사진이 없습니다</p>'}
+            ${album.photos.map(p => photoThumb(p, token, album.cover_path)).join('') || '<p class="text-muted text-sm">사진이 없습니다</p>'}
           </div>
         </div>
       </div>
@@ -217,6 +217,7 @@ function renderEditForm(album, links) {
 
   bindInfoForm(album.id, () => musicPaths);
   bindPhotoRemove(album.id);
+  bindCoverSet(album.id);
   bindLinkActions(album.id, links);
 }
 
@@ -307,6 +308,29 @@ async function openMusicModal(currentPaths, onConfirm) {
   }
 }
 
+function bindCoverSet(albumId) {
+  document.getElementById('photo-grid').addEventListener('click', async e => {
+    const btn = e.target.closest('.photo-set-cover');
+    if (!btn) return;
+    const filePath = btn.dataset.path;
+    try {
+      await api.put(`/api/admin/albums/${albumId}`, { cover_path: filePath });
+      document.querySelectorAll('#photo-grid .photo-thumb.is-cover').forEach(el => {
+        el.classList.remove('is-cover');
+        el.querySelector('.cover-badge')?.remove();
+      });
+      const thumb = btn.closest('.photo-thumb');
+      thumb.classList.add('is-cover');
+      const badge = document.createElement('span');
+      badge.className = 'cover-badge';
+      badge.textContent = '커버';
+      thumb.prepend(badge);
+    } catch (err) {
+      alert(err.message);
+    }
+  });
+}
+
 function bindPhotoRemove(albumId) {
   document.getElementById('photo-grid').addEventListener('click', async e => {
     const btn = e.target.closest('.photo-remove');
@@ -368,7 +392,6 @@ function bindLinkActions(albumId, links) {
       document.getElementById('links-container').innerHTML = renderLinks(links);
       document.getElementById('lf-password').value = '';
       document.getElementById('lf-expires').value = '';
-      document.getElementById('lf-expires-display').textContent = '';
       formArea.style.display = 'none';
       bindLinkDeactivate(albumId);
     } catch (err) {
@@ -439,10 +462,8 @@ function renderLinkForm() {
             <label class="form-label">만료일 (선택)</label>
             <div class="date-row">
               <input id="lf-expires" type="date" class="form-input">
-              <button type="button" id="btn-select-date" class="btn btn-primary btn-sm">선택</button>
               <button type="button" id="btn-clear-date" class="btn btn-ghost btn-sm">지우기</button>
             </div>
-            <span id="lf-expires-display" class="date-display-text"></span>
           </div>
           <div class="flex gap-2">
             <button type="submit" class="btn btn-primary btn-sm" id="btn-create-link">링크 생성</button>
@@ -453,26 +474,19 @@ function renderLinkForm() {
 }
 
 function bindDatePicker() {
-  const input   = document.getElementById('lf-expires');
-  const display = document.getElementById('lf-expires-display');
-
-  document.getElementById('btn-select-date').addEventListener('click', () => {
-    display.textContent = input.value
-      ? new Date(input.value + 'T00:00:00').toLocaleDateString('ko-KR') + ' 만료'
-      : '';
-  });
-
   document.getElementById('btn-clear-date').addEventListener('click', () => {
-    input.value = '';
-    display.textContent = '';
+    document.getElementById('lf-expires').value = '';
   });
 }
 
-function photoThumb(photo, token) {
+function photoThumb(photo, token, coverPath) {
   const thumbUrl = `/api/admin/thumb?path=${encodeURIComponent(photo.file_path)}&size=small&token=${token}`;
+  const isCover  = photo.file_path === coverPath;
   return `
-    <div class="photo-thumb">
+    <div class="photo-thumb${isCover ? ' is-cover' : ''}">
       <img src="${thumbUrl}" alt="" loading="lazy" onerror="this.style.opacity='0.3'">
+      ${isCover ? '<span class="cover-badge">커버</span>' : ''}
+      <button class="photo-set-cover" data-path="${esc(photo.file_path)}">커버로 설정</button>
       <button class="photo-remove" data-path="${esc(photo.file_path)}" title="제외">✕</button>
     </div>`;
 }
