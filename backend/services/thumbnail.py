@@ -47,25 +47,130 @@ def generate_thumbnail(file_path: str, size: str) -> str:
     return out_path
 
 
-_EXIF_ORIENTATION = 274
+# ── EXIF tag IDs ──────────────────────────────────────────────────────────────
+
+_EXIF_ORIENTATION    = 274
 _ROTATE_SWAP_ORIENTATIONS = {5, 6, 7, 8}
+
+# Main IFD (IFD0)
+_EXIF_MAKE           = 271
+_EXIF_MODEL          = 272
+_EXIF_SOFTWARE       = 305
+
+# Exif sub-IFD (tag 34665)
+_EXIF_SUB_IFD        = 0x8769
+_EXIF_EXPOSURE_TIME  = 33434
+_EXIF_F_NUMBER       = 33437
+_EXIF_EXPOSURE_PROG  = 34850
+_EXIF_ISO            = 34855
+_EXIF_METERING_MODE  = 37383
+_EXIF_FLASH          = 37385
+_EXIF_FOCAL_LENGTH   = 37386
+_EXIF_EXPOSURE_MODE  = 41985
+
+_EXPOSURE_PROGRAM = {
+    0: "Not defined", 1: "Manual", 2: "Program AE",
+    3: "Aperture priority", 4: "Shutter priority",
+    5: "Creative", 6: "Action", 7: "Portrait", 8: "Landscape",
+}
+_METERING_MODE = {
+    0: "Unknown", 1: "Average", 2: "Center-weighted",
+    3: "Spot", 4: "Multi-spot", 5: "Multi-segment", 6: "Partial",
+}
+_EXPOSURE_MODE = {0: "Auto", 1: "Manual", 2: "Auto bracket"}
+
+_EMPTY_META: dict = {
+    "width": None, "height": None, "taken_at": None,
+    "make": None, "camera": None, "software": None,
+    "shutter": None, "aperture": None, "iso": None, "focal_length": None,
+    "shoot_mode": None, "flash": None, "metering": None, "exposure_mode": None,
+}
+
+
+def _to_float(val) -> Optional[float]:
+    try:
+        v = float(val)
+        import math
+        return None if math.isnan(v) or math.isinf(v) else v
+    except (TypeError, ValueError, ZeroDivisionError):
+        return None
 
 
 def get_image_meta(file_path: str) -> dict:
-    """EXIF에서 촬영일, 해상도 추출. 실패 시 None 반환."""
+    """EXIF에서 메타데이터 추출. 실패 시 None 반환."""
     try:
         with Image.open(file_path) as img:
             width, height = img.size
             exif = img.getexif()
             if exif.get(_EXIF_ORIENTATION) in _ROTATE_SWAP_ORIENTATIONS:
                 width, height = height, width
-            raw_dt: Optional[str] = exif.get(_EXIF_DATETIME_ORIGINAL) or exif.get(_EXIF_DATETIME)
+
+            # 카메라 설정 태그는 Exif sub-IFD에 있으므로 별도 접근
+            sub = exif.get_ifd(_EXIF_SUB_IFD)
+
+            def get(tag: int):
+                v = exif.get(tag)
+                return v if v is not None else sub.get(tag)
+
+            # 촬영일
+            raw_dt: Optional[str] = get(_EXIF_DATETIME_ORIGINAL) or get(_EXIF_DATETIME)
             taken_at: Optional[datetime] = None
             if raw_dt:
                 try:
-                    taken_at = datetime.strptime(raw_dt, "%Y:%m:%d %H:%M:%S")
+                    taken_at = datetime.strptime(str(raw_dt), "%Y:%m:%d %H:%M:%S")
                 except ValueError:
                     pass
-            return {"width": width, "height": height, "taken_at": taken_at}
+
+            # 제작사 / 모델
+            make: Optional[str] = str(exif.get(_EXIF_MAKE, "") or "").strip() or None
+            model: Optional[str] = str(exif.get(_EXIF_MODEL, "") or "").strip() or None
+            camera: Optional[str] = model  # 모델명만 표시
+
+            # 소프트웨어
+            software: Optional[str] = str(exif.get(_EXIF_SOFTWARE, "") or "").replace("\x00", "").strip() or None
+
+            # 노출 시간 (셔터 스피드)
+            shutter: Optional[str] = None
+            val = _to_float(get(_EXIF_EXPOSURE_TIME))
+            if val and val > 0:
+                shutter = f"1/{round(1/val)} s" if val < 1 else f"{val:.1f} s"
+
+            # 조리개
+            f_num = _to_float(get(_EXIF_F_NUMBER))
+            aperture: Optional[str] = f"f/{f_num:.1f}" if f_num else None
+
+            # ISO
+            iso_raw = get(_EXIF_ISO)
+            iso: Optional[int] = int(iso_raw) if iso_raw is not None else None
+
+            # 초점 거리
+            fl = _to_float(get(_EXIF_FOCAL_LENGTH))
+            focal_length: Optional[str] = f"{fl:.0f} mm" if fl else None
+
+            # 촬영 모드 (ExposureProgram)
+            ep = get(_EXIF_EXPOSURE_PROG)
+            shoot_mode: Optional[str] = _EXPOSURE_PROGRAM.get(int(ep)) if ep is not None else None
+
+            # 플래시
+            flash_raw = get(_EXIF_FLASH)
+            flash: Optional[str] = None
+            if flash_raw is not None:
+                flash = "Fired" if (int(flash_raw) & 0x1) else "No flash"
+
+            # 측광 방식
+            mm = get(_EXIF_METERING_MODE)
+            metering: Optional[str] = _METERING_MODE.get(int(mm)) if mm is not None else None
+
+            # 노출 방식
+            em = get(_EXIF_EXPOSURE_MODE)
+            exposure_mode: Optional[str] = _EXPOSURE_MODE.get(int(em)) if em is not None else None
+
+            return {
+                "width": width, "height": height, "taken_at": taken_at,
+                "make": make, "camera": camera, "software": software,
+                "shutter": shutter, "aperture": aperture, "iso": iso,
+                "focal_length": focal_length, "shoot_mode": shoot_mode,
+                "flash": flash, "metering": metering, "exposure_mode": exposure_mode,
+            }
     except Exception:
-        return {"width": None, "height": None, "taken_at": None}
+        return dict(_EMPTY_META)

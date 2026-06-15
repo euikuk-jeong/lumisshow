@@ -22,6 +22,9 @@ def _secret() -> str:
 # ── 비밀번호 ──────────────────────────────────────────────────────────────────
 
 def verify_admin_password(plain: str) -> bool:
+    pw_hash = os.getenv("ADMIN_PASSWORD_HASH")
+    if pw_hash:
+        return _bcrypt.checkpw(plain.encode(), pw_hash.encode())
     expected = os.getenv("ADMIN_PASSWORD", "dev_password")
     return hmac.compare_digest(plain.encode(), expected.encode())
 

@@ -16,14 +16,11 @@ _INSECURE_DEFAULTS = {"dev_secret_key", "dev_password"}
 
 
 def _validate_env() -> None:
-    issues = [
-        name
-        for name, key, default in [
-            ("JWT_SECRET", "JWT_SECRET", "dev_secret_key"),
-            ("ADMIN_PASSWORD", "ADMIN_PASSWORD", "dev_password"),
-        ]
-        if os.getenv(key, default) in _INSECURE_DEFAULTS
-    ]
+    issues = []
+    if os.getenv("JWT_SECRET", "dev_secret_key") in _INSECURE_DEFAULTS:
+        issues.append("JWT_SECRET")
+    if not os.getenv("ADMIN_PASSWORD_HASH") and os.getenv("ADMIN_PASSWORD", "dev_password") in _INSECURE_DEFAULTS:
+        issues.append("ADMIN_PASSWORD")
     if issues:
         _logger.warning(
             "INSECURE CONFIGURATION: %s use default dev values — set secure values before production use.",
