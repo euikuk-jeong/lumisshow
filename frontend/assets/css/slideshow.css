@@ -77,13 +77,25 @@
   white-space: nowrap;
 }
 .ss-tb-btn:hover { background: rgba(255,255,255,0.28); }
+.ss-info-btn-icon { font-style: italic; font-weight: bold; }
 
 .ss-counter {
   color: rgba(255,255,255,0.85);
   font-size: 13px;
   min-width: 64px;
   text-align: center;
+}
+
+.ss-music-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.ss-toolbar-spacer {
   flex: 1;
+  min-width: 4px;
 }
 
 .ss-vol {
@@ -151,6 +163,92 @@
 .ss-in-flip-h      { animation: ss-flip-in   0.35s ease-out 0.35s  both; }
 .ss-out-blur       { animation: ss-blur-out  0.7s ease             forwards; }
 .ss-in-blur        { animation: ss-blur-in   0.7s ease             forwards; }
+
+/* ── Music toast (above toolbar, left-aligned) ─────────────── */
+
+.ss-music-toast {
+  position: absolute;
+  bottom: 68px;
+  left: 16px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(8px);
+  color: rgba(255, 255, 255, 0.92);
+  padding: 7px 14px;
+  border-radius: 20px;
+  font-size: 13px;
+  z-index: 15;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(4px);
+  transition: opacity 0.3s ease, transform 0.3s ease;
+  max-width: 280px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ss-music-toast.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.ss-music-toast-icon {
+  opacity: 0.75;
+  flex-shrink: 0;
+}
+
+/* ── Info overlay (top-left) ───────────────────────────────── */
+
+.ss-info {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  z-index: 10;
+  background: rgba(0,0,0,0.6);
+  backdrop-filter: blur(4px);
+  color: #fff;
+  padding: 12px 16px;
+  border-radius: 6px;
+  font-size: 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  max-width: 360px;
+  pointer-events: none;
+}
+
+.ss-info-row {
+  display: grid;
+  grid-template-columns: 90px 1fr;
+  gap: 8px;
+  line-height: 1.5;
+}
+
+.ss-info-label {
+  color: rgba(255,255,255,0.55);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.ss-info-value {
+  word-break: break-all;
+}
+
+.ss-info-divider {
+  border-top: 1px solid rgba(255, 255, 255, 0.15);
+  margin: 8px 0;
+}
+
+.ss-info-section {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.4);
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  margin-bottom: 5px;
+}
 
 /* ── Mobile ────────────────────────────────────────────────── */
 

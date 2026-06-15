@@ -1,3 +1,4 @@
+import json
 import os
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -10,6 +11,7 @@ from backend.models.schemas import (
     AlbumUpdate,
     PhotoOrderRequest,
     PhotoPathsRequest,
+    parse_music_paths,
 )
 from backend.services.auth import get_current_admin
 
@@ -18,13 +20,13 @@ router = APIRouter(prefix="/api/admin/albums", tags=["admin-albums"])
 
 def _resolve_paths(paths: list[str]) -> list[str]:
     """상대 경로를 PHOTO_ROOT 기준 절대 경로로 변환. 절대 경로는 그대로 통과."""
-    root = os.getenv("PHOTO_ROOT", "./testdata/photos")
+    root = os.path.realpath(os.getenv("PHOTO_ROOT", "./testdata/photos"))
     return [
-        os.path.normpath(os.path.join(root, p)) if not os.path.isabs(p) else p
+        os.path.realpath(os.path.join(root, p)) if not os.path.isabs(p) else os.path.realpath(p)
         for p in paths
     ]
 
-_ALLOWED_UPDATE_COLS = {"name", "description", "cover_path", "music_path"}
+_ALLOWED_UPDATE_COLS = {"name", "description", "cover_path"}
 
 
 async def _get_album_or_404(album_id: int, db):
@@ -32,6 +34,12 @@ async def _get_album_or_404(album_id: int, db):
         row = await cur.fetchone()
     if row is None:
         raise HTTPException(status_code=404, detail="Album not found")
+
+
+def _row_to_album_dict(row) -> dict:
+    d = dict(row)
+    d['music_paths'] = parse_music_paths(d.pop('music_path', None))
+    return d
 
 
 async def _fetch_album(album_id: int, db) -> dict:
@@ -47,7 +55,7 @@ async def _fetch_album(album_id: int, db) -> dict:
         row = await cur.fetchone()
     if row is None:
         raise HTTPException(status_code=404, detail="Album not found")
-    return dict(row)
+    return _row_to_album_dict(row)
 
 
 # ── CRUD ──────────────────────────────────────────────────────────────────────
@@ -62,7 +70,7 @@ async def list_albums(_: str = Depends(get_current_admin), db=Depends(get_db)):
         """
     ) as cur:
         rows = await cur.fetchall()
-    return [dict(r) for r in rows]
+    return [_row_to_album_dict(r) for r in rows]
 
 
 @router.post("", response_model=AlbumResponse, status_code=201)
@@ -105,18 +113,19 @@ async def get_album(
     return album
 
 
-@router.patch("/{album_id}", response_model=AlbumResponse)
+@router.put("/{album_id}", response_model=AlbumResponse)
 async def update_album(
     album_id: int,
     body: AlbumUpdate,
     _: str = Depends(get_current_admin),
     db=Depends(get_db),
 ):
-    updates = {
-        k: v
-        for k, v in body.model_dump(exclude_unset=True).items()
-        if k in _ALLOWED_UPDATE_COLS
-    }
+    body_data = body.model_dump(exclude_unset=True)
+    updates = {k: v for k, v in body_data.items() if k in _ALLOWED_UPDATE_COLS}
+    if 'music_paths' in body_data:
+        updates['music_path'] = (
+            json.dumps(body_data['music_paths']) if body_data['music_paths'] else None
+        )
     if updates:
         cols = ", ".join(f"{k} = ?" for k in updates)
         await db.execute(

@@ -1,10 +1,11 @@
 import asyncio
 import os
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import FileResponse
 
 from backend.models.database import get_db
+from backend.models.schemas import parse_music_paths
 from backend.services.auth import get_share_token_from_cookie, verify_share_session_cookie
 from backend.services.thumbnail import SIZES, generate_thumbnail
 
@@ -58,7 +59,7 @@ async def serve_media(file_path: str, request: Request, db=Depends(get_db)):
     _assert_within_photo_root(file_path)
     if not os.path.isfile(file_path):
         raise HTTPException(status_code=404, detail="File not found")
-    return FileResponse(file_path)
+    return FileResponse(file_path, filename=os.path.basename(file_path))
 
 
 def _music_dir() -> str:
@@ -66,7 +67,7 @@ def _music_dir() -> str:
 
 
 @router.get("/music/{token}")
-async def serve_music(token: str, request: Request, db=Depends(get_db)):
+async def serve_music(token: str, request: Request, index: int = Query(default=0, ge=0), db=Depends(get_db)):
     verify_share_session_cookie(token, request.cookies.get(_COOKIE))
     async with db.execute(
         """
@@ -78,11 +79,13 @@ async def serve_music(token: str, request: Request, db=Depends(get_db)):
         (token,),
     ) as cur:
         row = await cur.fetchone()
-    if row is None or row["music_path"] is None:
+    if row is None:
         raise HTTPException(status_code=404, detail="Music not found")
-    music_path = row["music_path"]
+    music_paths = parse_music_paths(row["music_path"])
+    if not music_paths or index >= len(music_paths):
+        raise HTTPException(status_code=404, detail="Track not found")
     allowed_dir = os.path.realpath(_music_dir())
-    resolved = os.path.realpath(music_path)
+    resolved = os.path.realpath(music_paths[index])
     if resolved != allowed_dir and not resolved.startswith(allowed_dir + os.sep):
         raise HTTPException(status_code=403, detail="Access denied")
     if not os.path.isfile(resolved):

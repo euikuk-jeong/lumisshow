@@ -1,6 +1,18 @@
+import json
 from datetime import datetime
 from typing import Optional
 from pydantic import BaseModel
+
+
+def parse_music_paths(raw: str | None) -> list[str]:
+    if not raw:
+        return []
+    if raw.startswith('['):
+        try:
+            return json.loads(raw)
+        except (json.JSONDecodeError, ValueError):
+            return []
+    return [raw]
 
 
 # ── Auth ──────────────────────────────────────────────────────────────────────
@@ -50,7 +62,7 @@ class AlbumUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
     cover_path: Optional[str] = None
-    music_path: Optional[str] = None
+    music_paths: Optional[list[str]] = None
 
 class AlbumPhotoResponse(BaseModel):
     id: int
@@ -64,7 +76,7 @@ class AlbumResponse(BaseModel):
     name: str
     description: Optional[str]
     cover_path: Optional[str]
-    music_path: Optional[str]
+    music_paths: list[str]
     photo_count: int
     created_at: datetime
     updated_at: datetime
@@ -119,14 +131,29 @@ class ShareAlbumResponse(BaseModel):
     created_at: datetime
     expires_at: Optional[datetime]
     has_music: bool
+    music_count: int
+    music_names: list[str]
 
 class SharePhotoItem(BaseModel):
     id: int
     url: str
     thumb_small_url: str
     thumb_medium_url: str
+    filename: Optional[str]
+    taken_at: Optional[datetime]
     width: Optional[int]
     height: Optional[int]
+    make: Optional[str]
+    camera: Optional[str]
+    software: Optional[str]
+    shutter: Optional[str]
+    aperture: Optional[str]
+    iso: Optional[int]
+    focal_length: Optional[str]
+    shoot_mode: Optional[str]
+    flash: Optional[str]
+    metering: Optional[str]
+    exposure_mode: Optional[str]
 
 class SharePhotosResponse(BaseModel):
     photos: list[SharePhotoItem]

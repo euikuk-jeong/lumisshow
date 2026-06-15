@@ -76,19 +76,48 @@ export async function renderSlideshow(token) {
   const preloadCache = {};
 
   // ── Audio ────────────────────────────────────────────────────
+  const musicCount = album.music_count || 0;
   let audio = null;
-  let musicOn = cfg.music && album.has_music;
-  if (album.has_music) {
-    audio = new Audio(`/music/${token}`);
-    audio.loop = true;
+  let musicOn = cfg.music && musicCount > 0;
+  let musicTrackIdx = 0;
+
+  if (musicCount > 0) {
+    audio = new Audio(`/music/${token}?index=0`);
     audio.volume = cfg.volume / 100;
+    if (musicCount === 1) {
+      audio.loop = true;
+    } else {
+      audio.addEventListener('ended', () => {
+        musicTrackIdx = (musicTrackIdx + 1) % musicCount;
+        audio.src = `/music/${token}?index=${musicTrackIdx}`;
+        if (musicOn) audio.play().catch(() => {});
+      });
+    }
+  }
+
+  function loadTrack(idx) {
+    if (!audio) return;
+    musicTrackIdx = ((idx % musicCount) + musicCount) % musicCount;
+    audio.src = `/music/${token}?index=${musicTrackIdx}`;
+    if (musicOn) {
+      audio.play().catch(() => {});
+      showMusicToast();
+    }
+    refreshInfoPanel();
   }
 
   // ── Render HTML ──────────────────────────────────────────────
-  const musicHtml = album.has_music ? `
-    <button class="ss-tb-btn" id="ss-music-btn" title="음악 끄기">♫</button>
-    <input type="range" id="ss-vol" class="ss-vol" min="0" max="100" value="${cfg.volume}" title="음량">
+  const prevNextTrackHtml = musicCount > 1 ? `
+    <button class="ss-tb-btn" id="ss-prev-track" title="이전 곡">&#9198;</button>
+    <button class="ss-tb-btn" id="ss-next-track" title="다음 곡">&#9197;</button>
   ` : '';
+  const musicHtml = musicCount > 0 ? `
+    <div class="ss-music-group">
+      <button class="ss-tb-btn" id="ss-music-btn" title="음악 끄기">&#9835;</button>
+      ${prevNextTrackHtml}
+      <input type="range" id="ss-vol" class="ss-vol" min="0" max="100" value="${cfg.volume}" title="음량">
+    </div>
+  ` : '<div class="ss-music-group"></div>';
 
   app.innerHTML = `
     <div class="ss-wrap" id="ss-wrap">
@@ -101,14 +130,21 @@ export async function renderSlideshow(token) {
       <button class="ss-arrow ss-arrow-prev" id="ss-arr-prev">&#8249;</button>
       <button class="ss-arrow ss-arrow-next" id="ss-arr-next">&#8250;</button>
       <div class="ss-toolbar">
+        ${musicHtml}
+        <div class="ss-toolbar-spacer"></div>
         <button class="ss-tb-btn" id="ss-pause-btn" title="일시정지">&#9646;&#9646;</button>
         <button class="ss-tb-btn" id="ss-prev-btn" title="이전">&#9664;</button>
         <span class="ss-counter" id="ss-counter">1 / ${photos.length}</span>
         <button class="ss-tb-btn" id="ss-next-btn" title="다음">&#9654;</button>
         <a class="ss-tb-btn" id="ss-dl-btn" title="현재 사진 다운로드" download>&#8595;</a>
-        ${musicHtml}
+        <button class="ss-tb-btn ss-info-btn-icon" id="ss-info-btn" title="정보">i</button>
         <button class="ss-tb-btn" id="ss-close-btn" title="닫기">&#215;</button>
       </div>
+      <div class="ss-music-toast" id="ss-music-toast">
+        <span class="ss-music-toast-icon">&#9835;</span>
+        <span id="ss-music-toast-name"></span>
+      </div>
+      <div class="ss-info" id="ss-info" style="display:none"></div>
     </div>`;
 
   const slotEls = { a: document.getElementById('ss-slot-a'), b: document.getElementById('ss-slot-b') };
@@ -147,15 +183,67 @@ export async function renderSlideshow(token) {
     el.classList.add(cls);
   }
 
+  let infoVisible = false;
+
+  function formatInfo(photo) {
+    const rows = [];
+    const add = (label, value) => { if (value != null && value !== '') rows.push([label, String(value)]); };
+
+    add('Filename', photo.filename);
+    if (photo.taken_at) {
+      const d = new Date(photo.taken_at);
+      const pad = n => String(n).padStart(2, '0');
+      add('Date', `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`);
+    }
+    if (photo.width && photo.height) add('Resolution', `${photo.width} × ${photo.height}`);
+    add('Make', photo.make);
+    add('Camera', photo.camera);
+    add('Software', photo.software);
+    add('Shoot Mode', photo.shoot_mode);
+    add('Exposure', photo.shutter);
+    add('Aperture', photo.aperture);
+    add('ISO', photo.iso);
+    add('Focal Length', photo.focal_length);
+    add('Flash', photo.flash);
+    add('Metering', photo.metering);
+    add('Exposure Mode', photo.exposure_mode);
+
+    return rows.map(([l, v]) =>
+      `<div class="ss-info-row"><span class="ss-info-label">${esc(l)}</span><span class="ss-info-value">${esc(v)}</span></div>`
+    ).join('');
+  }
+
+  function renderInfoContent() {
+    const photoHtml = formatInfo(photoAt(pos));
+    if (!audio || !musicOn) return photoHtml;
+
+    const names = album.music_names || [];
+    const raw = names[musicTrackIdx] || `트랙 ${musicTrackIdx + 1}`;
+    const rows = [];
+    rows.push(['파일', raw.replace(/\.[^.]+$/, '')]);
+    if (musicCount > 1) rows.push(['트랙', `${musicTrackIdx + 1} / ${musicCount}`]);
+    const musicHtml = rows.map(([l, v]) =>
+      `<div class="ss-info-row"><span class="ss-info-label">${esc(l)}</span><span class="ss-info-value">${esc(v)}</span></div>`
+    ).join('');
+
+    return `${photoHtml}<div class="ss-info-divider"></div><div class="ss-info-section">&#9835; 재생 중</div>${musicHtml}`;
+  }
+
+  function refreshInfoPanel() {
+    const infoEl = document.getElementById('ss-info');
+    if (infoEl && infoVisible) infoEl.innerHTML = renderInfoContent();
+  }
+
   function updateUI() {
     const photo = photoAt(pos);
     const dlBtn = document.getElementById('ss-dl-btn');
     dlBtn.href = photo.url;
-    dlBtn.download = photo.url.split('/').pop().split('?')[0] || 'photo.jpg';
+    dlBtn.download = photo.filename || 'photo.jpg';
     document.getElementById('ss-counter').textContent = `${pos + 1} / ${photos.length}`;
     const pauseBtn = document.getElementById('ss-pause-btn');
     pauseBtn.innerHTML = playing ? '&#9646;&#9646;' : '&#9654;';
     pauseBtn.title = playing ? '일시정지' : '재개';
+    refreshInfoPanel();
   }
 
   function scheduleNext() {
@@ -216,10 +304,25 @@ export async function renderSlideshow(token) {
     }, TRANS_MS);
   }
 
+  // ── Music toast ──────────────────────────────────────────────
+  let musicToastTimer = null;
+
+  function showMusicToast() {
+    const toast = document.getElementById('ss-music-toast');
+    if (!toast) return;
+    const names = album.music_names || [];
+    const raw = names[musicTrackIdx] || `트랙 ${musicTrackIdx + 1}`;
+    document.getElementById('ss-music-toast-name').textContent = raw.replace(/\.[^.]+$/, '');
+    toast.classList.add('visible');
+    clearTimeout(musicToastTimer);
+    musicToastTimer = setTimeout(() => toast.classList.remove('visible'), 3000);
+  }
+
   // ── Cleanup (registered early so navigation during init is safe) ──
   function cleanup() {
     clearTimeout(timer);
     clearTimeout(transTimer);
+    clearTimeout(musicToastTimer);
     document.removeEventListener('keydown', handleKeydown);
     if (audio) { audio.pause(); audio.src = ''; }
   }
@@ -234,13 +337,20 @@ export async function renderSlideshow(token) {
   scheduleNext();
 
   // ── Music ────────────────────────────────────────────────────
+  function updateMusicBtn() {
+    const btn = document.getElementById('ss-music-btn');
+    if (!btn) return;
+    btn.style.opacity = musicOn ? '1' : '0.4';
+    btn.title = musicOn ? '음악 끄기' : '음악 켜기';
+  }
+
   if (audio && musicOn) {
-    audio.play().catch(() => {
+    audio.play().then(() => showMusicToast()).catch(() => {
       musicOn = false;
-      const btn = document.getElementById('ss-music-btn');
-      if (btn) { btn.textContent = '♫'; btn.style.opacity = '0.4'; btn.title = '음악 켜기'; }
+      updateMusicBtn();
     });
   }
+  updateMusicBtn();
 
   // ── Button events ────────────────────────────────────────────
   document.getElementById('ss-pause-btn').addEventListener('click', () => {
@@ -260,25 +370,41 @@ export async function renderSlideshow(token) {
   }
   document.getElementById('ss-close-btn').addEventListener('click', closeSlideshow);
 
-  if (album.has_music) {
-    const musicBtn = document.getElementById('ss-music-btn');
-    const volSlider = document.getElementById('ss-vol');
+  document.getElementById('ss-info-btn').addEventListener('click', () => {
+    infoVisible = !infoVisible;
+    const infoEl = document.getElementById('ss-info');
+    const btn = document.getElementById('ss-info-btn');
+    if (infoVisible) {
+      infoEl.innerHTML = renderInfoContent();
+      infoEl.style.display = 'block';
+      btn.style.background = 'rgba(255,255,255,0.35)';
+    } else {
+      infoEl.style.display = 'none';
+      btn.style.background = '';
+    }
+  });
 
-    musicBtn.addEventListener('click', () => {
+  if (musicCount > 0) {
+    document.getElementById('ss-music-btn').addEventListener('click', () => {
       if (!audio) return;
       musicOn = !musicOn;
       if (musicOn) {
-        audio.play().catch(() => { musicOn = false; musicBtn.style.opacity = '0.4'; musicBtn.title = '음악 켜기'; });
-        musicBtn.style.opacity = '1'; musicBtn.title = '음악 끄기';
+        audio.play().then(() => showMusicToast()).catch(() => { musicOn = false; updateMusicBtn(); });
       } else {
         audio.pause();
-        musicBtn.style.opacity = '0.4'; musicBtn.title = '음악 켜기';
       }
+      updateMusicBtn();
+      refreshInfoPanel();
     });
 
-    volSlider.addEventListener('input', (e) => {
+    document.getElementById('ss-vol')?.addEventListener('input', e => {
       if (audio) audio.volume = parseInt(e.target.value, 10) / 100;
     });
+
+    if (musicCount > 1) {
+      document.getElementById('ss-prev-track').addEventListener('click', () => loadTrack(musicTrackIdx - 1));
+      document.getElementById('ss-next-track').addEventListener('click', () => loadTrack(musicTrackIdx + 1));
+    }
   }
 
   // ── Keyboard ─────────────────────────────────────────────────

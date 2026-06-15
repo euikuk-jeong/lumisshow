@@ -10,6 +10,8 @@ from fastapi.responses import FileResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from backend.models.schemas import BrowseResponse, FolderItem, PhotoItem, SearchResponse
+
+_AUDIO_EXTENSIONS = {'.mp3', '.flac', '.ogg', '.m4a', '.wav', '.aac', '.opus'}
 from backend.services.auth import get_current_admin, verify_admin_token
 from backend.services.thumbnail import IMAGE_EXTENSIONS, generate_thumbnail, get_image_meta
 
@@ -148,6 +150,25 @@ async def search(
     return SearchResponse(items=all_items[offset : offset + size], total=total, page=page)
 
 
+@router.get("/music")
+async def list_music(_: str = Depends(get_current_admin)):
+    music_dir = os.path.join(os.getenv("DATA_DIR", "./testdata/data"), "music")
+    if not os.path.isdir(music_dir):
+        return {"files": []}
+    files = []
+    for dirpath, dirnames, filenames in os.walk(music_dir):
+        dirnames[:] = sorted(d for d in dirnames if not d.startswith("."))
+        for fname in sorted(filenames):
+            if fname.startswith("."):
+                continue
+            if Path(fname).suffix.lower() not in _AUDIO_EXTENSIONS:
+                continue
+            full_path = os.path.join(dirpath, fname)
+            rel = os.path.relpath(full_path, music_dir).replace("\\", "/")
+            files.append({"path": full_path, "name": fname, "rel": rel})
+    return {"files": files}
+
+
 @router.get("/thumb")
 async def admin_thumb(
     path: str = Query(...),
@@ -157,7 +178,10 @@ async def admin_thumb(
     if size not in ("small", "medium"):
         raise HTTPException(status_code=400, detail="size must be 'small' or 'medium'")
     root = _photo_root()
-    full_path = os.path.realpath(os.path.join(root, path.lstrip("/\\")))
+    if os.path.isabs(path):
+        full_path = os.path.realpath(path)
+    else:
+        full_path = os.path.realpath(os.path.join(root, path.lstrip("/\\")))
     if full_path != root and not full_path.startswith(root + os.sep):
         raise HTTPException(status_code=400, detail="Invalid path")
     if not os.path.isfile(full_path):

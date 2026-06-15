@@ -1,3 +1,4 @@
+import asyncio
 import os
 import time
 from datetime import datetime, timezone
@@ -12,12 +13,14 @@ from backend.models.schemas import (
     ShareAuthRequest,
     SharePhotoItem,
     SharePhotosResponse,
+    parse_music_paths,
 )
 from backend.services.auth import (
     create_share_session_token,
     verify_password,
     verify_share_session_cookie,
 )
+from backend.services.thumbnail import get_image_meta
 from backend.services.zip_stream import zip_generator
 
 router = APIRouter(prefix="/api/share", tags=["share"])
@@ -135,13 +138,16 @@ async def get_album(token: str, request: Request, db=Depends(get_db)):
     if row is None:
         raise HTTPException(status_code=404, detail="Album not found")
 
+    music_paths = parse_music_paths(row["music_path"])
     return {
         "album_name": row["name"],
         "description": row["description"],
         "photo_count": row["photo_count"],
         "created_at": row["created_at"],
         "expires_at": row["expires_at"],
-        "has_music": row["music_path"] is not None,
+        "has_music": len(music_paths) > 0,
+        "music_count": len(music_paths),
+        "music_names": [os.path.basename(p) for p in music_paths],
     }
 
 
@@ -162,16 +168,33 @@ async def get_photos(token: str, request: Request, db=Depends(get_db)):
     ) as cur:
         rows = await cur.fetchall()
 
+    metas = await asyncio.gather(*[
+        asyncio.to_thread(get_image_meta, r["file_path"]) for r in rows
+    ])
+
     photos = [
         SharePhotoItem(
             id=r["id"],
             url=f"/media/{quote(r['file_path'])}",
             thumb_small_url=f"/thumb/{quote(r['file_path'])}?size=small",
             thumb_medium_url=f"/thumb/{quote(r['file_path'])}?size=medium",
-            width=None,
-            height=None,
+            filename=os.path.basename(r["file_path"]),
+            taken_at=meta["taken_at"],
+            width=meta["width"],
+            height=meta["height"],
+            make=meta["make"],
+            camera=meta["camera"],
+            software=meta["software"],
+            shutter=meta["shutter"],
+            aperture=meta["aperture"],
+            iso=meta["iso"],
+            focal_length=meta["focal_length"],
+            shoot_mode=meta["shoot_mode"],
+            flash=meta["flash"],
+            metering=meta["metering"],
+            exposure_mode=meta["exposure_mode"],
         )
-        for r in rows
+        for r, meta in zip(rows, metas)
     ]
     return SharePhotosResponse(photos=photos, total=len(photos))
 
@@ -202,9 +225,10 @@ async def download_zip(token: str, request: Request, db=Depends(get_db)):
     paths = [r["file_path"] for r in rows]
     album_name = rows[0]["album_name"]
     safe_name = "".join(c for c in album_name if c.isalnum() or c in " _-").strip() or "album"
+    encoded_name = quote(safe_name + ".zip", safe="")
 
     return StreamingResponse(
         zip_generator(paths),
         media_type="application/zip",
-        headers={"Content-Disposition": f'attachment; filename="{safe_name}.zip"'},
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{encoded_name}"},
     )

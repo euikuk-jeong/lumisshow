@@ -105,8 +105,9 @@ function renderEditForm(album, links) {
               <textarea id="f-desc" class="form-textarea">${esc(album.description || '')}</textarea>
             </div>
             <div class="form-group">
-              <label class="form-label">배경음악 경로</label>
-              <input id="f-music" type="text" class="form-input" value="${esc(album.music_path || '')}" placeholder="/mnt/photos/music/song.mp3">
+              <label class="form-label">배경음악</label>
+              <div id="music-list" class="music-list"></div>
+              <button type="button" class="btn btn-ghost btn-sm" id="btn-browse-music">+ 음악 파일 선택</button>
             </div>
             <div>
               <button type="submit" class="btn btn-primary btn-sm" id="btn-save">저장</button>
@@ -142,12 +143,84 @@ function renderEditForm(album, links) {
     </div>
   `;
 
-  bindInfoForm(album.id);
+  let musicPaths = [...(album.music_paths || [])];
+
+  function refreshMusicList() {
+    const listEl = document.getElementById('music-list');
+    if (!listEl) return;
+    if (!musicPaths.length) {
+      listEl.innerHTML = '<p class="text-muted text-sm" style="margin:4px 0">음악 없음</p>';
+      return;
+    }
+
+    listEl.innerHTML = musicPaths.map((p, i) => `
+      <div class="music-item" draggable="true" data-index="${i}">
+        <span class="music-item-drag" title="드래그하여 순서 변경">⠿</span>
+        <span class="music-item-name">${esc(p.split(/[\\/]/).pop())}</span>
+        <button type="button" class="music-item-remove" data-index="${i}" title="제거">✕</button>
+      </div>`).join('');
+
+    listEl.querySelectorAll('.music-item-remove').forEach(btn => {
+      btn.addEventListener('click', () => {
+        musicPaths.splice(parseInt(btn.dataset.index, 10), 1);
+        refreshMusicList();
+      });
+    });
+
+    // ── Drag-and-drop reorder ────────────────────────────────
+    let dragSrcIdx = null;
+
+    listEl.querySelectorAll('.music-item').forEach(item => {
+      const idx = parseInt(item.dataset.index, 10);
+
+      item.addEventListener('dragstart', e => {
+        dragSrcIdx = idx;
+        e.dataTransfer.effectAllowed = 'move';
+        // setTimeout 으로 ghost 캡처 후 스타일 적용 (즉시 적용 시 ghost도 반투명해짐)
+        setTimeout(() => item.classList.add('dragging'), 0);
+      });
+
+      item.addEventListener('dragend', () => {
+        item.classList.remove('dragging');
+        listEl.querySelectorAll('.music-item').forEach(el => el.classList.remove('drag-over'));
+      });
+
+      item.addEventListener('dragover', e => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        if (dragSrcIdx !== idx) {
+          listEl.querySelectorAll('.music-item').forEach(el => el.classList.remove('drag-over'));
+          item.classList.add('drag-over');
+        }
+      });
+
+      item.addEventListener('dragleave', e => {
+        // 자식 요소로 이동할 때는 highlight 유지
+        if (!item.contains(e.relatedTarget)) item.classList.remove('drag-over');
+      });
+
+      item.addEventListener('drop', e => {
+        e.preventDefault();
+        if (dragSrcIdx === null || dragSrcIdx === idx) return;
+        const moved = musicPaths.splice(dragSrcIdx, 1)[0];
+        // 원소 제거 후 인덱스 보정: 앞에서 뒤로 이동 시 target이 한 칸 당겨짐
+        musicPaths.splice(dragSrcIdx < idx ? idx - 1 : idx, 0, moved);
+        refreshMusicList();
+      });
+    });
+  }
+  refreshMusicList();
+
+  document.getElementById('btn-browse-music').addEventListener('click', () => {
+    openMusicModal(musicPaths, selected => { musicPaths = selected; refreshMusicList(); });
+  });
+
+  bindInfoForm(album.id, () => musicPaths);
   bindPhotoRemove(album.id);
   bindLinkActions(album.id, links);
 }
 
-function bindInfoForm(albumId) {
+function bindInfoForm(albumId, getMusicPaths) {
   const errEl = document.getElementById('info-error');
   const okEl  = document.getElementById('save-ok');
   document.getElementById('info-form').addEventListener('submit', async e => {
@@ -160,7 +233,7 @@ function bindInfoForm(albumId) {
       await api.put(`/api/admin/albums/${albumId}`, {
         name:        document.getElementById('f-name').value.trim(),
         description: document.getElementById('f-desc').value.trim() || null,
-        music_path:  document.getElementById('f-music').value.trim() || null,
+        music_paths: getMusicPaths(),
       });
       okEl.style.display = 'inline';
       setTimeout(() => { okEl.style.display = 'none'; }, 2000);
@@ -171,6 +244,67 @@ function bindInfoForm(albumId) {
       btn.disabled = false;
     }
   });
+}
+
+async function openMusicModal(currentPaths, onConfirm) {
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.innerHTML = `
+    <div class="modal" style="max-width:480px">
+      <p class="modal-title">음악 파일 선택</p>
+      <div id="music-modal-body"><div class="loading"></div></div>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" id="modal-cancel">취소</button>
+        <button class="btn btn-primary" id="modal-confirm">확인</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+  document.getElementById('modal-cancel').addEventListener('click', () => overlay.remove());
+
+  let selected = new Set(currentPaths);
+
+  // confirm 리스너를 API 호출 전에 등록 (API 응답 전 클릭해도 동작)
+  overlay.querySelector('#modal-confirm').addEventListener('click', () => {
+    onConfirm(Array.from(selected));
+    overlay.remove();
+  });
+
+  try {
+    const { files } = await api.get('/api/admin/music');
+    const body = document.getElementById('music-modal-body');
+    if (!files.length) {
+      body.innerHTML = `<p class="text-muted text-sm" style="padding:12px 0">
+        음악 파일이 없습니다.<br>서버의 <code>data/music/</code> 폴더에 mp3 등을 추가하세요.</p>`;
+    } else {
+      body.innerHTML = `<div class="music-file-list">${files.map(f => `
+        <div class="music-file-item${selected.has(f.path) ? ' selected' : ''}" data-path="${esc(f.path)}">
+          <input type="checkbox" ${selected.has(f.path) ? 'checked' : ''}>
+          <div style="overflow:hidden;min-width:0">
+            <div class="music-file-name">${esc(f.name)}</div>
+            ${f.rel !== f.name ? `<div class="music-file-rel">${esc(f.rel)}</div>` : ''}
+          </div>
+        </div>`).join('')}</div>`;
+
+      body.querySelectorAll('.music-file-item').forEach(item => {
+        const cb = item.querySelector('input[type=checkbox]');
+
+        // change 이벤트가 selected Set의 단일 진실 공급원
+        cb.addEventListener('change', () => {
+          if (cb.checked) { selected.add(item.dataset.path); item.classList.add('selected'); }
+          else            { selected.delete(item.dataset.path); item.classList.remove('selected'); }
+        });
+
+        // 체크박스 외 영역 클릭 시 cb.click()으로 위임 → change 이벤트 발생
+        item.addEventListener('click', e => {
+          if (e.target !== cb) cb.click();
+        });
+      });
+    }
+  } catch (e) {
+    document.getElementById('music-modal-body').innerHTML =
+      `<div class="alert alert-error">${esc(e.message)}</div>`;
+  }
 }
 
 function bindPhotoRemove(albumId) {
@@ -250,7 +384,7 @@ function bindLinkDeactivate(albumId) {
       if (!confirm('이 공유 링크를 비활성화하시겠습니까?')) return;
       const linkId = btn.dataset.id;
       try {
-        await api.put(`/api/admin/albums/${albumId}/links/${linkId}`, { is_active: false });
+        await api.patch(`/api/admin/albums/${albumId}/links/${linkId}`, { is_active: false });
         btn.closest('.link-item').querySelector('.badge').className = 'badge badge-inactive';
         btn.closest('.link-item').querySelector('.badge').textContent = '비활성';
         btn.remove();
