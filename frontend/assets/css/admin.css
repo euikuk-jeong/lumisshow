@@ -210,6 +210,11 @@
 .link-meta { color: var(--muted); display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 6px; }
 .link-actions { display: flex; gap: 6px; }
 
+/* ── Date Picker ────────────────────────────────────────── */
+.date-row { display: flex; align-items: center; gap: 6px; }
+.date-row .form-input { flex: 1; }
+.date-display-text { font-size: 12px; color: var(--muted); margin-top: 4px; min-height: 16px; }
+
 /* ── Create Link Form ───────────────────────────────────── */
 .link-form {
   background: var(--elevated);

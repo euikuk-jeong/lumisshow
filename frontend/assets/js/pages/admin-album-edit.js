@@ -350,21 +350,25 @@ function bindLinkActions(albumId, links) {
     if (copyBtn) navigator.clipboard.writeText(copyBtn.dataset.url).catch(() => {});
   });
 
+  bindDatePicker();
+
   document.getElementById('link-form-area').addEventListener('submit', async e => {
     e.preventDefault();
     const pwd     = document.getElementById('lf-password').value || null;
-    const expires = document.getElementById('lf-expires').value || null;
+    const dateVal = document.getElementById('lf-expires').value;
+    const expires = dateVal ? `${dateVal}T23:59:59` : null;
     const btn     = document.getElementById('btn-create-link');
     btn.disabled  = true;
     try {
       const link = await api.post(`/api/admin/albums/${albumId}/links`, {
         password:   pwd || null,
-        expires_at: expires || null,
+        expires_at: expires,
       });
       links.push(link);
       document.getElementById('links-container').innerHTML = renderLinks(links);
       document.getElementById('lf-password').value = '';
       document.getElementById('lf-expires').value = '';
+      document.getElementById('lf-expires-display').textContent = '';
       formArea.style.display = 'none';
       bindLinkDeactivate(albumId);
     } catch (err) {
@@ -433,7 +437,12 @@ function renderLinkForm() {
           </div>
           <div class="form-group">
             <label class="form-label">만료일 (선택)</label>
-            <input id="lf-expires" type="datetime-local" class="form-input">
+            <div class="date-row">
+              <input id="lf-expires" type="date" class="form-input">
+              <button type="button" id="btn-select-date" class="btn btn-primary btn-sm">선택</button>
+              <button type="button" id="btn-clear-date" class="btn btn-ghost btn-sm">지우기</button>
+            </div>
+            <span id="lf-expires-display" class="date-display-text"></span>
           </div>
           <div class="flex gap-2">
             <button type="submit" class="btn btn-primary btn-sm" id="btn-create-link">링크 생성</button>
@@ -441,6 +450,22 @@ function renderLinkForm() {
         </div>
       </form>
     </div>`;
+}
+
+function bindDatePicker() {
+  const input   = document.getElementById('lf-expires');
+  const display = document.getElementById('lf-expires-display');
+
+  document.getElementById('btn-select-date').addEventListener('click', () => {
+    display.textContent = input.value
+      ? new Date(input.value + 'T00:00:00').toLocaleDateString('ko-KR') + ' 만료'
+      : '';
+  });
+
+  document.getElementById('btn-clear-date').addEventListener('click', () => {
+    input.value = '';
+    display.textContent = '';
+  });
 }
 
 function photoThumb(photo, token) {
