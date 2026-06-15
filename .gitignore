@@ -29,6 +29,9 @@ testdata/photos/
 .DS_Store
 Thumbs.db
 
+# Verification screenshots
+verify_*.png
+
 # IDE
 .vscode/
 .idea/
