@@ -7,6 +7,10 @@ set PHOTO_ROOT=./testdata/photos
 set DATA_DIR=./testdata/data
 set BASE_URL=http://localhost:8080
 
+rem -- git tag에서 APP_VERSION 자동 설정
+for /f %%i in ('git describe --tags --abbrev=0 2^>nul') do set APP_VERSION=%%i
+if not defined APP_VERSION set APP_VERSION=dev
+
 rem -- LAN IP 자동 감지 (단말 테스트용)
 set LAN_IP=
 for /f "tokens=2 delims=:" %%i in ('ipconfig ^| findstr /i "IPv4" ^| findstr /v "169.254"') do (
