@@ -26,6 +26,6 @@ export function renderAdminShell(mainHTML, activePath = '') {
   });
   getVersion().then(v => {
     const el = document.getElementById('nav-version');
-    if (el) el.textContent = `${v} · © euikuk.jeong`;
+    if (el) el.textContent = `${v} · Made by Ekjeong`;
   });
 }
