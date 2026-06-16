@@ -25,6 +25,13 @@
   letter-spacing: -0.3px;
 }
 .nav-brand:hover { text-decoration: none; opacity: 0.85; }
+.nav-version {
+  font-size: 10px;
+  font-weight: 400;
+  color: var(--muted);
+  margin-left: 4px;
+  vertical-align: middle;
+}
 .nav-links {
   display: flex;
   align-items: center;

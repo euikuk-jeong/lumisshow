@@ -178,6 +178,14 @@
 
 /* ── 반응형 ─────────────────────────────────────────────── */
 
+.viewer-version {
+  margin-top: 40px;
+  text-align: center;
+  font-size: 11px;
+  color: var(--muted);
+  opacity: 0.45;
+}
+
 @media (max-width: 600px) {
   .viewer-cover { height: 200px; }
   .viewer-title { font-size: 22px; }
