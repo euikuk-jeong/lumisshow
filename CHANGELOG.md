@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-06-17
+
+### Fixed
+- 버전 표시 이중 `v` 접두사 제거 (`vv0.2.1` → `v0.2.1`)
+
+### Changed
+- Admin 네비바 및 뷰어 하단에 `© euikuk.jeong` copyright 추가
+
 ## [0.2.1] - 2026-06-17
 
 ### Added
@@ -50,7 +58,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v0.2.2...HEAD
+[0.2.2]: https://github.com/euikuk-jeong/lumisshow/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/euikuk-jeong/lumisshow/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/euikuk-jeong/lumisshow/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/euikuk-jeong/lumisshow/releases/tag/v0.1.0
