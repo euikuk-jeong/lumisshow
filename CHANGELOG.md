@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-06-17
+
+### Added
+- 풀스크린 버튼 추가 (⛶ / ⊡ 토글, `requestFullscreen` API)
+- 반복 재생 설정 옵션 (켜기: 순환 / 끄기: 마지막 사진에서 정지)
+- 반복 완료 토스트: 사이클 종료 시 '🔁 처음부터 다시 재생' 3초 표시
+- 종료 토스트: 마지막 사진 인터벌 후 '슬라이드쇼가 종료되었습니다' 10초 표시
+- `localtest.bat`: LAN IP 자동 감지 포함 로컬 개발 서버 실행 스크립트
+
+### Changed
+- 모바일 반응형 레이아웃: 화살표·볼륨 슬라이더·info 버튼 숨김, 툴바 버튼 축소
+- landscape 강제 고정: CSS `rotate(90deg)` (portrait 미디어쿼리) + `screen.orientation.lock` 병행
+- 터치 스와이프 좌표 보정: portrait CSS 회전 시 축 매핑 처리
+- UI 자동 숨김: 마우스/탭 없을 시 3초 후 툴바·화살표 페이드 아웃
+- 음량 기본값 60% → 25%
+
 ## [0.1.0] - 2026-06-16
 
 ### Added
@@ -21,5 +37,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/euikuk-jeong/lumisshow/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/euikuk-jeong/lumisshow/releases/tag/v0.1.0
