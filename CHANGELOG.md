@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-06-17
+
+### Added
+- Admin 네비바 및 뷰어 하단에 버전 정보 표시 (`GET /version` 공개 엔드포인트)
+- `localtest.sh` 추가 (Git Bash용, git tag 기준 버전 자동 감지)
+
+### Fixed
+- `localtest.bat` 콘솔 한글 깨짐 → 영문으로 변경
+- `localtest.bat`에서 APP_VERSION git tag 자동 설정 (CMD에서 동작 안 하는 문제)
+
+### Changed
+- Dockerfile에 `ARG/ENV APP_VERSION` 추가, 릴리즈 시 git tag 자동 주입
+
 ## [0.2.0] - 2026-06-17
 
 ### Added
@@ -37,6 +50,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/euikuk-jeong/lumisshow/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/euikuk-jeong/lumisshow/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/euikuk-jeong/lumisshow/releases/tag/v0.1.0
