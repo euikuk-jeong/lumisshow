@@ -44,6 +44,7 @@
   transition: background 0.15s, color 0.15s;
 }
 .ss-arrow:hover { background: rgba(0,0,0,0.65); color: #fff; }
+.ss-arrow { transition: background 0.15s, color 0.15s, opacity 0.4s ease; }
 .ss-arrow-prev { left: 8px; }
 .ss-arrow-next { right: 8px; }
 
@@ -59,6 +60,7 @@
   padding: 12px 16px;
   background: linear-gradient(transparent, rgba(0,0,0,0.85));
   z-index: 10;
+  transition: opacity 0.4s ease;
 }
 
 .ss-tb-btn {
@@ -200,6 +202,31 @@
   flex-shrink: 0;
 }
 
+/* ── Loop toast (centered, above toolbar) ──────────────────── */
+
+.ss-loop-toast {
+  position: absolute;
+  bottom: 68px;
+  left: 50%;
+  transform: translateX(-50%) translateY(4px);
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(8px);
+  color: rgba(255, 255, 255, 0.92);
+  padding: 7px 16px;
+  border-radius: 20px;
+  font-size: 13px;
+  z-index: 15;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.3s ease, transform 0.3s ease;
+  white-space: nowrap;
+}
+
+.ss-loop-toast.visible {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
 /* ── Info overlay (top-left) ───────────────────────────────── */
 
 .ss-info {
@@ -250,11 +277,35 @@
   margin-bottom: 5px;
 }
 
+/* ── UI auto-hide (triggered by .ss-ui-hidden on wrap) ─────── */
+
+.ss-wrap.ss-ui-hidden .ss-toolbar,
+.ss-wrap.ss-ui-hidden .ss-arrow {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* ── Landscape force (portrait 단말에서 90deg 회전) ─────────── */
+
+@media only screen and (orientation: portrait) {
+  .ss-wrap {
+    inset: auto;
+    width: 100vh;
+    height: 100vw;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) rotate(90deg);
+  }
+}
+
 /* ── Mobile ────────────────────────────────────────────────── */
 
 @media (max-width: 600px) {
-  .ss-arrow { font-size: 38px; padding: 14px 10px; }
-  .ss-toolbar { gap: 2px; padding: 10px 10px; }
-  .ss-tb-btn  { padding: 6px 9px; font-size: 13px; }
-  .ss-vol { width: 60px; }
+  .ss-arrow { display: none; }
+  .ss-vol { display: none; }
+  #ss-prev-track, #ss-next-track { display: none; }
+  .ss-info-btn-icon { display: none; }
+  .ss-toolbar { gap: 3px; padding: 10px 8px; }
+  .ss-tb-btn { padding: 6px 10px; font-size: 14px; }
+  .ss-counter { min-width: 48px; font-size: 12px; }
 }
