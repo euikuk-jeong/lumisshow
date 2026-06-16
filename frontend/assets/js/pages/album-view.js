@@ -127,7 +127,7 @@ export async function renderAlbumView(token) {
   _initSettingsPanel(token);
   getVersion().then(v => {
     const el = document.getElementById('viewer-version');
-    if (el) el.textContent = `LumisShow v${v}`;
+    if (el) el.textContent = `LumisShow ${v} · © euikuk.jeong`;
   });
 
   document.getElementById('btn-slideshow').addEventListener('click', () => {
