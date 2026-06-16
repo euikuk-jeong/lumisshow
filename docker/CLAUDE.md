@@ -9,10 +9,14 @@ Docker 빌드·배포 상세 컨텍스트. 루트 → [`/CLAUDE.md`](../CLAUDE.m
 환경변수 설정은 루트의 `.env.example`을 복사해 `.env`로 사용한다. `ADMIN_PASSWORD`와 `JWT_SECRET`은 필수값 — 누락 시 컨테이너 시작 실패.
 
 ```bash
-# 이미지 빌드
-docker build -f docker/Dockerfile -t lumisshow:latest .
+# 이미지 빌드 (개발용 로컬 빌드)
+docker build -f docker/Dockerfile -t ghcr.io/euikuk-jeong/lumisshow:latest .
 
 # 로컬 컨테이너 실행 (.env 파일 필요)
+docker compose -f docker/docker-compose.yml up -d
+
+# GHCR에서 최신 이미지 pull 후 재시작 (운영 업데이트)
+docker compose -f docker/docker-compose.yml pull
 docker compose -f docker/docker-compose.yml up -d
 
 # 로그 확인 (container_name: lumisshow)

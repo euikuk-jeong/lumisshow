@@ -1,10 +1,7 @@
 services:
   lumisshow:
-    image: lumisshow:latest
+    image: ghcr.io/euikuk-jeong/lumisshow:latest
     container_name: lumisshow
-    build:
-      context: ..
-      dockerfile: docker/Dockerfile
     restart: unless-stopped
     ports:
       - "${APP_PORT:-8080}:${APP_PORT:-8080}"

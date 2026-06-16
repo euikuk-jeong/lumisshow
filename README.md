@@ -46,12 +46,20 @@ Synology NAS용 Docker 기반 사진 앨범 & 슬라이드쇼 웹 앱.
 
 ## 빠른 시작 (Docker)
 
-### 1. 이미지 빌드
+### 1. 이미지 준비
+
+**권장 — GHCR 사전 빌드 이미지 사용:**
+
+```bash
+docker pull ghcr.io/euikuk-jeong/lumisshow:latest
+```
+
+**직접 빌드 (개발/커스터마이즈):**
 
 ```bash
 git clone https://github.com/euikuk-jeong/lumisshow.git
 cd lumisshow
-docker build -f docker/Dockerfile -t lumisshow:latest .
+docker build -f docker/Dockerfile -t ghcr.io/euikuk-jeong/lumisshow:latest .
 ```
 
 ### 2. 환경변수 설정
@@ -85,6 +93,9 @@ docker compose -f docker/docker-compose.yml up -d
 ```
 
 브라우저에서 `http://localhost:8080/admin` 접속 후 로그인.
+
+> **Synology Container Manager에서 GHCR 이미지를 처음 사용할 때:**
+> GitHub → Packages → lumisshow → Package settings → **"Change visibility" → Public** 으로 변경해야 인증 없이 pull할 수 있어요. (최초 1회)
 
 ---
 
@@ -130,13 +141,39 @@ $DATA_DIR/
 
 ## Synology NAS 배포
 
-상세 가이드 → [`doc/synology-deploy.md`](doc/synology-deploy.md)
+### 최초 설치
 
-요약:
-1. NAS SSH에서 소스 클론 후 Docker 이미지 빌드
-2. `/volume1/photo`를 `:ro`(읽기 전용)로 마운트
-3. `/volume1/docker/lumisshow`를 데이터 볼륨으로 마운트
+1. NAS SSH에서 환경변수 파일 준비:
+
+```bash
+mkdir -p /volume1/docker/lumisshow-config
+cat > /volume1/docker/lumisshow-config/.env <<'EOF'
+ADMIN_PASSWORD_HASH=$2b$12$...   # bcrypt 해시 (권장)
+JWT_SECRET=<openssl rand -hex 32 출력값>
+BASE_URL=http://192.168.1.100:8080
+APP_PORT=8080
+EOF
+```
+
+2. Container Manager → 레지스트리 → `ghcr.io/euikuk-jeong/lumisshow:latest` 이미지 다운로드
+
+3. `docker/docker-compose.yml`로 스택 실행:
+   - `/volume1/photo` → `/mnt/photos` (읽기 전용)
+   - `/volume1/docker/lumisshow` → `/data`
+
 4. DSM 리버스 프록시로 HTTPS 적용 (선택)
+
+### 새 버전 업데이트
+
+```bash
+# SSH 또는 Container Manager 터미널에서
+docker compose -f /path/to/docker-compose.yml pull
+docker compose -f /path/to/docker-compose.yml up -d
+```
+
+또는 Container Manager UI에서 **스택 → 업데이트** 클릭.
+
+> **데이터 유지:** `/volume1/docker/lumisshow`가 외부 볼륨으로 마운트되어 있으면 업데이트 후에도 DB·썸네일·음악이 그대로 유지돼요.
 
 ---
 
