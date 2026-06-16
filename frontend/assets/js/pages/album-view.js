@@ -9,7 +9,7 @@ const EFFECT_LABELS = {
   'zoom-in': 'Zoom In', 'zoom-out': 'Zoom Out',
   'flip-h': 'Flip H', blur: 'Blur', dissolve: 'Dissolve',
 };
-const DEFAULT_SETTINGS = { interval: 5, order: 'sequential', music: true, volume: 60, effect: 'random' };
+const DEFAULT_SETTINGS = { interval: 5, order: 'sequential', music: true, volume: 25, effect: 'random', loop: true };
 
 function loadSettings() {
   try {
@@ -99,8 +99,15 @@ export async function renderAlbumView(token) {
             <label><input type="radio" name="s-music" value="off"> OFF</label>
           </div>
         </div>
+        <div class="form-group">
+          <label class="form-label">반복 재생</label>
+          <div class="settings-radios">
+            <label><input type="radio" name="s-loop" value="on"> 켜기</label>
+            <label><input type="radio" name="s-loop" value="off"> 끄기</label>
+          </div>
+        </div>
         <div class="form-group" id="s-volume-group">
-          <label class="form-label">음량 <span id="s-volume-label">60%</span></label>
+          <label class="form-label">음량 <span id="s-volume-label">25%</span></label>
           <input type="range" id="s-volume" min="0" max="100" class="w-full">
         </div>
         <div class="form-group">
@@ -137,6 +144,7 @@ function _initSettingsPanel(token) {
   document.getElementById('s-interval').value = s.interval;
   document.querySelector(`input[name="s-order"][value="${s.order}"]`).checked = true;
   document.querySelector(`input[name="s-music"][value="${s.music ? 'on' : 'off'}"]`).checked = true;
+  document.querySelector(`input[name="s-loop"][value="${s.loop ? 'on' : 'off'}"]`).checked = true;
   document.getElementById('s-volume').value = s.volume;
   document.getElementById('s-volume-label').textContent = `${s.volume}%`;
   document.getElementById('s-effect').value = s.effect;
@@ -154,6 +162,7 @@ function _initSettingsPanel(token) {
       interval: parseInt(document.getElementById('s-interval').value, 10) || 5,
       order: document.querySelector('input[name="s-order"]:checked').value,
       music: document.querySelector('input[name="s-music"]:checked').value === 'on',
+      loop: document.querySelector('input[name="s-loop"]:checked').value === 'on',
       volume: parseInt(document.getElementById('s-volume').value, 10),
       effect: document.getElementById('s-effect').value,
     });

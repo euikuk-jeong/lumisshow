@@ -6,7 +6,7 @@ const KB_CLASSES = ['kb-tl','kb-tr','kb-bl','kb-br','kb-t','kb-b','kb-l','kb-r']
 // Keep in sync with EFFECTS in album-view.js (excluding 'random')
 const EFFECTS = ['fade','slide-left','slide-right','slide-up','zoom-in','zoom-out','flip-h','blur','dissolve'];
 
-const DEFAULT_SETTINGS = { interval: 5, order: 'sequential', music: true, volume: 60, effect: 'random' };
+const DEFAULT_SETTINGS = { interval: 5, order: 'sequential', music: true, volume: 25, effect: 'random', loop: true };
 
 function loadSettings() {
   try {
@@ -74,6 +74,7 @@ export async function renderSlideshow(token) {
   let transitioning = false;
   let timer = null;
   let transTimer = null;
+  let hideTimer = null;
   const preloadCache = {};
 
   // ── Audio ────────────────────────────────────────────────────
@@ -139,12 +140,14 @@ export async function renderSlideshow(token) {
         <button class="ss-tb-btn" id="ss-next-btn" title="다음">&#9654;</button>
         <a class="ss-tb-btn" id="ss-dl-btn" title="현재 사진 다운로드" download>&#8595;</a>
         <button class="ss-tb-btn ss-info-btn-icon" id="ss-info-btn" title="정보">i</button>
+        <button class="ss-tb-btn" id="ss-fs-btn" title="전체화면">&#x26F6;</button>
         <button class="ss-tb-btn" id="ss-close-btn" title="닫기">&#215;</button>
       </div>
       <div class="ss-music-toast" id="ss-music-toast">
         <span class="ss-music-toast-icon">&#9835;</span>
         <span id="ss-music-toast-name"></span>
       </div>
+      <div class="ss-loop-toast" id="ss-loop-toast"></div>
       <div class="ss-info" id="ss-info" style="display:none"></div>
     </div>`;
 
@@ -250,6 +253,14 @@ export async function renderSlideshow(token) {
   function scheduleNext() {
     clearTimeout(timer);
     if (playing && !transitioning) {
+      if (!cfg.loop && pos === photos.length - 1) {
+        timer = setTimeout(() => {
+          playing = false;
+          updateUI();
+          showLoopToast('슬라이드쇼가 종료되었습니다', 10000);
+        }, cfg.interval * 1000);
+        return;
+      }
       timer = setTimeout(() => advance(1), cfg.interval * 1000);
     }
   }
@@ -259,6 +270,7 @@ export async function renderSlideshow(token) {
     clearTimeout(timer);
 
     const nextPos = ((pos + dir) % photos.length + photos.length) % photos.length;
+    const wrapped = cfg.loop && dir > 0 && pos === photos.length - 1 && nextPos === 0;
     const incoming = activeSlot === 'a' ? 'b' : 'a';
 
     // Pick effect
@@ -302,7 +314,20 @@ export async function renderSlideshow(token) {
 
       updateUI();
       scheduleNext();
+      if (wrapped) showLoopToast('🔁 처음부터 다시 재생');
     }, TRANS_MS);
+  }
+
+  // ── Loop toast ───────────────────────────────────────────────
+  let loopToastTimer = null;
+
+  function showLoopToast(msg, duration = 3000) {
+    const toast = document.getElementById('ss-loop-toast');
+    if (!toast) return;
+    toast.textContent = msg;
+    toast.classList.add('visible');
+    clearTimeout(loopToastTimer);
+    loopToastTimer = setTimeout(() => toast.classList.remove('visible'), duration);
   }
 
   // ── Music toast ──────────────────────────────────────────────
@@ -324,8 +349,12 @@ export async function renderSlideshow(token) {
     clearTimeout(timer);
     clearTimeout(transTimer);
     clearTimeout(musicToastTimer);
+    clearTimeout(loopToastTimer);
+    clearTimeout(hideTimer);
     document.removeEventListener('keydown', handleKeydown);
+    document.removeEventListener('fullscreenchange', handleFSChange);
     if (audio) { audio.pause(); audio.src = ''; }
+    screen.orientation?.unlock();
   }
   window._pageCleanup = cleanup;
 
@@ -366,6 +395,7 @@ export async function renderSlideshow(token) {
   document.getElementById('ss-arr-next').addEventListener('click', () => advance(1));
 
   function closeSlideshow() {
+    if (document.fullscreenElement) document.exitFullscreen();
     cleanup();
     window.navigate(`/s/${token}/view`, true);
   }
@@ -434,7 +464,39 @@ export async function renderSlideshow(token) {
   wrap.addEventListener('touchend', (e) => {
     const dx = e.changedTouches[0].clientX - touchX;
     const dy = e.changedTouches[0].clientY - touchY;
-    if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 50) advance(dx < 0 ? 1 : -1);
+    // portrait 모드에서는 CSS 90deg 회전으로 인해 축이 바뀜: 사용자의 좌우 스와이프 = DOM 상하
+    if (window.matchMedia('(orientation: portrait)').matches) {
+      if (Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > 50) advance(dy < 0 ? 1 : -1);
+    } else {
+      if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 50) advance(dx < 0 ? 1 : -1);
+    }
   }, { passive: true });
+
+  // ── Screen orientation ───────────────────────────────────────
+  screen.orientation?.lock('landscape').catch(() => {});
+
+  // ── UI auto-hide ─────────────────────────────────────────────
+  function showUI() {
+    wrap.classList.remove('ss-ui-hidden');
+    clearTimeout(hideTimer);
+    hideTimer = setTimeout(() => wrap.classList.add('ss-ui-hidden'), 3000);
+  }
+  wrap.addEventListener('mousemove', showUI);
+  wrap.addEventListener('touchstart', showUI, { passive: true });
+  showUI();
+
+  // ── Fullscreen ───────────────────────────────────────────────
+  function handleFSChange() {
+    const btn = document.getElementById('ss-fs-btn');
+    if (btn) btn.innerHTML = document.fullscreenElement ? '&#x22A1;' : '&#x26F6;';
+  }
+  document.addEventListener('fullscreenchange', handleFSChange);
+  document.getElementById('ss-fs-btn').addEventListener('click', () => {
+    if (!document.fullscreenElement) {
+      wrap.requestFullscreen().catch(() => {});
+    } else {
+      document.exitFullscreen();
+    }
+  });
 
 }
