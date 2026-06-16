@@ -1,5 +1,5 @@
 import { shareApi, ShareAuthError } from '../api.js';
-import { esc } from '../utils.js';
+import { esc, getVersion } from '../utils.js';
 
 const EFFECTS = ['random', 'fade', 'slide-left', 'slide-right', 'slide-up',
                  'zoom-in', 'zoom-out', 'flip-h', 'blur', 'dissolve'];
@@ -76,6 +76,7 @@ export async function renderAlbumView(token) {
                 <img src="${p.thumb_small_url}" alt="" loading="lazy">
               </div>`).join('')}
           </div>` : ''}
+        <div class="viewer-version" id="viewer-version"></div>
       </div>
     </div>
     <div class="settings-overlay" id="settings-overlay" style="display:none">
@@ -124,6 +125,10 @@ export async function renderAlbumView(token) {
     </div>`;
 
   _initSettingsPanel(token);
+  getVersion().then(v => {
+    const el = document.getElementById('viewer-version');
+    if (el) el.textContent = `LumisShow v${v}`;
+  });
 
   document.getElementById('btn-slideshow').addEventListener('click', () => {
     window.navigate(`/s/${token}/slideshow`);

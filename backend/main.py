@@ -13,6 +13,7 @@ from backend.routers import admin_albums, admin_browse, admin_links, auth, media
 _FRONTEND_DIR = Path(__file__).parent.parent / "frontend"
 _logger = logging.getLogger(__name__)
 _INSECURE_DEFAULTS = {"dev_secret_key", "dev_password"}
+APP_VERSION = os.getenv("APP_VERSION", "dev")
 
 
 def _validate_env() -> None:
@@ -35,7 +36,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="LumisShow", version="0.1.0", lifespan=lifespan)
+app = FastAPI(title="LumisShow", version=APP_VERSION, lifespan=lifespan)
 
 app.include_router(auth.router)
 app.include_router(admin_browse.router)
@@ -48,6 +49,11 @@ app.include_router(media.router)
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+
+@app.get("/version")
+def version():
+    return {"version": APP_VERSION}
 
 
 # 정적 파일 서빙 (frontend assets)
