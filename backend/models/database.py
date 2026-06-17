@@ -57,6 +57,7 @@ _ALBUM_MIGRATIONS = [
     "ALTER TABLE albums ADD COLUMN slideshow_loop     INTEGER",
     "ALTER TABLE albums ADD COLUMN photo_sort_by      TEXT",
     "ALTER TABLE albums ADD COLUMN photo_sort_dir     TEXT",
+    "ALTER TABLE albums ADD COLUMN view_count         INTEGER NOT NULL DEFAULT 0",
 ]
 
 

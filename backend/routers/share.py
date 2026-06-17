@@ -120,7 +120,13 @@ async def auth_link(
 @router.get("/{token}/album", response_model=ShareAlbumResponse)
 async def get_album(token: str, request: Request, db=Depends(get_db)):
     verify_share_session_cookie(token, request.cookies.get(_COOKIE_NAME))
-    await _get_valid_link(token, db)
+    link = await _get_valid_link(token, db)
+
+    await db.execute(
+        "UPDATE albums SET view_count = view_count + 1 WHERE id = ?",
+        (link["album_id"],),
+    )
+    await db.commit()
 
     async with db.execute(
         """

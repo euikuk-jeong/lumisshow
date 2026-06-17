@@ -53,6 +53,7 @@ function albumCard(album, token) {
         <div class="album-name" title="${esc(album.name)}">${esc(album.name)}</div>
         <div class="album-meta">
           <span>📷 ${album.photo_count}장</span>
+          <span>👁 ${album.view_count ?? 0}회</span>
           <span>${date}</span>
         </div>
       </div>

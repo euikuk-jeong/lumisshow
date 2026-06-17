@@ -243,6 +243,17 @@ async def update_album(
     return await _fetch_album(album_id, db)
 
 
+@router.delete("/{album_id}/view-count", status_code=204)
+async def reset_view_count(
+    album_id: int,
+    _: str = Depends(get_current_admin),
+    db=Depends(get_db),
+):
+    await _get_album_or_404(album_id, db)
+    await db.execute("UPDATE albums SET view_count = 0 WHERE id = ?", (album_id,))
+    await db.commit()
+
+
 @router.delete("/{album_id}", status_code=204)
 async def delete_album(
     album_id: int,

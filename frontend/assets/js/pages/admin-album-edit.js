@@ -123,6 +123,12 @@ function renderEditForm(album, links, tzOffset) {
               <span id="save-ok" class="text-success text-sm mt-1" style="display:none;margin-left:8px">저장됨 ✓</span>
             </div>
           </form>
+          <hr class="divider" style="margin:12px 0">
+          <div class="flex items-center gap-2">
+            <span class="form-label" style="margin:0">조회 수</span>
+            <span id="view-count-value">${album.view_count ?? 0}회</span>
+            <button type="button" class="btn btn-ghost btn-sm" id="btn-reset-views">초기화</button>
+          </div>
         </div>
 
         <!-- Slideshow defaults -->
@@ -299,6 +305,7 @@ function renderEditForm(album, links, tzOffset) {
   });
 
   bindInfoForm(album.id, () => musicPaths);
+  bindViewCountReset(album.id);
   bindSlideshowForm(album.id);
   bindPhotoRemove(album.id);
   bindCoverSet(album.id);
@@ -331,6 +338,18 @@ function bindSlideshowForm(albumId) {
       errEl.style.display = 'block';
     } finally {
       btn.disabled = false;
+    }
+  });
+}
+
+function bindViewCountReset(albumId) {
+  document.getElementById('btn-reset-views').addEventListener('click', async () => {
+    if (!confirm('조회 수를 0으로 초기화하시겠습니까?')) return;
+    try {
+      await api.delete(`/api/admin/albums/${albumId}/view-count`);
+      document.getElementById('view-count-value').textContent = '0회';
+    } catch (e) {
+      alert(e.message);
     }
   });
 }
