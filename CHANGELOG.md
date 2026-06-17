@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.5] - 2026-06-18
+
+### Added
+- 앨범 사진 정렬 기능: 앨범 편집 화면 사진 섹션에 정렬 버튼 추가 ("+사진 추가" 왼쪽)
+  - 정렬 기준: 파일명 / 촬영일(EXIF 기반), 기본값: 촬영일 오름차순
+  - 방향: 오름차순 / 내림차순
+  - 적용 시 album_photos.sort_order 실체화 → 슬라이드쇼·공유 뷰어 자동 반영
+  - 사진 추가 시에도 앨범 sort 설정에 맞게 자동 재정렬
+  - 촬영일 EXIF 없는 사진은 파일명으로 tiebreak
+
 ## [0.2.4] - 2026-06-17
 
 ### Added
