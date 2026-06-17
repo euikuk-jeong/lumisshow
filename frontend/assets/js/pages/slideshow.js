@@ -8,13 +8,16 @@ const EFFECTS = ['fade','slide-left','slide-right','slide-up','zoom-in','zoom-ou
 
 const DEFAULT_SETTINGS = { interval: 5, order: 'sequential', music: true, volume: 25, effect: 'random', loop: true };
 
-function loadSettings() {
+function loadSettings(albumDefaults = {}, token = '') {
+  // 앨범 DB 기본값 + 토큰별 localStorage 로컬 오버라이드
+  const base = { ...DEFAULT_SETTINGS, ...albumDefaults };
   try {
-    const s = { ...DEFAULT_SETTINGS, ...JSON.parse(localStorage.getItem('slideshow_settings') || '{}') };
-    if (!['sequential', 'random'].includes(s.order)) s.order = DEFAULT_SETTINGS.order;
-    if (s.effect !== 'random' && !EFFECTS.includes(s.effect)) s.effect = DEFAULT_SETTINGS.effect;
+    const local = JSON.parse(localStorage.getItem(`slideshow_settings_${token}`) || '{}');
+    const s = { ...base, ...local };
+    if (!['sequential', 'random'].includes(s.order)) s.order = base.order;
+    if (s.effect !== 'random' && !EFFECTS.includes(s.effect)) s.effect = base.effect;
     return s;
-  } catch { return { ...DEFAULT_SETTINGS }; }
+  } catch { return { ...base }; }
 }
 
 function buildOrder(total, order, startIdx) {
@@ -61,7 +64,7 @@ export async function renderSlideshow(token) {
     return;
   }
 
-  const cfg = loadSettings();
+  const cfg = loadSettings(album.slideshow_defaults || {}, token);
   const rawI = parseInt(new URLSearchParams(location.search).get('i') ?? '', 10);
   const urlIdx = isNaN(rawI) ? null : Math.max(0, Math.min(photos.length - 1, rawI));
   const startIdx = urlIdx ?? (album.cover_index ?? 0);

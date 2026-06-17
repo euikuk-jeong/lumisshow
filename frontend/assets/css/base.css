@@ -149,5 +149,6 @@ button { cursor: pointer; font: inherit; }
   font-size: 11px;
   font-weight: 600;
 }
-.badge-active { background: #052e16; color: var(--success); }
+.badge-active   { background: #052e16; color: var(--success); }
 .badge-inactive { background: #1a1a1a; color: var(--muted); }
+.badge-expired  { background: #451a03; color: var(--warning); }

@@ -8,7 +8,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from backend.models.database import init_db
-from backend.routers import admin_albums, admin_browse, admin_links, auth, media, share
+from backend.routers import admin_albums, admin_browse, admin_links, admin_settings, auth, media, share
 
 _FRONTEND_DIR = Path(__file__).parent.parent / "frontend"
 _logger = logging.getLogger(__name__)
@@ -42,6 +42,7 @@ app.include_router(auth.router)
 app.include_router(admin_browse.router)
 app.include_router(admin_albums.router)
 app.include_router(admin_links.router)
+app.include_router(admin_settings.router)
 app.include_router(share.router)
 app.include_router(media.router)
 

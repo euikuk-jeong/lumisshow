@@ -4,6 +4,7 @@ import { renderAdminLogin } from './pages/admin-login.js';
 import { renderAdminAlbums } from './pages/admin-albums.js';
 import { renderAdminAlbumEdit } from './pages/admin-album-edit.js';
 import { renderAdminBrowse } from './pages/admin-browse.js';
+import { renderAdminSettings } from './pages/admin-settings.js';
 import { renderShareAuth } from './pages/share-auth.js';
 import { renderAlbumView } from './pages/album-view.js';
 import { renderSlideshow } from './pages/slideshow.js';
@@ -13,6 +14,7 @@ const ROUTES = [
   { path: '/admin',           render: () => renderAdminAlbums(),        public: false },
   { path: '/admin/',          render: () => renderAdminAlbums(),        public: false },
   { path: '/admin/browse',    render: () => renderAdminBrowse(),        public: false },
+  { path: '/admin/settings',  render: () => renderAdminSettings(),      public: false },
   { path: '/admin/albums/new',render: () => renderAdminAlbumEdit(null), public: false },
 ];
 

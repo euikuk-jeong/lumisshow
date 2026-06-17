@@ -15,6 +15,7 @@ from backend.models.schemas import (
     SharePhotosResponse,
     parse_music_paths,
 )
+from backend.routers.admin_settings import get_settings
 from backend.services.auth import (
     create_share_session_token,
     verify_password,
@@ -124,6 +125,8 @@ async def get_album(token: str, request: Request, db=Depends(get_db)):
     async with db.execute(
         """
         SELECT a.name, a.description, a.music_path, a.cover_path, a.created_at,
+               a.slideshow_interval, a.slideshow_order, a.slideshow_effect,
+               a.slideshow_music, a.slideshow_volume, a.slideshow_loop,
                sl.expires_at, COUNT(ap.id) AS photo_count
         FROM share_links sl
         JOIN albums a ON a.id = sl.album_id
@@ -157,6 +160,16 @@ async def get_album(token: str, request: Request, db=Depends(get_db)):
             pass
 
     music_paths = parse_music_paths(row["music_path"])
+    sv = await get_settings(db)
+    # 앨범별 슬라이드쇼 설정 사용 (NULL이면 서버 기본값 폴백)
+    slideshow_defaults = {
+        "interval": row["slideshow_interval"] or sv["slideshow_interval"],
+        "order":    row["slideshow_order"]    or sv["slideshow_order"],
+        "effect":   row["slideshow_effect"]   or sv["slideshow_effect"],
+        "music":    bool(row["slideshow_music"]) if row["slideshow_music"] is not None else sv["slideshow_music"],
+        "volume":   row["slideshow_volume"]   if row["slideshow_volume"] is not None else sv["slideshow_volume"],
+        "loop":     bool(row["slideshow_loop"]) if row["slideshow_loop"] is not None else sv["slideshow_loop"],
+    }
     return {
         "album_name": row["name"],
         "description": row["description"],
@@ -167,6 +180,8 @@ async def get_album(token: str, request: Request, db=Depends(get_db)):
         "music_count": len(music_paths),
         "music_names": [os.path.basename(p) for p in music_paths],
         "cover_index": cover_index,
+        "slideshow_defaults": slideshow_defaults,
+        "timezone_offset": sv["timezone_offset"],
     }
 
 
