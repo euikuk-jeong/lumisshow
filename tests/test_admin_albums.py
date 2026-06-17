@@ -240,6 +240,89 @@ async def test_reorder_photos(admin_client):
     assert os.path.basename(photos_after[1]["file_path"]) == "h.jpg"
 
 
+# ── 사진 정렬 ─────────────────────────────────────────────────────────────────
+
+async def test_photo_sort_defaults_taken_at_asc(admin_client):
+    r = await admin_client.post("/api/admin/albums", json={"name": "Sort"})
+    data = r.json()
+    assert data["photo_sort_by"] == "taken_at"
+    assert data["photo_sort_dir"] == "asc"
+
+
+async def test_photo_sort_filename_asc(admin_client):
+    r = await admin_client.post(
+        "/api/admin/albums",
+        json={"name": "S", "photo_paths": ["zebra.jpg", "apple.jpg", "mango.jpg"]},
+    )
+    album_id = r.json()["id"]
+    await admin_client.put(
+        f"/api/admin/albums/{album_id}",
+        json={"photo_sort_by": "filename", "photo_sort_dir": "asc"},
+    )
+    photos = (await admin_client.get(f"/api/admin/albums/{album_id}")).json()["photos"]
+    names = [os.path.basename(p["file_path"]) for p in photos]
+    assert names == ["apple.jpg", "mango.jpg", "zebra.jpg"]
+
+
+async def test_photo_sort_filename_desc(admin_client):
+    r = await admin_client.post(
+        "/api/admin/albums",
+        json={"name": "S", "photo_paths": ["apple.jpg", "zebra.jpg", "mango.jpg"]},
+    )
+    album_id = r.json()["id"]
+    await admin_client.put(
+        f"/api/admin/albums/{album_id}",
+        json={"photo_sort_by": "filename", "photo_sort_dir": "desc"},
+    )
+    photos = (await admin_client.get(f"/api/admin/albums/{album_id}")).json()["photos"]
+    names = [os.path.basename(p["file_path"]) for p in photos]
+    assert names == ["zebra.jpg", "mango.jpg", "apple.jpg"]
+
+
+async def test_photo_sort_taken_at_none_falls_back_to_filename(admin_client):
+    # 파일이 없으면 taken_at=None → 파일명 tiebreak으로 정렬
+    r = await admin_client.post(
+        "/api/admin/albums",
+        json={"name": "S", "photo_paths": ["charlie.jpg", "alpha.jpg", "bravo.jpg"]},
+    )
+    album_id = r.json()["id"]
+    await admin_client.put(
+        f"/api/admin/albums/{album_id}",
+        json={"photo_sort_by": "taken_at", "photo_sort_dir": "asc"},
+    )
+    photos = (await admin_client.get(f"/api/admin/albums/{album_id}")).json()["photos"]
+    names = [os.path.basename(p["file_path"]) for p in photos]
+    assert names == ["alpha.jpg", "bravo.jpg", "charlie.jpg"]
+
+
+async def test_add_photos_respects_sort(admin_client):
+    r = await admin_client.post(
+        "/api/admin/albums",
+        json={"name": "S", "photo_paths": ["z.jpg"]},
+    )
+    album_id = r.json()["id"]
+    await admin_client.post(
+        f"/api/admin/albums/{album_id}/photos",
+        json={"photo_paths": ["a.jpg", "m.jpg"]},
+    )
+    photos = (await admin_client.get(f"/api/admin/albums/{album_id}")).json()["photos"]
+    names = [os.path.basename(p["file_path"]) for p in photos]
+    assert names == ["a.jpg", "m.jpg", "z.jpg"]
+
+
+async def test_photo_sort_invalid_values_sanitized(admin_client):
+    r = await admin_client.post("/api/admin/albums", json={"name": "S"})
+    album_id = r.json()["id"]
+    r = await admin_client.put(
+        f"/api/admin/albums/{album_id}",
+        json={"photo_sort_by": "badvalue", "photo_sort_dir": "baddir"},
+    )
+    assert r.status_code == 200
+    data = r.json()
+    assert data["photo_sort_by"] == "filename"
+    assert data["photo_sort_dir"] == "asc"
+
+
 # ── 인증 필요 ─────────────────────────────────────────────────────────────────
 
 async def test_list_albums_requires_auth(client):

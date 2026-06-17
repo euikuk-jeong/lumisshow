@@ -459,6 +459,28 @@
   white-space: nowrap;
 }
 
+/* ── Photo Sort Popover ─────────────────────────────────── */
+.photo-sort-wrap { position: relative; }
+.photo-sort-popover {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px;
+  z-index: 200;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+  min-width: 200px;
+  flex-direction: column;
+  gap: 10px;
+}
+.photo-sort-popover .sort-group-label {
+  font-size: 12px;
+  color: var(--muted);
+  margin: 0 0 5px;
+}
+
 /* ── Settings Page ──────────────────────────────────────── */
 .settings-page { display: flex; flex-direction: column; gap: 20px; max-width: 640px; }
 .settings-section-header { margin-bottom: 16px; }
