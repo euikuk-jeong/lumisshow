@@ -242,10 +242,10 @@ async def test_reorder_photos(admin_client):
 
 # ── 사진 정렬 ─────────────────────────────────────────────────────────────────
 
-async def test_photo_sort_defaults_filename_asc(admin_client):
+async def test_photo_sort_defaults_taken_at_asc(admin_client):
     r = await admin_client.post("/api/admin/albums", json={"name": "Sort"})
     data = r.json()
-    assert data["photo_sort_by"] == "filename"
+    assert data["photo_sort_by"] == "taken_at"
     assert data["photo_sort_dir"] == "asc"
 
 

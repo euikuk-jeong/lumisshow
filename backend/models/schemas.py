@@ -94,7 +94,7 @@ class AlbumResponse(BaseModel):
     slideshow_music: bool = True
     slideshow_volume: int = 25
     slideshow_loop: bool = True
-    photo_sort_by: str = "filename"
+    photo_sort_by: str = "taken_at"
     photo_sort_dir: str = "asc"
 
 class AlbumDetail(AlbumResponse):
