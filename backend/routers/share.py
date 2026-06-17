@@ -34,6 +34,9 @@ _LOCKOUT_SECONDS = 15 * 60
 # token -> (fail_count, locked_until: float)
 _fail_registry: dict[str, tuple[int, float]] = {}
 
+# 세션 쿠키(JWT) 기준 조회수 중복 방지: 동일 세션의 새로고침은 카운트 안 함
+_counted_sessions: set[str] = set()
+
 
 def _check_lockout(token: str) -> None:
     entry = _fail_registry.get(token)
@@ -122,11 +125,14 @@ async def get_album(token: str, request: Request, db=Depends(get_db)):
     verify_share_session_cookie(token, request.cookies.get(_COOKIE_NAME))
     link = await _get_valid_link(token, db)
 
-    await db.execute(
-        "UPDATE albums SET view_count = view_count + 1 WHERE id = ?",
-        (link["album_id"],),
-    )
-    await db.commit()
+    cookie = request.cookies.get(_COOKIE_NAME)
+    if cookie not in _counted_sessions:
+        _counted_sessions.add(cookie)
+        await db.execute(
+            "UPDATE albums SET view_count = view_count + 1 WHERE id = ?",
+            (link["album_id"],),
+        )
+        await db.commit()
 
     async with db.execute(
         """
