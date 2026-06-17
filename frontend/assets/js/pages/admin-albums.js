@@ -41,8 +41,9 @@ async function loadAlbums() {
 }
 
 function albumCard(album, token) {
-  const cover = album.cover_path
-    ? `<img src="/api/admin/thumb?path=${encodeURIComponent(album.cover_path)}&size=small&token=${token}" alt="" loading="lazy">`
+  const coverPath = album.cover_path || album.first_photo_path;
+  const cover = coverPath
+    ? `<img src="/api/admin/thumb?path=${encodeURIComponent(coverPath)}&size=small&token=${token}" alt="" loading="lazy">`
     : '🖼';
   const date = new Date(album.created_at).toLocaleDateString('ko-KR');
   return `
@@ -52,6 +53,7 @@ function albumCard(album, token) {
         <div class="album-name" title="${esc(album.name)}">${esc(album.name)}</div>
         <div class="album-meta">
           <span>📷 ${album.photo_count}장</span>
+          <span>👁 ${album.view_count ?? 0}회</span>
           <span>${date}</span>
         </div>
       </div>
