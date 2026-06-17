@@ -41,8 +41,9 @@ async function loadAlbums() {
 }
 
 function albumCard(album, token) {
-  const cover = album.cover_path
-    ? `<img src="/api/admin/thumb?path=${encodeURIComponent(album.cover_path)}&size=small&token=${token}" alt="" loading="lazy">`
+  const coverPath = album.cover_path || album.first_photo_path;
+  const cover = coverPath
+    ? `<img src="/api/admin/thumb?path=${encodeURIComponent(coverPath)}&size=small&token=${token}" alt="" loading="lazy">`
     : '🖼';
   const date = new Date(album.created_at).toLocaleDateString('ko-KR');
   return `

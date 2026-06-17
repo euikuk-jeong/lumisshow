@@ -118,7 +118,8 @@ async def _apply_photo_sort(album_id: int, sort_by: str, sort_dir: str, db) -> N
 async def _fetch_album(album_id: int, db) -> dict:
     async with db.execute(
         """
-        SELECT a.*, COUNT(p.id) AS photo_count
+        SELECT a.*, COUNT(p.id) AS photo_count,
+          (SELECT file_path FROM album_photos WHERE album_id = a.id ORDER BY sort_order, id LIMIT 1) AS first_photo_path
         FROM albums a LEFT JOIN album_photos p ON p.album_id = a.id
         WHERE a.id = ?
         GROUP BY a.id
@@ -137,7 +138,8 @@ async def _fetch_album(album_id: int, db) -> dict:
 async def list_albums(_: str = Depends(get_current_admin), db=Depends(get_db)):
     async with db.execute(
         """
-        SELECT a.*, COUNT(p.id) AS photo_count
+        SELECT a.*, COUNT(p.id) AS photo_count,
+          (SELECT file_path FROM album_photos WHERE album_id = a.id ORDER BY sort_order, id LIMIT 1) AS first_photo_path
         FROM albums a LEFT JOIN album_photos p ON p.album_id = a.id
         GROUP BY a.id ORDER BY a.created_at DESC
         """

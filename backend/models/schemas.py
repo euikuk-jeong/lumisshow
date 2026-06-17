@@ -84,6 +84,7 @@ class AlbumResponse(BaseModel):
     name: str
     description: Optional[str]
     cover_path: Optional[str]
+    first_photo_path: Optional[str] = None
     music_paths: list[str]
     photo_count: int
     created_at: datetime
