@@ -177,7 +177,29 @@ function renderEditForm(album, links, tzOffset) {
         <div class="card">
           <div class="flex items-center justify-between" style="margin-bottom:12px">
             <p class="section-title" style="margin:0">사진 (${album.photos.length}장)</p>
-            <a href="/admin/browse?album_id=${album.id}" class="btn btn-ghost btn-sm" data-link>+ 사진 추가</a>
+            <div class="flex gap-2 items-center">
+              <div class="photo-sort-wrap">
+                <button type="button" class="btn btn-ghost btn-sm" id="btn-photo-sort">정렬: ${photoSortLabel(album.photo_sort_by, album.photo_sort_dir)}</button>
+                <div class="photo-sort-popover" id="photo-sort-popover" style="display:none">
+                  <div>
+                    <p class="sort-group-label">정렬 기준</p>
+                    <div class="settings-radios" style="gap:12px;font-size:13px">
+                      <label><input type="radio" name="ps-by" value="filename" ${(album.photo_sort_by || 'filename') === 'filename' ? 'checked' : ''}> 파일명</label>
+                      <label><input type="radio" name="ps-by" value="taken_at" ${album.photo_sort_by === 'taken_at' ? 'checked' : ''}> 촬영일</label>
+                    </div>
+                  </div>
+                  <div>
+                    <p class="sort-group-label">방향</p>
+                    <div class="settings-radios" style="gap:12px;font-size:13px">
+                      <label><input type="radio" name="ps-dir" value="asc" ${(album.photo_sort_dir || 'asc') !== 'desc' ? 'checked' : ''}> 오름차순</label>
+                      <label><input type="radio" name="ps-dir" value="desc" ${album.photo_sort_dir === 'desc' ? 'checked' : ''}> 내림차순</label>
+                    </div>
+                  </div>
+                  <button type="button" class="btn btn-primary btn-sm" id="btn-sort-apply">적용</button>
+                </div>
+              </div>
+              <a href="/admin/browse?album_id=${album.id}" class="btn btn-ghost btn-sm" data-link>+ 사진 추가</a>
+            </div>
           </div>
           <div id="photo-grid" class="photo-grid">
             ${album.photos.map(p => photoThumb(p, token, album.cover_path)).join('') || '<p class="text-muted text-sm">사진이 없습니다</p>'}
@@ -280,6 +302,7 @@ function renderEditForm(album, links, tzOffset) {
   bindSlideshowForm(album.id);
   bindPhotoRemove(album.id);
   bindCoverSet(album.id);
+  bindPhotoSort(album.id, album.cover_path);
   bindLinkActions(album.id, links, tzOffset);
 }
 
@@ -587,6 +610,54 @@ function renderLinkForm() {
 function bindDatePicker() {
   document.getElementById('btn-clear-date').addEventListener('click', () => {
     document.getElementById('lf-expires').value = '';
+  });
+}
+
+function photoSortLabel(sortBy, sortDir) {
+  const by  = sortBy  === 'taken_at' ? '촬영일' : '파일명';
+  const dir = sortDir === 'desc'     ? '↓'     : '↑';
+  return `${by} ${dir}`;
+}
+
+function bindPhotoSort(albumId, initialCoverPath) {
+  const btn     = document.getElementById('btn-photo-sort');
+  const popover = document.getElementById('photo-sort-popover');
+  if (!btn || !popover) return;
+
+  btn.addEventListener('click', e => {
+    e.stopPropagation();
+    const open = popover.style.display !== 'none';
+    popover.style.display = open ? 'none' : 'flex';
+  });
+
+  document.addEventListener('click', e => {
+    if (!popover.contains(e.target) && e.target !== btn) {
+      popover.style.display = 'none';
+    }
+  });
+
+  document.getElementById('btn-sort-apply').addEventListener('click', async () => {
+    const sortBy  = document.querySelector('input[name="ps-by"]:checked').value;
+    const sortDir = document.querySelector('input[name="ps-dir"]:checked').value;
+    popover.style.display = 'none';
+    const applyBtn = document.getElementById('btn-sort-apply');
+    applyBtn.disabled = true;
+    try {
+      await api.put(`/api/admin/albums/${albumId}`, {
+        photo_sort_by: sortBy,
+        photo_sort_dir: sortDir,
+      });
+      const updated = await api.get(`/api/admin/albums/${albumId}`);
+      btn.textContent = `정렬: ${photoSortLabel(sortBy, sortDir)}`;
+      document.getElementById('photo-grid').innerHTML =
+        updated.photos.length
+          ? updated.photos.map(p => photoThumb(p, getToken(), updated.cover_path)).join('')
+          : '<p class="text-muted text-sm">사진이 없습니다</p>';
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      applyBtn.disabled = false;
+    }
   });
 }
 
