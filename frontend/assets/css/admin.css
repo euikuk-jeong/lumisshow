@@ -458,3 +458,47 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* ── Settings Page ──────────────────────────────────────── */
+.settings-page { display: flex; flex-direction: column; gap: 20px; max-width: 640px; }
+.settings-section-header { margin-bottom: 16px; }
+.settings-group { display: flex; flex-direction: column; gap: 12px; margin-bottom: 16px; }
+.settings-item {
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  align-items: center;
+  gap: 12px;
+}
+.settings-label { font-size: 13px; color: var(--muted); font-weight: 500; }
+.settings-select { width: auto; min-width: 200px; }
+.settings-num { width: 80px; }
+.settings-input-row { display: flex; align-items: center; gap: 8px; }
+.settings-actions { display: flex; align-items: center; gap: 12px; }
+
+/* ── Timezone Searchable Select ─────────────────────────── */
+.tz-select { position: relative; }
+.tz-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  min-width: 100%;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  max-height: 220px;
+  overflow-y: auto;
+  z-index: 200;
+  display: none;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+}
+.tz-dropdown.open { display: block; }
+.tz-option {
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text);
+  white-space: nowrap;
+}
+.tz-option:hover { background: var(--elevated); }
+.tz-option.selected { color: var(--primary); }
+.tz-no-result { padding: 8px 12px; font-size: 13px; color: var(--muted); }

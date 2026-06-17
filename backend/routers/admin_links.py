@@ -1,5 +1,7 @@
 import os
 import secrets
+from datetime import datetime, timezone
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 
@@ -14,10 +16,25 @@ def _base_url() -> str:
     return os.getenv("BASE_URL", "http://localhost:8080").rstrip("/")
 
 
+def _to_utc_naive(dt: Optional[datetime]) -> Optional[datetime]:
+    """timezone-aware datetime을 UTC naive로 변환해 SQLite에 안전하게 저장."""
+    if dt is None:
+        return None
+    if dt.tzinfo is not None:
+        return dt.astimezone(timezone.utc).replace(tzinfo=None)
+    return dt
+
+
 def _row_to_link(row) -> dict:
     d = dict(row)
     d["share_url"] = f"{_base_url()}/s/{d['token']}"
     d["has_password"] = d.pop("password_hash") is not None
+    # expires_at를 UTC-aware datetime으로 반환해 JS가 정확히 파싱하도록 함
+    if d.get("expires_at"):
+        dt = datetime.fromisoformat(str(d["expires_at"]))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        d["expires_at"] = dt
     return d
 
 
@@ -67,7 +84,7 @@ async def create_link(
     password_hash = hash_password(body.password) if body.password else None
     async with db.execute(
         "INSERT INTO share_links (album_id, token, password_hash, expires_at) VALUES (?, ?, ?, ?)",
-        (album_id, token, password_hash, body.expires_at),
+        (album_id, token, password_hash, _to_utc_naive(body.expires_at)),
     ) as cur:
         link_id = cur.lastrowid
     await db.commit()
@@ -93,6 +110,9 @@ async def update_link(
     if "password" in updates:
         raw = updates.pop("password")
         updates["password_hash"] = hash_password(raw) if raw else None
+
+    if "expires_at" in updates:
+        updates["expires_at"] = _to_utc_naive(updates["expires_at"])
 
     if updates:
         cols = ", ".join(f"{k} = ?" for k in updates)

@@ -11,17 +11,29 @@ const EFFECT_LABELS = {
 };
 const DEFAULT_SETTINGS = { interval: 5, order: 'sequential', music: true, volume: 25, effect: 'random', loop: true };
 
-function loadSettings() {
+function loadSettingsForViewer(albumDefaults = {}, token = '') {
+  // 앨범 DB 기본값 + 로컬 사용자 변경 오버라이드 (토큰별 localStorage)
+  const base = { ...DEFAULT_SETTINGS, ...albumDefaults };
   try {
-    const s = { ...DEFAULT_SETTINGS, ...JSON.parse(localStorage.getItem('slideshow_settings') || '{}') };
-    if (!['sequential', 'random'].includes(s.order)) s.order = DEFAULT_SETTINGS.order;
-    if (!EFFECTS.includes(s.effect)) s.effect = DEFAULT_SETTINGS.effect;
+    const local = JSON.parse(localStorage.getItem(`slideshow_settings_${token}`) || '{}');
+    const s = { ...base, ...local };
+    if (!['sequential', 'random'].includes(s.order)) s.order = base.order;
+    if (!EFFECTS.includes(s.effect)) s.effect = base.effect;
     return s;
-  } catch { return { ...DEFAULT_SETTINGS }; }
+  } catch { return { ...base }; }
 }
 
-function saveSettings(s) {
-  localStorage.setItem('slideshow_settings', JSON.stringify(s));
+function saveSettings(token, s) {
+  localStorage.setItem(`slideshow_settings_${token}`, JSON.stringify(s));
+}
+
+function formatDateInTZ(isoString, offsetMinutes) {
+  const utcMs = new Date(isoString).getTime();
+  const tzDate = new Date(utcMs + offsetMinutes * 60 * 1000);
+  const y = tzDate.getUTCFullYear();
+  const m = tzDate.getUTCMonth() + 1;
+  const d = tzDate.getUTCDate();
+  return `${y}. ${m}. ${d}.`;
 }
 
 export async function renderAlbumView(token) {
@@ -47,8 +59,9 @@ export async function renderAlbumView(token) {
   const coverPhoto = album.cover_index != null ? photos[album.cover_index] : photos[0];
   const coverUrl = coverPhoto ? coverPhoto.thumb_medium_url : null;
 
+  const tzOffset = album.timezone_offset ?? 0;
   const expiryHtml = album.expires_at
-    ? `<span>⏰ 만료: ${new Date(album.expires_at).toLocaleDateString('ko-KR')}</span>`
+    ? `<span>⏰ 만료: ${formatDateInTZ(album.expires_at, tzOffset)}</span>`
     : '';
 
   app.innerHTML = `
@@ -124,7 +137,7 @@ export async function renderAlbumView(token) {
       </div>
     </div>`;
 
-  _initSettingsPanel(token);
+  _initSettingsPanel(token, album);
   getVersion().then(v => {
     const el = document.getElementById('viewer-version');
     if (el) el.textContent = `LumisShow ${v} · Made by Ekjeong`;
@@ -143,8 +156,8 @@ export async function renderAlbumView(token) {
   });
 }
 
-function _initSettingsPanel(token) {
-  const s = loadSettings();
+function _initSettingsPanel(token, album) {
+  const s = loadSettingsForViewer(album.slideshow_defaults || {}, token);
 
   document.getElementById('s-interval').value = s.interval;
   document.querySelector(`input[name="s-order"][value="${s.order}"]`).checked = true;
@@ -163,7 +176,7 @@ function _initSettingsPanel(token) {
   });
 
   document.getElementById('btn-start').addEventListener('click', () => {
-    saveSettings({
+    saveSettings(token, {
       interval: parseInt(document.getElementById('s-interval').value, 10) || 5,
       order: document.querySelector('input[name="s-order"]:checked').value,
       music: document.querySelector('input[name="s-music"]:checked').value === 'on',

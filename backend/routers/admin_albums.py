@@ -13,6 +13,7 @@ from backend.models.schemas import (
     PhotoPathsRequest,
     parse_music_paths,
 )
+from backend.routers.admin_settings import get_settings
 from backend.services.auth import get_current_admin
 
 router = APIRouter(prefix="/api/admin/albums", tags=["admin-albums"])
@@ -26,7 +27,20 @@ def _resolve_paths(paths: list[str]) -> list[str]:
         for p in paths
     ]
 
-_ALLOWED_UPDATE_COLS = {"name", "description", "cover_path"}
+_SLIDESHOW_DEFAULTS = {
+    "slideshow_interval": 5,
+    "slideshow_order": "sequential",
+    "slideshow_effect": "random",
+    "slideshow_music": True,
+    "slideshow_volume": 25,
+    "slideshow_loop": True,
+}
+
+_ALLOWED_UPDATE_COLS = {
+    "name", "description", "cover_path",
+    "slideshow_interval", "slideshow_order", "slideshow_effect",
+    "slideshow_music", "slideshow_volume", "slideshow_loop",
+}
 
 
 async def _get_album_or_404(album_id: int, db):
@@ -39,6 +53,13 @@ async def _get_album_or_404(album_id: int, db):
 def _row_to_album_dict(row) -> dict:
     d = dict(row)
     d['music_paths'] = parse_music_paths(d.pop('music_path', None))
+    # NULL(기존 앨범) → 기본값으로 채움
+    for col, default in _SLIDESHOW_DEFAULTS.items():
+        if d.get(col) is None:
+            d[col] = default
+    for col in ('slideshow_music', 'slideshow_loop'):
+        if not isinstance(d[col], bool):
+            d[col] = bool(d[col])
     return d
 
 
@@ -79,9 +100,16 @@ async def create_album(
     _: str = Depends(get_current_admin),
     db=Depends(get_db),
 ):
+    sv = await get_settings(db)
     async with db.execute(
-        "INSERT INTO albums (name, description) VALUES (?, ?)",
-        (body.name, body.description),
+        """INSERT INTO albums
+           (name, description,
+            slideshow_interval, slideshow_order, slideshow_effect,
+            slideshow_music, slideshow_volume, slideshow_loop)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+        (body.name, body.description,
+         sv["slideshow_interval"], sv["slideshow_order"], sv["slideshow_effect"],
+         int(sv["slideshow_music"]), sv["slideshow_volume"], int(sv["slideshow_loop"])),
     ) as cur:
         album_id = cur.lastrowid
 
@@ -126,6 +154,10 @@ async def update_album(
         updates['music_path'] = (
             json.dumps(body_data['music_paths']) if body_data['music_paths'] else None
         )
+    # SQLite는 bool을 INTEGER로 저장
+    for col in ('slideshow_music', 'slideshow_loop'):
+        if col in updates and isinstance(updates[col], bool):
+            updates[col] = int(updates[col])
     if updates:
         cols = ", ".join(f"{k} = ?" for k in updates)
         await db.execute(

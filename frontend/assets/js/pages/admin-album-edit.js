@@ -3,6 +3,13 @@ import { getToken } from '../auth.js';
 import { renderAdminShell } from '../layout.js';
 import { esc } from '../utils.js';
 
+const EFFECTS = ['random','fade','slide-left','slide-right','slide-up','zoom-in','zoom-out','flip-h','blur','dissolve'];
+const EFFECT_LABELS = {
+  random: '랜덤', fade: 'Fade', 'slide-left': 'Slide Left', 'slide-right': 'Slide Right',
+  'slide-up': 'Slide Up', 'zoom-in': 'Zoom In', 'zoom-out': 'Zoom Out',
+  'flip-h': 'Flip H', blur: 'Blur', dissolve: 'Dissolve',
+};
+
 export async function renderAdminAlbumEdit(albumId) {
   const isNew = !albumId;
   const title = isNew ? '새 앨범' : '앨범 편집';
@@ -73,20 +80,22 @@ function renderCreateForm() {
 async function loadAlbum(albumId) {
   const el = document.getElementById('edit-content');
   try {
-    const [album, links] = await Promise.all([
+    const [album, links, settings] = await Promise.all([
       api.get(`/api/admin/albums/${albumId}`),
       api.get(`/api/admin/albums/${albumId}/links`),
+      api.get('/api/admin/settings').catch(() => ({ timezone_offset: 0 })),
     ]);
-    renderEditForm(album, links);
+    renderEditForm(album, links, settings.timezone_offset ?? 0);
     bindDeleteAlbum(albumId);
   } catch (e) {
     el.innerHTML = `<div class="alert alert-error">${esc(e.message)}</div>`;
   }
 }
 
-function renderEditForm(album, links) {
+function renderEditForm(album, links, tzOffset) {
   const el    = document.getElementById('edit-content');
   const token = getToken();
+  const ss    = album; // slideshow fields are on album object
   el.innerHTML = `
     <div class="album-edit-layout">
       <!-- Left: Info + Photos -->
@@ -116,6 +125,54 @@ function renderEditForm(album, links) {
           </form>
         </div>
 
+        <!-- Slideshow defaults -->
+        <div class="card">
+          <p class="section-title">슬라이드쇼 기본 설정</p>
+          <div id="ss-error" class="alert alert-error" style="display:none"></div>
+          <form id="ss-form" class="flex-col gap-3">
+            <div class="form-group">
+              <label class="form-label">전환 시간 (초)</label>
+              <input id="ss-interval" type="number" min="2" max="60" class="form-input" style="width:100px"
+                     value="${ss.slideshow_interval ?? 5}">
+            </div>
+            <div class="form-group">
+              <label class="form-label">재생 순서</label>
+              <div class="settings-radios">
+                <label><input type="radio" name="ss-order" value="sequential" ${(ss.slideshow_order ?? 'sequential') === 'sequential' ? 'checked' : ''}> 순서대로</label>
+                <label><input type="radio" name="ss-order" value="random" ${(ss.slideshow_order ?? '') === 'random' ? 'checked' : ''}> 랜덤</label>
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">전환 효과</label>
+              <select id="ss-effect" class="form-select">
+                ${EFFECTS.map(e => `<option value="${e}" ${(ss.slideshow_effect ?? 'random') === e ? 'selected' : ''}>${EFFECT_LABELS[e]}</option>`).join('')}
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">배경음악</label>
+              <div class="settings-radios">
+                <label><input type="radio" name="ss-music" value="on"  ${ss.slideshow_music !== false ? 'checked' : ''}> ON</label>
+                <label><input type="radio" name="ss-music" value="off" ${ss.slideshow_music === false ? 'checked' : ''}> OFF</label>
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">음량 <span id="ss-vol-label">${ss.slideshow_volume ?? 25}%</span></label>
+              <input id="ss-volume" type="range" min="0" max="100" value="${ss.slideshow_volume ?? 25}" class="w-full">
+            </div>
+            <div class="form-group">
+              <label class="form-label">반복 재생</label>
+              <div class="settings-radios">
+                <label><input type="radio" name="ss-loop" value="on"  ${ss.slideshow_loop !== false ? 'checked' : ''}> 켜기</label>
+                <label><input type="radio" name="ss-loop" value="off" ${ss.slideshow_loop === false ? 'checked' : ''}> 끄기</label>
+              </div>
+            </div>
+            <div>
+              <button type="submit" class="btn btn-primary btn-sm" id="btn-ss-save">저장</button>
+              <span id="ss-save-ok" class="text-success text-sm mt-1" style="display:none;margin-left:8px">저장됨 ✓</span>
+            </div>
+          </form>
+        </div>
+
         <!-- Photos -->
         <div class="card">
           <div class="flex items-center justify-between" style="margin-bottom:12px">
@@ -132,7 +189,7 @@ function renderEditForm(album, links) {
       <div>
         <div class="card">
           <p class="section-title">공유 링크</p>
-          <div id="links-container">${renderLinks(links)}</div>
+          <div id="links-container">${renderLinks(links, tzOffset)}</div>
           <hr class="divider">
           <button class="btn btn-ghost btn-sm w-full" id="btn-new-link">+ 새 링크 생성</button>
           <div id="link-form-area" style="display:none">
@@ -215,10 +272,44 @@ function renderEditForm(album, links) {
     openMusicModal(musicPaths, selected => { musicPaths = selected; refreshMusicList(); });
   });
 
+  document.getElementById('ss-volume').addEventListener('input', e => {
+    document.getElementById('ss-vol-label').textContent = `${e.target.value}%`;
+  });
+
   bindInfoForm(album.id, () => musicPaths);
+  bindSlideshowForm(album.id);
   bindPhotoRemove(album.id);
   bindCoverSet(album.id);
-  bindLinkActions(album.id, links);
+  bindLinkActions(album.id, links, tzOffset);
+}
+
+function bindSlideshowForm(albumId) {
+  const errEl = document.getElementById('ss-error');
+  const okEl  = document.getElementById('ss-save-ok');
+  document.getElementById('ss-form').addEventListener('submit', async e => {
+    e.preventDefault();
+    errEl.style.display = 'none';
+    okEl.style.display = 'none';
+    const btn = document.getElementById('btn-ss-save');
+    btn.disabled = true;
+    try {
+      await api.put(`/api/admin/albums/${albumId}`, {
+        slideshow_interval: parseInt(document.getElementById('ss-interval').value, 10) || 5,
+        slideshow_order:    document.querySelector('input[name="ss-order"]:checked').value,
+        slideshow_effect:   document.getElementById('ss-effect').value,
+        slideshow_music:    document.querySelector('input[name="ss-music"]:checked').value === 'on',
+        slideshow_volume:   parseInt(document.getElementById('ss-volume').value, 10),
+        slideshow_loop:     document.querySelector('input[name="ss-loop"]:checked').value === 'on',
+      });
+      okEl.style.display = 'inline';
+      setTimeout(() => { okEl.style.display = 'none'; }, 2000);
+    } catch (err) {
+      errEl.textContent = err.message;
+      errEl.style.display = 'block';
+    } finally {
+      btn.disabled = false;
+    }
+  });
 }
 
 function bindInfoForm(albumId, getMusicPaths) {
@@ -360,7 +451,7 @@ function bindDeleteAlbum(albumId) {
   });
 }
 
-function bindLinkActions(albumId, links) {
+function bindLinkActions(albumId, links, tzOffset) {
   const formArea    = document.getElementById('link-form-area');
   const linksContainer = document.getElementById('links-container');
 
@@ -380,7 +471,7 @@ function bindLinkActions(albumId, links) {
     e.preventDefault();
     const pwd     = document.getElementById('lf-password').value || null;
     const dateVal = document.getElementById('lf-expires').value;
-    const expires = dateVal ? `${dateVal}T23:59:59` : null;
+    const expires = dateVal ? buildExpiresAt(dateVal, tzOffset) : null;
     const btn     = document.getElementById('btn-create-link');
     btn.disabled  = true;
     try {
@@ -389,7 +480,7 @@ function bindLinkActions(albumId, links) {
         expires_at: expires,
       });
       links.push(link);
-      document.getElementById('links-container').innerHTML = renderLinks(links);
+      document.getElementById('links-container').innerHTML = renderLinks(links, tzOffset);
       document.getElementById('lf-password').value = '';
       document.getElementById('lf-expires').value = '';
       formArea.style.display = 'none';
@@ -423,17 +514,19 @@ function bindLinkDeactivate(albumId) {
 }
 
 /* ── Render helpers ─────────────────────────────────────── */
-function renderLinks(links) {
+function renderLinks(links, tzOffset = 0) {
   if (!links.length) return '<p class="text-muted text-sm">링크가 없습니다</p>';
-  return `<div class="link-list">${links.map(renderLinkItem).join('')}</div>`;
+  return `<div class="link-list">${links.map(l => renderLinkItem(l, tzOffset)).join('')}</div>`;
 }
 
-function renderLinkItem(link) {
+function renderLinkItem(link, tzOffset = 0) {
+  const isExpired = link.expires_at && new Date(link.expires_at) < new Date();
   const expires = link.expires_at
-    ? `만료: ${new Date(link.expires_at).toLocaleDateString('ko-KR')}`
+    ? `만료: ${formatDateInTZ(link.expires_at, tzOffset)}`
     : '만료 없음';
-  const badgeClass = link.is_active ? 'badge badge-active' : 'badge badge-inactive';
-  const badgeText  = link.is_active ? '활성' : '비활성';
+  const isEffectivelyActive = link.is_active && !isExpired;
+  const badgeClass = !link.is_active ? 'badge badge-inactive' : isExpired ? 'badge badge-expired' : 'badge badge-active';
+  const badgeText  = !link.is_active ? '비활성' : isExpired ? '만료됨' : '활성';
   return `
     <div class="link-item">
       <div class="link-url">${esc(link.share_url)}</div>
@@ -444,9 +537,27 @@ function renderLinkItem(link) {
       </div>
       <div class="link-actions">
         <button class="btn btn-ghost btn-sm btn-copy-link" data-url="${esc(link.share_url)}">복사</button>
-        ${link.is_active ? `<button class="btn btn-danger btn-sm btn-deactivate-link" data-id="${link.id}">비활성화</button>` : ''}
+        ${isEffectivelyActive ? `<button class="btn btn-danger btn-sm btn-deactivate-link" data-id="${link.id}">비활성화</button>` : ''}
       </div>
     </div>`;
+}
+
+function formatDateInTZ(isoString, offsetMinutes) {
+  // API가 반환한 UTC datetime(Z suffix)을 지정 timezone 기준 날짜로 변환
+  const utcMs = new Date(isoString).getTime();
+  const tzDate = new Date(utcMs + offsetMinutes * 60 * 1000);
+  const y = tzDate.getUTCFullYear();
+  const m = tzDate.getUTCMonth() + 1;
+  const d = tzDate.getUTCDate();
+  return `${y}. ${m}. ${d}.`;
+}
+
+function buildExpiresAt(dateVal, offsetMinutes) {
+  const sign = offsetMinutes >= 0 ? '+' : '-';
+  const abs  = Math.abs(offsetMinutes);
+  const hh   = String(Math.floor(abs / 60)).padStart(2, '0');
+  const mm   = String(abs % 60).padStart(2, '0');
+  return `${dateVal}T23:59:59${sign}${hh}:${mm}`;
 }
 
 function renderLinkForm() {

@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.4] - 2026-06-17
+
+### Added
+- Admin 설정 메뉴 추가 (사진 탐색 · 로그아웃 사이에 배치)
+  - 서버 타임존 설정: 검색 가능한 드롭다운, 49개 글로벌 타임존 지원
+  - 슬라이드쇼 전역 기본값 설정 (전환 시간·순서·효과·음악·음량·반복)
+- 앨범별 슬라이드쇼 기본 설정: 앨범 편집 화면에 "슬라이드쇼 기본 설정" 섹션 추가
+  - 앨범마다 개별 슬라이드쇼 설정을 DB에 저장
+  - 신규 앨범 생성 시 서버 전역 설정값으로 자동 초기화
+- 공유 링크 뷰어에 앨범별 기본 설정 적용: 뷰어 진입 시 앨범 DB 설정값 사용
+  - 뷰어에서 변경한 설정은 로컬(localStorage, 토큰별)에만 저장되고 DB는 변경되지 않음
+
+### Fixed
+- 공유 링크 만료일 처리 버그 수정
+  - 타임존 오프셋이 포함된 만료일을 UTC로 정규화하여 SQLite에 저장
+  - 음수 UTC 오프셋(예: EST UTC-5)에서 만료 비교가 잘못되던 문제 해결
+  - Admin UI에서 만료된 링크를 "활성" 으로 잘못 표시하던 버그 수정 ("만료됨" 배지 추가)
+- 만료일 표시를 서버 타임존 기준으로 변환하여 정확하게 표시
+
 ## [0.2.3] - 2026-06-17
 
 ### Changed
@@ -63,7 +82,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v0.2.3...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v0.2.4...HEAD
+[0.2.4]: https://github.com/euikuk-jeong/lumisshow/compare/v0.2.3...v0.2.4
 [0.2.3]: https://github.com/euikuk-jeong/lumisshow/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/euikuk-jeong/lumisshow/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/euikuk-jeong/lumisshow/compare/v0.2.0...v0.2.1

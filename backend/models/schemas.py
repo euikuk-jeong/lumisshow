@@ -63,6 +63,12 @@ class AlbumUpdate(BaseModel):
     description: Optional[str] = None
     cover_path: Optional[str] = None
     music_paths: Optional[list[str]] = None
+    slideshow_interval: Optional[int] = None
+    slideshow_order: Optional[str] = None
+    slideshow_effect: Optional[str] = None
+    slideshow_music: Optional[bool] = None
+    slideshow_volume: Optional[int] = None
+    slideshow_loop: Optional[bool] = None
 
 class AlbumPhotoResponse(BaseModel):
     id: int
@@ -80,6 +86,12 @@ class AlbumResponse(BaseModel):
     photo_count: int
     created_at: datetime
     updated_at: datetime
+    slideshow_interval: int = 5
+    slideshow_order: str = "sequential"
+    slideshow_effect: str = "random"
+    slideshow_music: bool = True
+    slideshow_volume: int = 25
+    slideshow_loop: bool = True
 
 class AlbumDetail(AlbumResponse):
     photos: list[AlbumPhotoResponse]
@@ -119,6 +131,37 @@ class LinkResponse(BaseModel):
     created_at: datetime
 
 
+# ── Settings ──────────────────────────────────────────────────────────────────
+
+class SlideshowDefaults(BaseModel):
+    interval: int
+    order: str
+    effect: str
+    music: bool
+    volume: int
+    loop: bool
+
+class SettingsResponse(BaseModel):
+    timezone_offset: int
+    timezone_label: str
+    slideshow_interval: int
+    slideshow_order: str
+    slideshow_effect: str
+    slideshow_music: bool
+    slideshow_volume: int
+    slideshow_loop: bool
+
+class SettingsUpdate(BaseModel):
+    timezone_offset: Optional[int] = None
+    timezone_label: Optional[str] = None
+    slideshow_interval: Optional[int] = None
+    slideshow_order: Optional[str] = None
+    slideshow_effect: Optional[str] = None
+    slideshow_music: Optional[bool] = None
+    slideshow_volume: Optional[int] = None
+    slideshow_loop: Optional[bool] = None
+
+
 # ── Share (public viewer) ─────────────────────────────────────────────────────
 
 class ShareAuthRequest(BaseModel):
@@ -134,6 +177,8 @@ class ShareAlbumResponse(BaseModel):
     music_count: int
     music_names: list[str]
     cover_index: Optional[int] = None
+    slideshow_defaults: Optional[SlideshowDefaults] = None
+    timezone_offset: int = 0
 
 class SharePhotoItem(BaseModel):
     id: int
