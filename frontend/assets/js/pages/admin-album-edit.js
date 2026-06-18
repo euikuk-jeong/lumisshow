@@ -2,6 +2,7 @@ import { api } from '../api.js';
 import { getToken } from '../auth.js';
 import { renderAdminShell } from '../layout.js';
 import { esc } from '../utils.js';
+import { openLightbox } from '../lightbox.js';
 
 const EFFECTS = ['random','fade','slide-left','slide-right','slide-up','zoom-in','zoom-out','flip-h','blur','dissolve'];
 const EFFECT_LABELS = {
@@ -204,6 +205,10 @@ function renderEditForm(album, links, tzOffset) {
                   <button type="button" class="btn btn-primary btn-sm" id="btn-sort-apply">적용</button>
                 </div>
               </div>
+              <div class="view-toggle">
+                <button type="button" id="btn-photo-view-grid" class="btn btn-ghost btn-sm active" title="그리드 보기">⊞</button>
+                <button type="button" id="btn-photo-view-list" class="btn btn-ghost btn-sm" title="리스트 보기">☰</button>
+              </div>
               <a href="/admin/browse?album_id=${album.id}" class="btn btn-ghost btn-sm" data-link>+ 사진 추가</a>
             </div>
           </div>
@@ -304,12 +309,40 @@ function renderEditForm(album, links, tzOffset) {
     document.getElementById('ss-vol-label').textContent = `${e.target.value}%`;
   });
 
+  const photoState = { viewMode: 'grid', coverPath: album.cover_path, photos: [...album.photos] };
+
+  function refreshPhotoGrid() {
+    const el = document.getElementById('photo-grid');
+    el.className = photoState.viewMode === 'list' ? 'photo-list' : 'photo-grid';
+    el.innerHTML = photoState.photos.length
+      ? photoState.photos.map(p =>
+          photoState.viewMode === 'list'
+            ? photoListItemEdit(p, token, photoState.coverPath)
+            : photoThumb(p, token, photoState.coverPath)
+        ).join('')
+      : '<p class="text-muted text-sm">사진이 없습니다</p>';
+  }
+
+  document.getElementById('btn-photo-view-grid').addEventListener('click', () => {
+    photoState.viewMode = 'grid';
+    document.getElementById('btn-photo-view-grid').classList.add('active');
+    document.getElementById('btn-photo-view-list').classList.remove('active');
+    refreshPhotoGrid();
+  });
+  document.getElementById('btn-photo-view-list').addEventListener('click', () => {
+    photoState.viewMode = 'list';
+    document.getElementById('btn-photo-view-grid').classList.remove('active');
+    document.getElementById('btn-photo-view-list').classList.add('active');
+    refreshPhotoGrid();
+  });
+
   bindInfoForm(album.id, () => musicPaths);
   bindViewCountReset(album.id);
   bindSlideshowForm(album.id);
-  bindPhotoRemove(album.id);
-  bindCoverSet(album.id);
-  bindPhotoSort(album.id, album.cover_path);
+  bindPhotoRemove(album.id, photoState, refreshPhotoGrid);
+  bindCoverSet(album.id, photoState, refreshPhotoGrid);
+  bindPhotoSort(album.id, photoState, refreshPhotoGrid);
+  bindPhotoPreview(token, album.id, photoState, refreshPhotoGrid);
   bindLinkActions(album.id, links, tzOffset);
 }
 
@@ -441,30 +474,22 @@ async function openMusicModal(currentPaths, onConfirm) {
   }
 }
 
-function bindCoverSet(albumId) {
+function bindCoverSet(albumId, photoState, refresh) {
   document.getElementById('photo-grid').addEventListener('click', async e => {
     const btn = e.target.closest('.photo-set-cover');
     if (!btn) return;
     const filePath = btn.dataset.path;
     try {
       await api.put(`/api/admin/albums/${albumId}`, { cover_path: filePath });
-      document.querySelectorAll('#photo-grid .photo-thumb.is-cover').forEach(el => {
-        el.classList.remove('is-cover');
-        el.querySelector('.cover-badge')?.remove();
-      });
-      const thumb = btn.closest('.photo-thumb');
-      thumb.classList.add('is-cover');
-      const badge = document.createElement('span');
-      badge.className = 'cover-badge';
-      badge.textContent = '커버';
-      thumb.prepend(badge);
+      photoState.coverPath = filePath;
+      refresh();
     } catch (err) {
       alert(err.message);
     }
   });
 }
 
-function bindPhotoRemove(albumId) {
+function bindPhotoRemove(albumId, photoState, refresh) {
   document.getElementById('photo-grid').addEventListener('click', async e => {
     const btn = e.target.closest('.photo-remove');
     if (!btn) return;
@@ -473,7 +498,8 @@ function bindPhotoRemove(albumId) {
     btn.disabled = true;
     try {
       await api.delete(`/api/admin/albums/${albumId}/photos`, { photo_paths: [filePath] });
-      btn.closest('.photo-thumb').remove();
+      photoState.photos = photoState.photos.filter(p => p.file_path !== filePath);
+      refresh();
     } catch (err) {
       alert(err.message);
       btn.disabled = false;
@@ -632,13 +658,35 @@ function bindDatePicker() {
   });
 }
 
+function photoListItemEdit(photo, token, coverPath) {
+  const thumbUrl = `/api/admin/thumb?path=${encodeURIComponent(photo.file_path)}&size=small&token=${token}`;
+  const isCover  = photo.file_path === coverPath;
+  const name     = photo.file_path.split(/[\\/]/).pop();
+  const addedAt  = photo.added_at
+    ? new Date(photo.added_at).toLocaleDateString('ko-KR')
+    : '—';
+  return `
+    <div class="photo-list-item${isCover ? ' is-cover' : ''}" data-path="${esc(photo.file_path)}">
+      <div class="photo-list-thumb">
+        <img src="${thumbUrl}" alt="" loading="lazy" onerror="this.style.opacity='0.3'">
+      </div>
+      <span class="photo-list-name" title="${esc(photo.file_path)}">${esc(name)}</span>
+      ${isCover ? '<span class="cover-badge" style="position:static;font-size:11px;padding:2px 6px">커버</span>' : ''}
+      <div class="photo-list-meta"><span>추가: ${addedAt}</span></div>
+      <div class="photo-list-actions">
+        ${!isCover ? `<button class="photo-set-cover btn btn-ghost btn-sm" data-path="${esc(photo.file_path)}">커버로 설정</button>` : ''}
+        <button class="photo-remove btn btn-ghost btn-sm" data-path="${esc(photo.file_path)}" title="제외">✕</button>
+      </div>
+    </div>`;
+}
+
 function photoSortLabel(sortBy, sortDir) {
   const by  = sortBy  === 'taken_at' ? '촬영일' : '파일명';
   const dir = sortDir === 'desc'     ? '↓'     : '↑';
   return `${by} ${dir}`;
 }
 
-function bindPhotoSort(albumId, initialCoverPath) {
+function bindPhotoSort(albumId, photoState, refresh) {
   const btn     = document.getElementById('btn-photo-sort');
   const popover = document.getElementById('photo-sort-popover');
   if (!btn || !popover) return;
@@ -668,10 +716,9 @@ function bindPhotoSort(albumId, initialCoverPath) {
       });
       const updated = await api.get(`/api/admin/albums/${albumId}`);
       btn.textContent = `정렬: ${photoSortLabel(sortBy, sortDir)}`;
-      document.getElementById('photo-grid').innerHTML =
-        updated.photos.length
-          ? updated.photos.map(p => photoThumb(p, getToken(), updated.cover_path)).join('')
-          : '<p class="text-muted text-sm">사진이 없습니다</p>';
+      photoState.photos = updated.photos;
+      photoState.coverPath = updated.cover_path;
+      refresh();
     } catch (err) {
       alert(err.message);
     } finally {
@@ -680,11 +727,38 @@ function bindPhotoSort(albumId, initialCoverPath) {
   });
 }
 
+function bindPhotoPreview(token, albumId, photoState, refresh) {
+  document.getElementById('photo-grid').addEventListener('click', e => {
+    if (e.target.closest('button')) return;
+    const item = e.target.closest('.photo-thumb[data-path], .photo-list-item[data-path]');
+    if (!item) return;
+    const filePath = item.dataset.path;
+    const allPaths = [
+      ...document.querySelectorAll('#photo-grid .photo-thumb[data-path], #photo-grid .photo-list-item[data-path]'),
+    ].map(el => el.dataset.path);
+    const idx = allPaths.indexOf(filePath);
+    if (idx === -1) return;
+    openLightbox(allPaths, idx, token, {
+      isCover: path => photoState.coverPath === path,
+      onSetCover: async path => {
+        await api.put(`/api/admin/albums/${albumId}`, { cover_path: path });
+        photoState.coverPath = path;
+        refresh();
+      },
+      onDelete: async path => {
+        await api.delete(`/api/admin/albums/${albumId}/photos`, { photo_paths: [path] });
+        photoState.photos = photoState.photos.filter(p => p.file_path !== path);
+        refresh();
+      },
+    });
+  });
+}
+
 function photoThumb(photo, token, coverPath) {
   const thumbUrl = `/api/admin/thumb?path=${encodeURIComponent(photo.file_path)}&size=small&token=${token}`;
   const isCover  = photo.file_path === coverPath;
   return `
-    <div class="photo-thumb${isCover ? ' is-cover' : ''}">
+    <div class="photo-thumb${isCover ? ' is-cover' : ''}" data-path="${esc(photo.file_path)}">
       <img src="${thumbUrl}" alt="" loading="lazy" onerror="this.style.opacity='0.3'">
       ${isCover ? '<span class="cover-badge">커버</span>' : ''}
       <button class="photo-set-cover" data-path="${esc(photo.file_path)}">커버로 설정</button>
