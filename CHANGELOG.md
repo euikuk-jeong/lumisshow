@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-06-18
+
+### Added
+- 사진 탐색 화면 개선
+  - Synology NAS 시스템 폴더 자동 숨김 (`@eaDir`, `#recycle`, `@tmp`, `#snapshot` 등)
+  - 리스트 보기 / 그리드 보기 토글 (⊞/☰)
+  - 정렬 옵션 추가: 파일명 오름차순/내림차순, 날짜 오름차순/내림차순
+  - 전체 선택 / 전체 해제 버튼 항상 표시
+  - 사진 클릭 시 라이트박스 확대 보기 (체크박스로 선택)
+  - 라이트박스 하단에 선택 상태 표시 (선택/✓ 선택됨 + 현재 선택 수/전체 수)
+- 앨범 편집 화면 개선
+  - 사진 썸네일 클릭 시 라이트박스 확대 보기
+  - 리스트 보기 / 그리드 보기 토글 (⊞/☰)
+  - 라이트박스 하단에 "커버로 설정" / "앨범에서 삭제" 액션 버튼
+
+### Fixed
+- 앨범 편집 리스트 보기에서 "커버로 설정" 버튼이 보이지 않던 문제 수정
+
 ## [0.3.0] - 2026-06-18
 
 ### Added
@@ -118,7 +136,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/euikuk-jeong/lumisshow/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/euikuk-jeong/lumisshow/compare/v0.2.6...v0.3.0
 [0.2.6]: https://github.com/euikuk-jeong/lumisshow/compare/v0.2.5...v0.2.6
 [0.2.5]: https://github.com/euikuk-jeong/lumisshow/compare/v0.2.4...v0.2.5

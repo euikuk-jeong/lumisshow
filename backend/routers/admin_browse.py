@@ -30,6 +30,13 @@ async def _admin_image_auth(
 
 router = APIRouter(prefix="/api/admin", tags=["admin-browse"])
 
+# Synology NAS 시스템 폴더/파일 접두사: @eaDir, @tmp, #recycle, #snapshot 등
+_SKIP_PREFIXES = (".", "@", "#")
+
+
+def _is_hidden(name: str) -> bool:
+    return name.startswith(_SKIP_PREFIXES)
+
 
 def _photo_root() -> str:
     return os.path.realpath(os.getenv("PHOTO_ROOT", "./testdata/photos"))
@@ -66,12 +73,12 @@ def _scan_dir(real_path: str, root: str) -> tuple[list[FolderItem], list[PhotoIt
     photos: list[PhotoItem] = []
     with os.scandir(real_path) as entries:
         for entry in sorted(entries, key=lambda e: e.name.lower()):
-            if entry.name.startswith("."):
+            if _is_hidden(entry.name):
                 continue
             if entry.is_dir(follow_symlinks=False):
                 try:
                     child_count = sum(
-                        1 for e in os.scandir(entry.path) if not e.name.startswith(".")
+                        1 for e in os.scandir(entry.path) if not _is_hidden(e.name)
                     )
                 except PermissionError:
                     child_count = 0
@@ -93,9 +100,9 @@ def _walk_photos(
 ) -> list[PhotoItem]:
     results: list[PhotoItem] = []
     for dirpath, dirnames, filenames in os.walk(start_dir):
-        dirnames[:] = sorted(d for d in dirnames if not d.startswith("."))
+        dirnames[:] = sorted(d for d in dirnames if not _is_hidden(d))
         for fname in sorted(filenames):
-            if fname.startswith("."):
+            if _is_hidden(fname):
                 continue
             if Path(fname).suffix.lower() not in IMAGE_EXTENSIONS:
                 continue
