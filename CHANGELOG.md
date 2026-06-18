@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.3] - 2026-06-19
+
+### Fixed
+- 슬라이드쇼 정보 패널 EXIF 미표시 문제: `share.py`에서 상대 경로를 절대 경로로 변환하지 않아 PIL이 파일을 찾지 못하던 버그 수정
+- ZIP 다운로드 시 상대 경로를 절대 경로로 변환하지 않아 파일이 포함되지 않던 버그 수정
+
 ## [0.3.2] - 2026-06-19
 
 ### Security
