@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.4] - 2026-06-19
+
+### Changed
+- 모바일 슬라이드쇼 툴바 버튼 크기 확대: 터치 타겟 ~32px → ~40px (font-size 16→18px, 수직 패딩 8→11px)
+
 ## [0.3.3] - 2026-06-19
 
 ### Fixed
