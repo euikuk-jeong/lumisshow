@@ -285,27 +285,54 @@
   pointer-events: none;
 }
 
-/* ── Landscape force (portrait 단말에서 90deg 회전) ─────────── */
+/* ── Mobile (터치 단말) ─────────────────────────────────────── */
 
-@media only screen and (orientation: portrait) {
-  .ss-wrap {
-    inset: auto;
-    width: 100vh;
-    height: 100vw;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%) rotate(90deg);
-  }
-}
-
-/* ── Mobile ────────────────────────────────────────────────── */
-
-@media (max-width: 600px) {
+@media (pointer: coarse) and (hover: none) {
+  .ss-wrap { touch-action: none; }
   .ss-arrow { display: none; }
   .ss-vol { display: none; }
   #ss-prev-track, #ss-next-track { display: none; }
   .ss-info-btn-icon { display: none; }
   .ss-toolbar { gap: 3px; padding: 10px 8px; }
-  .ss-tb-btn { padding: 6px 10px; font-size: 14px; }
+  .ss-tb-btn { padding: 8px 14px; font-size: 16px; }
   .ss-counter { min-width: 48px; font-size: 12px; }
+}
+
+/* ── 단말 Portrait: landscape letterbox ─────────────────────── */
+
+@media (pointer: coarse) and (hover: none) and (orientation: portrait) {
+  .ss-wrap {
+    inset: auto;
+    left: 0;
+    width: 100vw;
+    height: 56.25vw; /* 16:9 landscape 비율 */
+    top: 50%;
+    transform: translateY(-50%);
+  }
+}
+
+/* ── 탭존 힌트 화살표 ───────────────────────────────────────── */
+
+.ss-tap-hint {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  color: rgba(255,255,255,0.32);
+  font-size: 56px;
+  line-height: 1;
+  pointer-events: none;
+  z-index: 5;
+  display: none;
+  transition: opacity 0.4s ease;
+}
+
+@media (pointer: coarse) and (hover: none) {
+  .ss-tap-hint { display: block; }
+}
+
+.ss-tap-hint-prev { left: 6px; }
+.ss-tap-hint-next { right: 6px; }
+
+.ss-wrap.ss-ui-hidden .ss-tap-hint {
+  opacity: 0;
 }

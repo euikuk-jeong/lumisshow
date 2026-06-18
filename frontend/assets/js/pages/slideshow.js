@@ -152,6 +152,8 @@ export async function renderSlideshow(token) {
       </div>
       <div class="ss-loop-toast" id="ss-loop-toast"></div>
       <div class="ss-info" id="ss-info" style="display:none"></div>
+      <div class="ss-tap-hint ss-tap-hint-prev">&#8249;</div>
+      <div class="ss-tap-hint ss-tap-hint-next">&#8250;</div>
     </div>`;
 
   const slotEls = { a: document.getElementById('ss-slot-a'), b: document.getElementById('ss-slot-b') };
@@ -457,26 +459,33 @@ export async function renderSlideshow(token) {
   }
   document.addEventListener('keydown', handleKeydown);
 
-  // ── Touch swipe ──────────────────────────────────────────────
-  let touchX = 0, touchY = 0;
+  // ── Touch tap zones (좌35% = 이전, 우35% = 다음, 중앙 = 툴바 토글) ──
   const wrap = document.getElementById('ss-wrap');
+  let tStart = null;
   wrap.addEventListener('touchstart', (e) => {
-    touchX = e.touches[0].clientX;
-    touchY = e.touches[0].clientY;
+    tStart = { x: e.touches[0].clientX, y: e.touches[0].clientY, t: Date.now() };
   }, { passive: true });
   wrap.addEventListener('touchend', (e) => {
-    const dx = e.changedTouches[0].clientX - touchX;
-    const dy = e.changedTouches[0].clientY - touchY;
-    // portrait 모드에서는 CSS 90deg 회전으로 인해 축이 바뀜: 사용자의 좌우 스와이프 = DOM 상하
-    if (window.matchMedia('(orientation: portrait)').matches) {
-      if (Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > 50) advance(dy < 0 ? 1 : -1);
-    } else {
-      if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 50) advance(dx < 0 ? 1 : -1);
+    if (!tStart) return;
+    const dx = Math.abs(e.changedTouches[0].clientX - tStart.x);
+    const dy = Math.abs(e.changedTouches[0].clientY - tStart.y);
+    const dt = Date.now() - tStart.t;
+    tStart = null;
+    if (dx < 15 && dy < 15 && dt < 300) {
+      const rect = wrap.getBoundingClientRect();
+      const relX = (e.changedTouches[0].clientX - rect.left) / rect.width;
+      if (relX < 0.35) advance(-1);
+      else if (relX > 0.65) advance(1);
+      else showUI();
     }
   }, { passive: true });
 
-  // ── Screen orientation ───────────────────────────────────────
-  screen.orientation?.lock('landscape').catch(() => {});
+  // ── 모바일: 자동 전체화면 + orientation lock ─────────────────
+  if (window.matchMedia('(pointer: coarse) and (hover: none)').matches) {
+    document.documentElement.requestFullscreen?.()
+      .then(() => screen.orientation?.lock('landscape').catch(() => {}))
+      .catch(() => {});
+  }
 
   // ── UI auto-hide ─────────────────────────────────────────────
   function showUI() {
@@ -496,7 +505,9 @@ export async function renderSlideshow(token) {
   document.addEventListener('fullscreenchange', handleFSChange);
   document.getElementById('ss-fs-btn').addEventListener('click', () => {
     if (!document.fullscreenElement) {
-      wrap.requestFullscreen().catch(() => {});
+      document.documentElement.requestFullscreen()
+        .then(() => screen.orientation?.lock('landscape').catch(() => {}))
+        .catch(() => {});
     } else {
       document.exitFullscreen();
     }
