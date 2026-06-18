@@ -9,19 +9,26 @@ from PIL import Image
 @pytest_asyncio.fixture
 async def media_env(admin_client, tmp_path):
     """이미지 파일 + 앨범 + 공유 링크 + 세션 쿠키 세팅."""
-    photo_path = (tmp_path / "photos" / "test.jpg").as_posix()
-    Image.new("RGB", (200, 150), color=(100, 150, 200)).save(photo_path, "JPEG")
+    photo_dir = tmp_path / "photos"
+    photo_dir.mkdir(parents=True, exist_ok=True)
+    abs_path = str(photo_dir / "test.jpg")
+    Image.new("RGB", (200, 150), color=(100, 150, 200)).save(abs_path, "JPEG")
 
     r = await admin_client.post(
         "/api/admin/albums",
-        json={"name": "Media Test", "photo_paths": [photo_path]},
+        json={"name": "Media Test", "photo_paths": [abs_path]},
     )
     album_id = r.json()["id"]
+
+    # DB에 저장된 상대 경로 취득 (예: "test.jpg")
+    album_data = (await admin_client.get(f"/api/admin/albums/{album_id}")).json()
+    stored_path = album_data["photos"][0]["file_path"]
+
     r = await admin_client.post(f"/api/admin/albums/{album_id}/links", json={})
     token = r.json()["token"]
     await admin_client.post(f"/api/share/{token}/auth", json={})
 
-    return {"token": token, "photo_path": photo_path, "album_id": album_id}
+    return {"token": token, "stored_path": stored_path, "abs_path": abs_path, "album_id": album_id}
 
 
 @pytest_asyncio.fixture
@@ -29,12 +36,12 @@ async def music_env(admin_client, tmp_path):
     """음악 파일 + 앨범 + 공유 링크 + 세션 쿠키 세팅."""
     music_dir = tmp_path / "data" / "music"
     music_dir.mkdir(parents=True, exist_ok=True)
-    music_path = (music_dir / "bg.mp3").as_posix()
+    music_path = str(music_dir / "bg.mp3")
     (music_dir / "bg.mp3").write_bytes(b"ID3fake")
 
     r = await admin_client.post("/api/admin/albums", json={"name": "Music Test", "photo_paths": []})
     album_id = r.json()["id"]
-    await admin_client.patch(f"/api/admin/albums/{album_id}", json={"music_path": music_path})
+    await admin_client.put(f"/api/admin/albums/{album_id}", json={"music_paths": [music_path]})
 
     r = await admin_client.post(f"/api/admin/albums/{album_id}/links", json={})
     token = r.json()["token"]
@@ -46,54 +53,61 @@ async def music_env(admin_client, tmp_path):
 # ── /thumb ─────────────────────────────────────────────────────────────────────
 
 async def test_thumb_small_returns_jpeg(admin_client, media_env):
-    path = media_env["photo_path"]
+    path = media_env["stored_path"]
     r = await admin_client.get(f"/thumb/{path}?size=small")
     assert r.status_code == 200
     assert "image/jpeg" in r.headers["content-type"]
 
 
 async def test_thumb_medium(admin_client, media_env):
-    path = media_env["photo_path"]
+    path = media_env["stored_path"]
     r = await admin_client.get(f"/thumb/{path}?size=medium")
     assert r.status_code == 200
 
 
 async def test_thumb_invalid_size(admin_client, media_env):
-    path = media_env["photo_path"]
+    path = media_env["stored_path"]
     r = await admin_client.get(f"/thumb/{path}?size=huge")
     assert r.status_code == 400
 
 
 async def test_thumb_no_cookie(admin_client, tmp_path):
     """세션 쿠키 없이 요청 → 401."""
-    photo_path = (tmp_path / "photos" / "nc.jpg").as_posix()
+    photo_path = str(tmp_path / "photos" / "nc.jpg")
     Image.new("RGB", (50, 50)).save(photo_path, "JPEG")
-    await admin_client.post("/api/admin/albums", json={"name": "NC", "photo_paths": [photo_path]})
+    r = await admin_client.post("/api/admin/albums", json={"name": "NC", "photo_paths": [photo_path]})
+    album_id = r.json()["id"]
+    album_data = (await admin_client.get(f"/api/admin/albums/{album_id}")).json()
+    stored = album_data["photos"][0]["file_path"]
     # auth 미호출 → share_session 쿠키 없음
-    r = await admin_client.get(f"/thumb/{photo_path}?size=small")
+    r = await admin_client.get(f"/thumb/{stored}?size=small")
     assert r.status_code == 401
 
 
 async def test_thumb_file_not_in_album(admin_client, media_env, tmp_path):
     """앨범에 없는 파일 → 403."""
-    other = (tmp_path / "photos" / "other.jpg").as_posix()
+    other = str(tmp_path / "photos" / "other.jpg")
     Image.new("RGB", (50, 50)).save(other, "JPEG")
-    r = await admin_client.get(f"/thumb/{other}?size=small")
+    r = await admin_client.post("/api/admin/albums", json={"name": "OtherAlbum", "photo_paths": [other]})
+    album_id = r.json()["id"]
+    album_data = (await admin_client.get(f"/api/admin/albums/{album_id}")).json()
+    other_stored = album_data["photos"][0]["file_path"]
+    # media_env 세션 쿠키로 다른 앨범 파일 요청 → 403
+    r = await admin_client.get(f"/thumb/{other_stored}?size=small")
     assert r.status_code == 403
 
 
 async def test_thumb_file_missing_on_disk(admin_client, media_env):
     """앨범에 등록됐으나 디스크에 없는 파일 → 404."""
-    path = media_env["photo_path"]
-    os.remove(path)
-    r = await admin_client.get(f"/thumb/{path}?size=small")
+    os.remove(media_env["abs_path"])
+    r = await admin_client.get(f"/thumb/{media_env['stored_path']}?size=small")
     assert r.status_code == 404
 
 
 # ── /media ─────────────────────────────────────────────────────────────────────
 
 async def test_media_returns_image_bytes(admin_client, media_env):
-    path = media_env["photo_path"]
+    path = media_env["stored_path"]
     r = await admin_client.get(f"/media/{path}")
     assert r.status_code == 200
     assert len(r.content) > 0
@@ -101,26 +115,32 @@ async def test_media_returns_image_bytes(admin_client, media_env):
 
 async def test_media_no_cookie(admin_client, tmp_path):
     """세션 쿠키 없이 요청 → 401."""
-    photo_path = (tmp_path / "photos" / "nc2.jpg").as_posix()
+    photo_path = str(tmp_path / "photos" / "nc2.jpg")
     Image.new("RGB", (50, 50)).save(photo_path, "JPEG")
-    await admin_client.post("/api/admin/albums", json={"name": "NC2", "photo_paths": [photo_path]})
-    r = await admin_client.get(f"/media/{photo_path}")
+    r = await admin_client.post("/api/admin/albums", json={"name": "NC2", "photo_paths": [photo_path]})
+    album_id = r.json()["id"]
+    album_data = (await admin_client.get(f"/api/admin/albums/{album_id}")).json()
+    stored = album_data["photos"][0]["file_path"]
+    r = await admin_client.get(f"/media/{stored}")
     assert r.status_code == 401
 
 
 async def test_media_file_not_in_album(admin_client, media_env, tmp_path):
     """앨범에 없는 파일 → 403."""
-    other = (tmp_path / "photos" / "outsider.jpg").as_posix()
+    other = str(tmp_path / "photos" / "outsider.jpg")
     Image.new("RGB", (50, 50)).save(other, "JPEG")
-    r = await admin_client.get(f"/media/{other}")
+    r = await admin_client.post("/api/admin/albums", json={"name": "OutsiderAlbum", "photo_paths": [other]})
+    album_id = r.json()["id"]
+    album_data = (await admin_client.get(f"/api/admin/albums/{album_id}")).json()
+    other_stored = album_data["photos"][0]["file_path"]
+    r = await admin_client.get(f"/media/{other_stored}")
     assert r.status_code == 403
 
 
 async def test_media_file_missing_on_disk(admin_client, media_env):
     """앨범에 등록됐으나 디스크에 없는 파일 → 404."""
-    path = media_env["photo_path"]
-    os.remove(path)
-    r = await admin_client.get(f"/media/{path}")
+    os.remove(media_env["abs_path"])
+    r = await admin_client.get(f"/media/{media_env['stored_path']}")
     assert r.status_code == 404
 
 
@@ -131,14 +151,12 @@ async def test_media_relative_path_resolved(admin_client, tmp_path):
     photo = sub / "p.jpg"
     Image.new("RGB", (50, 50)).save(str(photo), "JPEG")
 
-    # Browse API가 반환하는 것과 동일한 상대 경로로 추가
     r = await admin_client.post("/api/admin/albums", json={"name": "RelTest", "photo_paths": ["sub/p.jpg"]})
     album_id = r.json()["id"]
     r = await admin_client.post(f"/api/admin/albums/{album_id}/links", json={})
     token = r.json()["token"]
     await admin_client.post(f"/api/share/{token}/auth", json={})
 
-    # DB에 저장된 절대 경로를 가져와서 미디어 서빙 요청
     album_detail = (await admin_client.get(f"/api/admin/albums/{album_id}")).json()
     stored_path = album_detail["photos"][0]["file_path"]
     r = await admin_client.get(f"/media/{stored_path}")
@@ -147,7 +165,6 @@ async def test_media_relative_path_resolved(admin_client, tmp_path):
 
 async def test_thumb_path_traversal(admin_client, tmp_path):
     """PHOTO_ROOT 밖 파일이 DB에 등록됐더라도 /thumb/ 접근 → 403."""
-    # tmp_path/photos 밖(sibling)에 파일 생성 — PHOTO_ROOT 범위 밖
     secret = tmp_path / "secret.jpg"
     Image.new("RGB", (50, 50)).save(str(secret), "JPEG")
     secret_posix = secret.as_posix()
@@ -158,6 +175,7 @@ async def test_thumb_path_traversal(admin_client, tmp_path):
     token = r.json()["token"]
     await admin_client.post(f"/api/share/{token}/auth", json={})
 
+    # 절대 경로로 요청 → media router가 상대 경로로 정규화 → DB 매칭 → path traversal check → 403
     r = await admin_client.get(f"/thumb/{secret_posix}?size=small")
     assert r.status_code == 403
 
@@ -180,19 +198,25 @@ async def test_media_path_traversal(admin_client, tmp_path):
 
 async def test_media_cross_token_denied(admin_client, tmp_path):
     """token1 쿠키로 token2 앨범 파일에 접근 → 403."""
-    p1 = (tmp_path / "photos" / "p1.jpg").as_posix()
+    p1 = str(tmp_path / "photos" / "p1.jpg")
     Image.new("RGB", (50, 50)).save(p1, "JPEG")
     r = await admin_client.post("/api/admin/albums", json={"name": "A1", "photo_paths": [p1]})
-    r = await admin_client.post(f"/api/admin/albums/{r.json()['id']}/links", json={})
+    album1_id = r.json()["id"]
+    r = await admin_client.post(f"/api/admin/albums/{album1_id}/links", json={})
     token1 = r.json()["token"]
     await admin_client.post(f"/api/share/{token1}/auth", json={})  # token1 쿠키 발급
 
-    p2 = (tmp_path / "photos" / "p2.jpg").as_posix()
+    p2 = str(tmp_path / "photos" / "p2.jpg")
     Image.new("RGB", (50, 50)).save(p2, "JPEG")
     r = await admin_client.post("/api/admin/albums", json={"name": "A2", "photo_paths": [p2]})
+    album2_id = r.json()["id"]
 
-    # token1 쿠키로 token2 앨범 파일 요청
-    r = await admin_client.get(f"/media/{p2}")
+    # A2 앨범의 저장 경로 취득
+    album2_data = (await admin_client.get(f"/api/admin/albums/{album2_id}")).json()
+    p2_stored = album2_data["photos"][0]["file_path"]
+
+    # token1 쿠키로 token2 앨범 파일 요청 → 403
+    r = await admin_client.get(f"/media/{p2_stored}")
     assert r.status_code == 403
 
 

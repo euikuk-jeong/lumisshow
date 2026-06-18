@@ -1,30 +1,29 @@
 import asyncio
-import io
-import zipfile
+import os
+import zipstream
 from collections.abc import AsyncGenerator
-from pathlib import Path
-
-
-def _build_zip(paths: list[str]) -> bytes:
-    buf = io.BytesIO()
-    seen: set[str] = set()
-    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED, allowZip64=True) as zf:
-        for path in paths:
-            p = Path(path)
-            if not p.is_file():
-                continue
-            name = p.name
-            if name in seen:
-                stem, suffix = p.stem, p.suffix
-                i = 1
-                while f"{stem}_{i}{suffix}" in seen:
-                    i += 1
-                name = f"{stem}_{i}{suffix}"
-            seen.add(name)
-            zf.write(str(p), name)
-    return buf.getvalue()
 
 
 async def zip_generator(paths: list[str]) -> AsyncGenerator[bytes, None]:
-    data = await asyncio.get_running_loop().run_in_executor(None, _build_zip, paths)
-    yield data
+    zs = zipstream.ZipStream(compress_type=zipstream.ZIP_DEFLATED)
+    seen: dict[str, int] = {}
+    for path in paths:
+        if not os.path.isfile(path):
+            continue
+        name = os.path.basename(path)
+        stem, ext = os.path.splitext(name)
+        if name in seen:
+            seen[name] += 1
+            name = f"{stem}_{seen[name]}{ext}"
+        else:
+            seen[name] = 0
+        zs.add_path(path, name)
+
+    _sentinel = object()
+    loop = asyncio.get_running_loop()
+    it = iter(zs)
+    while True:
+        chunk = await loop.run_in_executor(None, next, it, _sentinel)
+        if chunk is _sentinel:
+            break
+        yield chunk

@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import FileResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
+from backend.models.database import get_db
 from backend.models.schemas import BrowseResponse, FolderItem, PhotoItem, SearchResponse
 
 _AUDIO_EXTENSIONS = {'.mp3', '.flac', '.ogg', '.m4a', '.wav', '.aac', '.opus'}
@@ -53,24 +54,10 @@ def _safe_dir(rel: str) -> str:
     return resolved
 
 
-def _build_photo_item(full_path: str, root: str) -> PhotoItem:
-    rel = os.path.relpath(full_path, root).replace("\\", "/")
-    stat = os.stat(full_path)
-    meta = get_image_meta(full_path)
-    return PhotoItem(
-        path=rel,
-        name=os.path.basename(full_path),
-        size=stat.st_size,
-        taken_at=meta["taken_at"],
-        width=meta["width"],
-        height=meta["height"],
-        thumb_url=f"/api/admin/thumb?path={quote(rel)}&size=small",
-    )
-
-
-def _scan_dir(real_path: str, root: str) -> tuple[list[FolderItem], list[PhotoItem]]:
+def _scan_dir_basic(real_path: str, root: str) -> tuple[list[FolderItem], list[tuple[str, str, int]]]:
+    """폴더 목록과 기본 사진 정보(full_path, name, size)를 반환. EXIF 없음."""
     folders: list[FolderItem] = []
-    photos: list[PhotoItem] = []
+    basics: list[tuple[str, str, int]] = []
     with os.scandir(real_path) as entries:
         for entry in sorted(entries, key=lambda e: e.name.lower()):
             if _is_hidden(entry.name):
@@ -87,18 +74,18 @@ def _scan_dir(real_path: str, root: str) -> tuple[list[FolderItem], list[PhotoIt
             elif entry.is_file():
                 if Path(entry.name).suffix.lower() not in IMAGE_EXTENSIONS:
                     continue
-                photos.append(_build_photo_item(entry.path, root))
-    return folders, photos
+                stat = os.stat(entry.path)
+                basics.append((entry.path, entry.name, stat.st_size))
+    return folders, basics
 
 
-def _walk_photos(
+def _walk_photos_basic(
     start_dir: str,
     root: str,
     q: Optional[str],
-    date_from: Optional[datetime],
-    date_to: Optional[datetime],
-) -> list[PhotoItem]:
-    results: list[PhotoItem] = []
+) -> list[tuple[str, str, int]]:
+    """파일명 필터로 사진을 재귀 탐색. EXIF 없이 (full_path, name, size) 반환."""
+    results: list[tuple[str, str, int]] = []
     for dirpath, dirnames, filenames in os.walk(start_dir):
         dirnames[:] = sorted(d for d in dirnames if not _is_hidden(d))
         for fname in sorted(filenames):
@@ -109,13 +96,70 @@ def _walk_photos(
             if q and q.lower() not in fname.lower():
                 continue
             full_path = os.path.join(dirpath, fname)
-            item = _build_photo_item(full_path, root)
-            if date_from and (not item.taken_at or item.taken_at < date_from):
-                continue
-            if date_to and (not item.taken_at or item.taken_at > date_to):
-                continue
-            results.append(item)
+            stat = os.stat(full_path)
+            results.append((full_path, fname, stat.st_size))
     return results
+
+
+async def _enrich_photos(
+    basic_items: list[tuple[str, str, int]],
+    root: str,
+    db,
+) -> list[PhotoItem]:
+    """basic_items의 각 사진에 EXIF 메타데이터를 추가. photo_meta_cache 활용."""
+    if not basic_items:
+        return []
+
+    rel_map = {fp: os.path.relpath(fp, root).replace("\\", "/") for fp, _, _ in basic_items}
+
+    meta_by_rel: dict[str, dict] = {}
+    uncached: list[tuple[str, str]] = []  # (rel, full_path)
+
+    for full_path, _, _ in basic_items:
+        rel = rel_map[full_path]
+        async with db.execute(
+            "SELECT taken_at, width, height FROM photo_meta_cache WHERE file_path = ?", (rel,)
+        ) as cur:
+            row = await cur.fetchone()
+        if row:
+            taken_at = datetime.fromisoformat(row["taken_at"]) if row["taken_at"] else None
+            meta_by_rel[rel] = {"taken_at": taken_at, "width": row["width"], "height": row["height"]}
+        else:
+            uncached.append((rel, full_path))
+
+    if uncached:
+        metas = await asyncio.gather(*[
+            asyncio.to_thread(get_image_meta, fp) for _, fp in uncached
+        ])
+        inserts = []
+        for (rel, _), meta in zip(uncached, metas):
+            meta_by_rel[rel] = meta
+            inserts.append((
+                rel,
+                meta["taken_at"].isoformat() if meta.get("taken_at") else None,
+                meta.get("width"),
+                meta.get("height"),
+            ))
+        await db.executemany(
+            "INSERT OR REPLACE INTO photo_meta_cache (file_path, taken_at, width, height) VALUES (?, ?, ?, ?)",
+            inserts,
+        )
+        await db.commit()
+
+    items = []
+    for full_path, name, size in basic_items:
+        rel = rel_map[full_path]
+        meta = meta_by_rel.get(rel, {})
+        items.append(PhotoItem(
+            path=rel,
+            name=name,
+            size=size,
+            taken_at=meta.get("taken_at"),
+            width=meta.get("width"),
+            height=meta.get("height"),
+            thumb_url=f"/api/admin/thumb?path={quote(rel)}&size=small",
+        ))
+    return items
 
 
 # ── 엔드포인트 ────────────────────────────────────────────────────────────────
@@ -124,10 +168,12 @@ def _walk_photos(
 async def browse(
     path: str = Query(default=""),
     _: str = Depends(get_current_admin),
+    db=Depends(get_db),
 ):
     real_path = _safe_dir(path)
     root = _photo_root()
-    folders, photos = await asyncio.to_thread(_scan_dir, real_path, root)
+    folders, basics = await asyncio.to_thread(_scan_dir_basic, real_path, root)
+    photos = await _enrich_photos(basics, root, db)
     return BrowseResponse(folders=folders, photos=photos)
 
 
@@ -140,6 +186,7 @@ async def search(
     page: int = Query(default=1, ge=1),
     size: int = Query(default=100, ge=1, le=500),
     _: str = Depends(get_current_admin),
+    db=Depends(get_db),
 ):
     root = _photo_root()
     start_dir = _safe_dir(folder) if folder else root
@@ -151,10 +198,22 @@ async def search(
         else None
     )
 
-    all_items = await asyncio.to_thread(_walk_photos, start_dir, root, q, df, dt)
+    basics = await asyncio.to_thread(_walk_photos_basic, start_dir, root, q)
+    all_items = await _enrich_photos(basics, root, db)
+
+    if df or dt:
+        filtered = []
+        for item in all_items:
+            if df and (not item.taken_at or item.taken_at < df):
+                continue
+            if dt and (not item.taken_at or item.taken_at > dt):
+                continue
+            filtered.append(item)
+        all_items = filtered
+
     total = len(all_items)
     offset = (page - 1) * size
-    return SearchResponse(items=all_items[offset : offset + size], total=total, page=page)
+    return SearchResponse(items=all_items[offset: offset + size], total=total, page=page)
 
 
 @router.get("/music")

@@ -83,7 +83,7 @@ async def test_get_album_not_found(admin_client):
 async def test_update_album_name(admin_client):
     r = await admin_client.post("/api/admin/albums", json={"name": "Old"})
     album_id = r.json()["id"]
-    r = await admin_client.patch(f"/api/admin/albums/{album_id}", json={"name": "New"})
+    r = await admin_client.put(f"/api/admin/albums/{album_id}", json={"name": "New"})
     assert r.status_code == 200
     assert r.json()["name"] == "New"
 
@@ -91,7 +91,7 @@ async def test_update_album_name(admin_client):
 async def test_update_album_cover_path(admin_client):
     r = await admin_client.post("/api/admin/albums", json={"name": "Cover"})
     album_id = r.json()["id"]
-    r = await admin_client.patch(
+    r = await admin_client.put(
         f"/api/admin/albums/{album_id}", json={"cover_path": "cover.jpg"}
     )
     assert r.status_code == 200
@@ -101,13 +101,13 @@ async def test_update_album_cover_path(admin_client):
 async def test_update_album_empty_body_is_noop(admin_client):
     r = await admin_client.post("/api/admin/albums", json={"name": "Stable"})
     album_id = r.json()["id"]
-    r = await admin_client.patch(f"/api/admin/albums/{album_id}", json={})
+    r = await admin_client.put(f"/api/admin/albums/{album_id}", json={})
     assert r.status_code == 200
     assert r.json()["name"] == "Stable"
 
 
 async def test_update_album_not_found(admin_client):
-    r = await admin_client.patch("/api/admin/albums/9999", json={"name": "X"})
+    r = await admin_client.put("/api/admin/albums/9999", json={"name": "X"})
     assert r.status_code == 404
 
 

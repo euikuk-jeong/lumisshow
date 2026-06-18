@@ -93,7 +93,12 @@ def test_get_image_meta_invalid_file(tmp_path):
     with open(p, "wb") as f:
         f.write(b"not an image")
     meta = get_image_meta(p)
-    assert meta == {"width": None, "height": None, "taken_at": None}
+    assert set(meta.keys()) == {
+        "width", "height", "taken_at", "make", "camera", "software",
+        "shutter", "aperture", "iso", "focal_length", "shoot_mode",
+        "flash", "metering", "exposure_mode",
+    }
+    assert all(v is None for v in meta.values())
 
 
 def test_thumb_path_deterministic(img_path):

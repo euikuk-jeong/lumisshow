@@ -246,9 +246,9 @@ async def test_album_with_music_flow(live_server):
             headers=auth,
         )
         album_id = r.json()["id"]
-        await c.patch(
+        await c.put(
             f"/api/admin/albums/{album_id}",
-            json={"music_path": music_path},
+            json={"music_paths": [music_path]},
             headers=auth,
         )
         r = await c.post(f"/api/admin/albums/{album_id}/links", json={}, headers=auth)

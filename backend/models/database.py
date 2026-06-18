@@ -41,6 +41,13 @@ CREATE TABLE IF NOT EXISTS thumbnail_cache (
     PRIMARY KEY (file_path, size)
 );
 
+CREATE TABLE IF NOT EXISTS photo_meta_cache (
+    file_path TEXT PRIMARY KEY,
+    taken_at  TEXT,
+    width     INTEGER,
+    height    INTEGER
+);
+
 CREATE TABLE IF NOT EXISTS settings (
     key   TEXT PRIMARY KEY,
     value TEXT NOT NULL
@@ -66,6 +73,26 @@ def _db_path() -> str:
     return os.path.join(data_dir, "db", "app.db")
 
 
+async def _migrate_absolute_to_relative(db) -> None:
+    """album_photos.file_path의 절대 경로를 PHOTO_ROOT 기준 상대 경로로 변환."""
+    photo_root = os.path.realpath(os.getenv("PHOTO_ROOT", "./testdata/photos"))
+    async with db.execute("SELECT id, file_path FROM album_photos") as cur:
+        rows = await cur.fetchall()
+    updates = []
+    for row in rows:
+        row_id, path = row[0], row[1]
+        if os.path.isabs(path):
+            try:
+                rel = os.path.relpath(path, photo_root).replace("\\", "/")
+                updates.append((rel, row_id))
+            except ValueError:
+                pass  # Windows 다른 드라이브 간 경로: 건너뜀
+    if updates:
+        await db.executemany(
+            "UPDATE album_photos SET file_path = ? WHERE id = ?", updates
+        )
+
+
 async def init_db() -> None:
     path = _db_path()
     os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -74,8 +101,9 @@ async def init_db() -> None:
         for migration in _ALBUM_MIGRATIONS:
             try:
                 await db.execute(migration)
-            except Exception:
+            except aiosqlite.OperationalError:
                 pass  # 이미 존재하는 컬럼이면 무시
+        await _migrate_absolute_to_relative(db)
         await db.commit()
 
 
