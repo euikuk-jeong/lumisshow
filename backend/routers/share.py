@@ -214,8 +214,13 @@ async def get_photos(token: str, request: Request, db=Depends(get_db)):
     ) as cur:
         rows = await cur.fetchall()
 
+    photo_root = os.path.realpath(os.getenv("PHOTO_ROOT", "./testdata/photos"))
+
+    def _abs(p: str) -> str:
+        return p if os.path.isabs(p) else os.path.join(photo_root, p)
+
     metas = await asyncio.gather(*[
-        asyncio.to_thread(get_image_meta, r["file_path"]) for r in rows
+        asyncio.to_thread(get_image_meta, _abs(r["file_path"])) for r in rows
     ])
 
     photos = [
@@ -268,7 +273,11 @@ async def download_zip(token: str, request: Request, db=Depends(get_db)):
     if not rows:
         raise HTTPException(status_code=404, detail="No photos in album")
 
-    paths = [r["file_path"] for r in rows]
+    zip_root = os.path.realpath(os.getenv("PHOTO_ROOT", "./testdata/photos"))
+    paths = [
+        p if os.path.isabs(p) else os.path.join(zip_root, p)
+        for p in (r["file_path"] for r in rows)
+    ]
     album_name = rows[0]["album_name"]
     safe_name = "".join(c for c in album_name if c.isalnum() or c in " _-").strip() or "album"
     encoded_name = quote(safe_name + ".zip", safe="")
