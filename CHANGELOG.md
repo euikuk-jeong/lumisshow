@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.2] - 2026-06-19
+
+### Security
+- 공유 링크 토큰 강도 강화: `secrets.token_hex(5)` (40비트) → `secrets.token_urlsafe(16)` (128비트)
+- `album_photos.file_path` 절대 경로 → PHOTO_ROOT 기준 상대 경로 저장 (서버 파일시스템 구조 노출 방지)
+
+### Fixed
+- ZIP 다운로드가 전체 아카이브를 메모리에 올리던 문제 수정: `zipstream-ng` 청크 스트리밍으로 교체
+- 탐색기(`/browse`, `/search`) 요청마다 PIL로 EXIF 재읽기 하던 성능 문제: `photo_meta_cache` 테이블 캐싱 추가
+- DB 마이그레이션 예외 처리 범위 축소: `except Exception` → `except OperationalError` (실제 오류 은폐 방지)
+- 테스트 13건 오류 수정 (PUT/PATCH 메서드 불일치, 토큰 길이, EXIF 필드수, Windows 경로 구분자)
+
 ## [0.3.1] - 2026-06-18
 
 ### Added
