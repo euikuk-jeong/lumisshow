@@ -5,3 +5,4 @@ bcrypt>=4.0
 pillow>=10.3
 python-multipart>=0.0.9
 aiosqlite>=0.20
+zipstream-ng>=1.1

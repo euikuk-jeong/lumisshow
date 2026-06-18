@@ -23,12 +23,16 @@ router = APIRouter(prefix="/api/admin/albums", tags=["admin-albums"])
 
 
 def _resolve_paths(paths: list[str]) -> list[str]:
-    """상대 경로를 PHOTO_ROOT 기준 절대 경로로 변환. 절대 경로는 그대로 통과."""
+    """경로를 PHOTO_ROOT 기준 상대 경로로 정규화. 절대 경로도 상대로 변환."""
     root = os.path.realpath(os.getenv("PHOTO_ROOT", "./testdata/photos"))
-    return [
-        os.path.realpath(os.path.join(root, p)) if not os.path.isabs(p) else os.path.realpath(p)
-        for p in paths
-    ]
+    result = []
+    for p in paths:
+        abs_path = os.path.realpath(p if os.path.isabs(p) else os.path.join(root, p))
+        try:
+            result.append(os.path.relpath(abs_path, root).replace("\\", "/"))
+        except ValueError:
+            result.append(p)  # Windows 다른 드라이브 간 경로: 원본 유지
+    return result
 
 _SLIDESHOW_DEFAULTS = {
     "slideshow_interval": 5,
@@ -88,8 +92,13 @@ async def _apply_photo_sort(album_id: int, sort_by: str, sort_dir: str, db) -> N
     reverse = sort_dir == "desc"
 
     if sort_by == "taken_at":
+        root = os.path.realpath(os.getenv("PHOTO_ROOT", "./testdata/photos"))
+
+        def _abs(p: str) -> str:
+            return p if os.path.isabs(p) else os.path.join(root, p)
+
         metas = await asyncio.gather(*[
-            asyncio.to_thread(get_image_meta, r["file_path"]) for r in rows
+            asyncio.to_thread(get_image_meta, _abs(r["file_path"])) for r in rows
         ])
         # taken_at None → datetime.min, 동일 날짜면 파일명으로 tiebreak
         combined = sorted(

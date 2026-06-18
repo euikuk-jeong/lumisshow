@@ -29,6 +29,9 @@ async def auth_client(tmp_path, monkeypatch, photo_root):
     monkeypatch.setenv("ADMIN_PASSWORD", "testpass")
     monkeypatch.setenv("JWT_SECRET", "testsecret")
 
+    from backend.models.database import init_db
+    await init_db()
+
     from backend.main import app
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:

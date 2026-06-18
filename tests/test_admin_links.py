@@ -24,7 +24,7 @@ async def test_create_link_minimal(admin_client):
     assert r.status_code == 201
     data = r.json()
     assert "token" in data
-    assert len(data["token"]) == 36  # UUID v4
+    assert len(data["token"]) >= 20
     assert data["has_password"] is False
     assert data["is_active"] is True
     assert data["expires_at"] is None

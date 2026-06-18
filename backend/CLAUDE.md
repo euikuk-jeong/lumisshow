@@ -89,13 +89,13 @@ services/
 두 가지 방식 지원 — `ADMIN_PASSWORD_HASH`(bcrypt) 설정 시 우선 사용, 없으면 `ADMIN_PASSWORD` 평문 비교. 운영 환경에서는 bcrypt 해시 권장 (docker inspect 노출 위험 방지).
 
 ### 공유 링크 토큰
-UUID v4. 브루트포스 불가 수준의 랜덤성. 만료일(`expires_at`)과 활성화 플래그(`is_active`)를 모두 확인해야 유효.
+`secrets.token_urlsafe(16)` (128비트). 브루트포스 불가 수준의 랜덤성. 만료일(`expires_at`)과 활성화 플래그(`is_active`)를 모두 확인해야 유효.
 
 ### 배경음악 저장 구조
 `albums.music_path` TEXT 컬럼에 JSON 배열 문자열 저장 (`["path1", "path2"]`). `parse_music_paths()` (schemas.py)로 읽기 시 파싱. 기존 단일 경로 문자열은 자동으로 1-element 리스트로 처리 (하위 호환). 음악 파일은 `DATA_DIR/music/` 하위에만 허용.
 
 ### 썸네일 및 EXIF
-두 가지 크기 — small(300×200, 그리드/탐색기), medium(800×600, 슬라이드쇼 프리로드). 최초 요청 시 on-demand 생성. EXIF 전체 메타 추출: 촬영일·해상도·제조사·카메라·소프트웨어·셔터·조리개·ISO·초점거리·촬영모드·플래시·측광·노출모드.
+두 가지 크기 — small(300×200, 그리드/탐색기), medium(800×600, 슬라이드쇼 프리로드). 최초 요청 시 on-demand 생성. EXIF 전체 메타 추출: 촬영일·해상도·제조사·카메라·소프트웨어·셔터·조리개·ISO·초점거리·촬영모드·플래시·측광·노출모드. 탐색기/검색 EXIF는 `photo_meta_cache` 테이블에 캐싱(기준키: PHOTO_ROOT 상대 경로).
 
 ### ZIP 다운로드
-`StreamingResponse` + `zipfile.ZipFile` 스트리밍으로 서버 메모리에 전체 파일을 올리지 않음. 응답 헤더에 `Content-Disposition: attachment` 설정.
+`StreamingResponse` + `zipstream-ng` 청크 스트리밍으로 서버 메모리에 전체 파일을 올리지 않음. 응답 헤더에 `Content-Disposition: attachment` 설정.
