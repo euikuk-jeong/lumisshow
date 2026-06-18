@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-06-18
+
+### Added
+- 모바일 슬라이드쇼 탭존 내비게이션: 스와이프 제스처 대신 화면 좌(35%)/우(35%) 탭으로 이전/다음 이동
+  - 중앙(30%) 탭 시 툴바 표시/숨김 토글
+  - 탭존 힌트 화살표(‹ ›) 툴바와 연동하여 자동 페이드
+- 모바일 슬라이드쇼 진입 시 자동 전체화면 + orientation lock 시도
+
+### Changed
+- 모바일 Portrait 처리: CSS 90도 회전 방식 → 16:9 letterbox 방식으로 교체
+  - 전체화면에서도 letterbox 유지 (`document.documentElement` 기준 fullscreen)
+- 모바일 감지 기준: `max-width: 600px` → `(pointer: coarse) and (hover: none)` 미디어쿼리
+
+### Fixed
+- 핀치줌/더블탭 줌으로 슬라이드쇼 레이아웃 깨지는 문제: `user-scalable=no` + `touch-action: none`
+- iOS 뒤로가기 스와이프와 슬라이드쇼 스와이프 충돌: 탭존 방식으로 전환해 충돌 원천 차단
+- favicon.ico 404 로그 제거: `<link rel="icon" href="data:,">` 추가
+
 ## [0.2.6] - 2026-06-18
 
 ### Added
@@ -100,7 +118,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v0.2.6...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/euikuk-jeong/lumisshow/compare/v0.2.6...v0.3.0
 [0.2.6]: https://github.com/euikuk-jeong/lumisshow/compare/v0.2.5...v0.2.6
 [0.2.5]: https://github.com/euikuk-jeong/lumisshow/compare/v0.2.4...v0.2.5
 [0.2.4]: https://github.com/euikuk-jeong/lumisshow/compare/v0.2.3...v0.2.4
