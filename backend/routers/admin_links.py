@@ -80,7 +80,7 @@ async def create_link(
     db=Depends(get_db),
 ):
     await _get_album_or_404(album_id, db)
-    token = secrets.token_urlsafe(16)
+    token = secrets.token_hex(5)
     password_hash = hash_password(body.password) if body.password else None
     async with db.execute(
         "INSERT INTO share_links (album_id, token, password_hash, expires_at) VALUES (?, ?, ?, ?)",
