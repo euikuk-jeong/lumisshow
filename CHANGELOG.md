@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.5] - 2026-06-20
+
+### Security
+- Admin 썸네일 URL에서 JWT 노출 제거: `?token=` 쿼리 파라미터 방식을 httpOnly 쿠키(`admin_img_session`) 방식으로 교체하여 nginx 로그·브라우저 히스토리에 8h admin JWT가 노출되지 않도록 수정
+
 ## [0.3.4] - 2026-06-19
 
 ### Changed
@@ -159,7 +164,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v0.3.1...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v0.3.5...HEAD
+[0.3.5]: https://github.com/euikuk-jeong/lumisshow/compare/v0.3.4...v0.3.5
+[0.3.4]: https://github.com/euikuk-jeong/lumisshow/compare/v0.3.3...v0.3.4
+[0.3.3]: https://github.com/euikuk-jeong/lumisshow/compare/v0.3.2...v0.3.3
+[0.3.2]: https://github.com/euikuk-jeong/lumisshow/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/euikuk-jeong/lumisshow/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/euikuk-jeong/lumisshow/compare/v0.2.6...v0.3.0
 [0.2.6]: https://github.com/euikuk-jeong/lumisshow/compare/v0.2.5...v0.2.6
