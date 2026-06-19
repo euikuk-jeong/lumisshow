@@ -1,5 +1,4 @@
 import { api } from '../api.js';
-import { getToken } from '../auth.js';
 import { renderAdminShell } from '../layout.js';
 import { esc } from '../utils.js';
 import { openLightbox } from '../lightbox.js';
@@ -69,11 +68,10 @@ export async function renderAdminBrowse() {
     // 그 외(이미지 영역) → 라이트박스
     const selectable = e.target.closest('.selectable[data-path]');
     if (selectable) {
-      const token = getToken();
       const allPaths = [...document.querySelectorAll('#browse-content .selectable[data-path]')]
         .map(el => el.dataset.path);
       const idx = allPaths.indexOf(selectable.dataset.path);
-      if (idx !== -1) openLightbox(allPaths, idx, token, {
+      if (idx !== -1) openLightbox(allPaths, idx, {
         getSelectionState: path => ({
           isSelected: state.selected.has(path),
           selectedCount: state.lastPhotos.filter(p => state.selected.has(p.path)).length,
@@ -175,8 +173,6 @@ function setViewMode(state, mode) {
 function renderBrowseResult(state) {
   const { lastFolders: folders, lastPhotos: photos, lastPath: currentPath } = state;
   const el    = document.getElementById('browse-content');
-  const token = getToken();
-
   const sorted = sortPhotos(photos, state.sortBy);
 
   const breadcrumbHTML = currentPath !== null ? buildBreadcrumb(currentPath) : '';
@@ -190,9 +186,9 @@ function renderBrowseResult(state) {
   if (!sorted.length) {
     photosHTML = '<p class="text-muted text-sm">사진이 없습니다</p>';
   } else if (state.viewMode === 'list') {
-    photosHTML = `<div class="photo-list">${sorted.map(p => photoListItem(p, state.selected.has(p.path), token)).join('')}</div>`;
+    photosHTML = `<div class="photo-list">${sorted.map(p => photoListItem(p, state.selected.has(p.path))).join('')}</div>`;
   } else {
-    photosHTML = `<div class="photo-grid">${sorted.map(p => selectableThumb(p, state.selected.has(p.path), token)).join('')}</div>`;
+    photosHTML = `<div class="photo-grid">${sorted.map(p => selectableThumb(p, state.selected.has(p.path))).join('')}</div>`;
   }
 
   const selectedInView = sorted.filter(p => state.selected.has(p.path)).length;
@@ -288,8 +284,8 @@ function buildBreadcrumb(currentPath) {
   return html;
 }
 
-function selectableThumb(photo, isSelected, token) {
-  const thumbUrl = photo.thumb_url ? `${photo.thumb_url}&token=${token}` : '';
+function selectableThumb(photo, isSelected) {
+  const thumbUrl = photo.thumb_url || '';
   return `
     <div class="photo-thumb selectable${isSelected ? ' selected' : ''}" data-path="${esc(photo.path)}">
       ${thumbUrl ? `<img src="${thumbUrl}" alt="" loading="lazy" onerror="this.style.opacity='0.2'">` : ''}
@@ -297,8 +293,8 @@ function selectableThumb(photo, isSelected, token) {
     </div>`;
 }
 
-function photoListItem(photo, isSelected, token) {
-  const thumbUrl = photo.thumb_url ? `${photo.thumb_url}&token=${token}` : '';
+function photoListItem(photo, isSelected) {
+  const thumbUrl = photo.thumb_url || '';
   const date = photo.taken_at ? new Date(photo.taken_at).toLocaleDateString('ko-KR') : '—';
   const dims = photo.width && photo.height ? `${photo.width}×${photo.height}` : '';
   return `
