@@ -1,5 +1,4 @@
 import { api } from '../api.js';
-import { getToken } from '../auth.js';
 import { renderAdminShell } from '../layout.js';
 import { esc } from '../utils.js';
 
@@ -30,8 +29,7 @@ async function loadAlbums() {
         </div>`;
       return;
     }
-    const token = getToken();
-    el.innerHTML = `<div class="album-grid">${albums.map(a => albumCard(a, token)).join('')}</div>`;
+    el.innerHTML = `<div class="album-grid">${albums.map(a => albumCard(a)).join('')}</div>`;
     el.querySelectorAll('.album-card').forEach((card, i) => {
       card.addEventListener('click', () => window.navigate(`/admin/albums/${albums[i].id}`));
     });
@@ -40,10 +38,10 @@ async function loadAlbums() {
   }
 }
 
-function albumCard(album, token) {
+function albumCard(album) {
   const coverPath = album.cover_path || album.first_photo_path;
   const cover = coverPath
-    ? `<img src="/api/admin/thumb?path=${encodeURIComponent(coverPath)}&size=small&token=${token}" alt="" loading="lazy">`
+    ? `<img src="/api/admin/thumb?path=${encodeURIComponent(coverPath)}&size=small" alt="" loading="lazy">`
     : '🖼';
   const date = new Date(album.created_at).toLocaleDateString('ko-KR');
   return `

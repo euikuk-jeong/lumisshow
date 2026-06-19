@@ -1,5 +1,4 @@
 import { api } from '../api.js';
-import { getToken } from '../auth.js';
 import { renderAdminShell } from '../layout.js';
 import { esc } from '../utils.js';
 import { openLightbox } from '../lightbox.js';
@@ -95,7 +94,6 @@ async function loadAlbum(albumId) {
 
 function renderEditForm(album, links, tzOffset) {
   const el    = document.getElementById('edit-content');
-  const token = getToken();
   const ss    = album; // slideshow fields are on album object
   el.innerHTML = `
     <div class="album-edit-layout">
@@ -213,7 +211,7 @@ function renderEditForm(album, links, tzOffset) {
             </div>
           </div>
           <div id="photo-grid" class="photo-grid">
-            ${album.photos.map(p => photoThumb(p, token, album.cover_path)).join('') || '<p class="text-muted text-sm">사진이 없습니다</p>'}
+            ${album.photos.map(p => photoThumb(p, album.cover_path)).join('') || '<p class="text-muted text-sm">사진이 없습니다</p>'}
           </div>
         </div>
       </div>
@@ -317,8 +315,8 @@ function renderEditForm(album, links, tzOffset) {
     el.innerHTML = photoState.photos.length
       ? photoState.photos.map(p =>
           photoState.viewMode === 'list'
-            ? photoListItemEdit(p, token, photoState.coverPath)
-            : photoThumb(p, token, photoState.coverPath)
+            ? photoListItemEdit(p, photoState.coverPath)
+            : photoThumb(p, photoState.coverPath)
         ).join('')
       : '<p class="text-muted text-sm">사진이 없습니다</p>';
   }
@@ -342,7 +340,7 @@ function renderEditForm(album, links, tzOffset) {
   bindPhotoRemove(album.id, photoState, refreshPhotoGrid);
   bindCoverSet(album.id, photoState, refreshPhotoGrid);
   bindPhotoSort(album.id, photoState, refreshPhotoGrid);
-  bindPhotoPreview(token, album.id, photoState, refreshPhotoGrid);
+  bindPhotoPreview(album.id, photoState, refreshPhotoGrid);
   bindLinkActions(album.id, links, tzOffset);
 }
 
@@ -658,8 +656,8 @@ function bindDatePicker() {
   });
 }
 
-function photoListItemEdit(photo, token, coverPath) {
-  const thumbUrl = `/api/admin/thumb?path=${encodeURIComponent(photo.file_path)}&size=small&token=${token}`;
+function photoListItemEdit(photo, coverPath) {
+  const thumbUrl = `/api/admin/thumb?path=${encodeURIComponent(photo.file_path)}&size=small`;
   const isCover  = photo.file_path === coverPath;
   const name     = photo.file_path.split(/[\\/]/).pop();
   const addedAt  = photo.added_at
@@ -727,7 +725,7 @@ function bindPhotoSort(albumId, photoState, refresh) {
   });
 }
 
-function bindPhotoPreview(token, albumId, photoState, refresh) {
+function bindPhotoPreview(albumId, photoState, refresh) {
   document.getElementById('photo-grid').addEventListener('click', e => {
     if (e.target.closest('button')) return;
     const item = e.target.closest('.photo-thumb[data-path], .photo-list-item[data-path]');
@@ -738,7 +736,7 @@ function bindPhotoPreview(token, albumId, photoState, refresh) {
     ].map(el => el.dataset.path);
     const idx = allPaths.indexOf(filePath);
     if (idx === -1) return;
-    openLightbox(allPaths, idx, token, {
+    openLightbox(allPaths, idx, {
       isCover: path => photoState.coverPath === path,
       onSetCover: async path => {
         await api.put(`/api/admin/albums/${albumId}`, { cover_path: path });
@@ -754,8 +752,8 @@ function bindPhotoPreview(token, albumId, photoState, refresh) {
   });
 }
 
-function photoThumb(photo, token, coverPath) {
-  const thumbUrl = `/api/admin/thumb?path=${encodeURIComponent(photo.file_path)}&size=small&token=${token}`;
+function photoThumb(photo, coverPath) {
+  const thumbUrl = `/api/admin/thumb?path=${encodeURIComponent(photo.file_path)}&size=small`;
   const isCover  = photo.file_path === coverPath;
   return `
     <div class="photo-thumb${isCover ? ' is-cover' : ''}" data-path="${esc(photo.file_path)}">

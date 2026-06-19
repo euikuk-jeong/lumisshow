@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Optional
 from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import FileResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
@@ -17,14 +17,15 @@ from backend.services.auth import get_current_admin, verify_admin_token
 from backend.services.thumbnail import IMAGE_EXTENSIONS, generate_thumbnail, get_image_meta
 
 _bearer_optional = HTTPBearer(auto_error=False)
+_ADMIN_IMG_COOKIE = "admin_img_session"
 
 
 async def _admin_image_auth(
+    request: Request,
     cred: Optional[HTTPAuthorizationCredentials] = Depends(_bearer_optional),
-    token: Optional[str] = Query(default=None),
 ) -> str:
-    """이미지 서빙용: Bearer 헤더 또는 ?token= query param으로 인증."""
-    raw = (cred.credentials if cred else None) or token
+    """이미지 서빙용: Bearer 헤더 또는 admin_img_session 쿠키로 인증."""
+    raw = (cred.credentials if cred else None) or request.cookies.get(_ADMIN_IMG_COOKIE)
     if raw and verify_admin_token(raw):
         return "admin"
     raise HTTPException(status_code=401, detail="Admin authentication required")

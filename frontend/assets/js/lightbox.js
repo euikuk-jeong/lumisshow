@@ -6,7 +6,7 @@
  *   getSelectionState(path)→ { isSelected, selectedCount, totalCount }
  *   onToggleSelect(path)   → void      선택 토글 콜백
  */
-export function openLightbox(paths, startIdx, token, options = {}) {
+export function openLightbox(paths, startIdx, options = {}) {
   const localPaths = [...paths];
   let idx = startIdx;
 
@@ -57,7 +57,7 @@ export function openLightbox(paths, startIdx, token, options = {}) {
     idx = i;
     imgEl.style.opacity = '0.4';
     imgEl.onload = () => { imgEl.style.opacity = '1'; };
-    imgEl.src = `/api/admin/thumb?path=${encodeURIComponent(localPaths[i])}&size=medium&token=${token}`;
+    imgEl.src = `/api/admin/thumb?path=${encodeURIComponent(localPaths[i])}&size=medium`;
     captionEl.textContent = `${localPaths[i].split('/').pop()}  (${i + 1} / ${localPaths.length})`;
     prevBtn.style.visibility = i > 0 ? 'visible' : 'hidden';
     nextBtn.style.visibility = i < localPaths.length - 1 ? 'visible' : 'hidden';
