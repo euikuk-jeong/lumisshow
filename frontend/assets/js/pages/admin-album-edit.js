@@ -551,6 +551,7 @@ function bindLinkActions(albumId, links, tzOffset) {
       document.getElementById('lf-expires').value = '';
       formArea.style.display = 'none';
       bindLinkDeactivate(albumId);
+      bindLinkDelete(albumId, links);
     } catch (err) {
       alert(err.message);
     } finally {
@@ -559,6 +560,7 @@ function bindLinkActions(albumId, links, tzOffset) {
   });
 
   bindLinkDeactivate(albumId);
+  bindLinkDelete(albumId, links);
 }
 
 function bindLinkDeactivate(albumId) {
@@ -571,9 +573,33 @@ function bindLinkDeactivate(albumId) {
         await api.patch(`/api/admin/albums/${albumId}/links/${linkId}`, { is_active: false });
         btn.closest('.link-item').querySelector('.badge').className = 'badge badge-inactive';
         btn.closest('.link-item').querySelector('.badge').textContent = '비활성';
+        btn.closest('.link-item').querySelector('.btn-delete-link')?.setAttribute('data-active', 'false');
         btn.remove();
       } catch (err) {
         alert(err.message);
+      }
+    });
+  });
+}
+
+function bindLinkDelete(albumId, links) {
+  document.getElementById('links-container').querySelectorAll('.btn-delete-link').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (!confirm('이 공유 링크를 삭제하시겠습니까? 삭제 후 복구할 수 없습니다.')) return;
+      const linkId = parseInt(btn.dataset.id, 10);
+      const isActive = btn.dataset.active === 'true';
+      btn.disabled = true;
+      try {
+        if (isActive) {
+          await api.patch(`/api/admin/albums/${albumId}/links/${linkId}`, { is_active: false });
+        }
+        await api.delete(`/api/admin/albums/${albumId}/links/${linkId}`);
+        const idx = links.findIndex(l => l.id === linkId);
+        if (idx !== -1) links.splice(idx, 1);
+        btn.closest('.link-item').remove();
+      } catch (err) {
+        alert(err.message);
+        btn.disabled = false;
       }
     });
   });
@@ -604,6 +630,7 @@ function renderLinkItem(link, tzOffset = 0) {
       <div class="link-actions">
         <button class="btn btn-ghost btn-sm btn-copy-link" data-url="${esc(link.share_url)}">복사</button>
         ${isEffectivelyActive ? `<button class="btn btn-danger btn-sm btn-deactivate-link" data-id="${link.id}">비활성화</button>` : ''}
+        <button class="btn btn-danger btn-sm btn-delete-link" data-id="${link.id}" data-active="${isEffectivelyActive}">삭제</button>
       </div>
     </div>`;
 }

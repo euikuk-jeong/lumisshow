@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.7] - 2026-06-20
+
+### Added
+- 앨범 편집 화면 공유 링크에 삭제 버튼 추가: 활성 링크는 비활성화 후 삭제, 비활성/만료 링크는 바로 삭제
+
+### Fixed
+- 공유 링크 삭제 후 새 링크 생성 시 삭제된 링크가 목록에 다시 표시되던 버그 수정
+
 ## [0.3.6] - 2026-06-20
 
 ### Added
