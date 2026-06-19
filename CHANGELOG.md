@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.6] - 2026-06-20
+
+### Added
+- NAS 원클릭 배포 스크립트 추가 (`scripts/nas-update.sh`): pull → 중지 → 재시작 → 구버전 이미지 정리를 SSH 커맨드 하나로 수행
+
+### Fixed
+- 공유 링크 토큰 길이 복원: `token_urlsafe(16)` (22자) → `token_hex(5)` (10자). 속도 제한(5회 실패 → 15분 잠금)으로 충분한 보안 수준 유지
+
 ## [0.3.5] - 2026-06-20
 
 ### Security
@@ -164,7 +172,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v0.3.5...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v0.3.6...HEAD
+[0.3.6]: https://github.com/euikuk-jeong/lumisshow/compare/v0.3.5...v0.3.6
 [0.3.5]: https://github.com/euikuk-jeong/lumisshow/compare/v0.3.4...v0.3.5
 [0.3.4]: https://github.com/euikuk-jeong/lumisshow/compare/v0.3.3...v0.3.4
 [0.3.3]: https://github.com/euikuk-jeong/lumisshow/compare/v0.3.2...v0.3.3
