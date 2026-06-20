@@ -175,7 +175,7 @@ async def create_album(
          sv["slideshow_interval"], sv["slideshow_order"], sv["slideshow_effect"],
          int(sv["slideshow_music"]), sv["slideshow_volume"], int(sv["slideshow_loop"]),
          _PHOTO_SORT_DEFAULTS["photo_sort_by"], _PHOTO_SORT_DEFAULTS["photo_sort_dir"],
-         sv.get("ui_theme", "dark")),
+         None),
     ) as cur:
         album_id = cur.lastrowid
 

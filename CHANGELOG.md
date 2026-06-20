@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-06-21
+
+### Changed
+- 신규 앨범 생성 시 기본 테마를 서버 기본(`null`)으로 설정 — 서버 테마 변경 시 기본값 앨범 전체에 자동 반영
+
 ## [0.4.0] - 2026-06-21
 
 ### Added
