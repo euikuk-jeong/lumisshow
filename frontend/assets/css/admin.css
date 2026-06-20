@@ -699,3 +699,20 @@
 .tz-option:hover { background: var(--elevated); }
 .tz-option.selected { color: var(--primary); }
 .tz-no-result { padding: 8px 12px; font-size: 13px; color: var(--muted); }
+
+
+/* ── Hidden Paths ───────────────────────────────────────── */
+.hidden-paths-list { display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px; }
+.hidden-path-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  background: var(--elevated);
+  border-radius: var(--radius);
+  font-size: 13px;
+}
+.hidden-path-value { flex: 1; font-family: monospace; color: var(--text); word-break: break-all; }
+.hidden-path-delete { padding: 2px 6px; flex-shrink: 0; }
+.hidden-path-add-row { display: flex; gap: 8px; align-items: center; }
+.hidden-path-add-row .form-input { flex: 1; }

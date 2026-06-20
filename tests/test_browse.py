@@ -6,6 +6,10 @@ from httpx import ASGITransport, AsyncClient
 from PIL import Image
 
 
+def _make_jpg(path):
+    Image.new("RGB", (10, 10)).save(str(path), "JPEG")
+
+
 @pytest.fixture
 def photo_root(tmp_path):
     root = tmp_path / "photos"
@@ -163,3 +167,44 @@ async def test_thumb_nonexistent_file(auth_client):
 async def test_thumb_requires_auth(client):
     r = await client.get("/api/admin/thumb?path=photo0.jpg&size=small")
     assert r.status_code == 401
+
+
+# ── browse hidden paths ───────────────────────────────────────────────────────
+
+async def test_browse_hidden_folder_not_shown(auth_client, photo_root):
+    private = photo_root / "private"
+    private.mkdir()
+    _make_jpg(private / "secret.jpg")
+
+    await auth_client.patch("/api/admin/settings", json={"browse_hidden_paths": ["private"]})
+
+    r = await auth_client.get("/api/admin/browse")
+    folder_names = [f["name"] for f in r.json()["folders"]]
+    assert "private" not in folder_names
+    assert "sub" in folder_names
+
+
+async def test_search_excludes_photos_under_hidden_path(auth_client, photo_root):
+    private = photo_root / "private"
+    private.mkdir()
+    _make_jpg(private / "secret.jpg")
+
+    await auth_client.patch("/api/admin/settings", json={"browse_hidden_paths": ["private"]})
+
+    r = await auth_client.get("/api/admin/search")
+    names = [item["name"] for item in r.json()["items"]]
+    assert "secret.jpg" not in names
+    assert any("photo" in n for n in names)
+
+
+async def test_browse_hidden_path_segment_boundary(auth_client, photo_root):
+    """'private' 숨김 설정이 'privatefoo' 폴더에는 적용되지 않아야 한다."""
+    privatefoo = photo_root / "privatefoo"
+    privatefoo.mkdir()
+    _make_jpg(privatefoo / "visible.jpg")
+
+    await auth_client.patch("/api/admin/settings", json={"browse_hidden_paths": ["private"]})
+
+    r = await auth_client.get("/api/admin/browse")
+    folder_names = [f["name"] for f in r.json()["folders"]]
+    assert "privatefoo" in folder_names

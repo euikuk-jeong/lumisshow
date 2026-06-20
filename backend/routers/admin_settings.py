@@ -17,6 +17,7 @@ DEFAULTS: dict = {
     "slideshow_music": True,
     "slideshow_volume": 25,
     "slideshow_loop": True,
+    "browse_hidden_paths": [],
 }
 
 

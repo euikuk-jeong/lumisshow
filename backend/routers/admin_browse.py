@@ -11,6 +11,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from backend.models.database import get_db
 from backend.models.schemas import BrowseResponse, FolderItem, PhotoItem, SearchResponse
+from backend.routers.admin_settings import get_settings
 
 _AUDIO_EXTENSIONS = {'.mp3', '.flac', '.ogg', '.m4a', '.wav', '.aac', '.opus'}
 from backend.services.auth import get_current_admin, verify_admin_token
@@ -40,6 +41,14 @@ def _is_hidden(name: str) -> bool:
     return name.startswith(_SKIP_PREFIXES)
 
 
+def _is_path_hidden(rel: str, hidden_paths: list[str]) -> bool:
+    """rel이 hidden_paths 중 하나와 같거나 그 하위 경로이면 True."""
+    for h in hidden_paths:
+        if rel == h or rel.startswith(h + "/"):
+            return True
+    return False
+
+
 def _photo_root() -> str:
     return os.path.realpath(os.getenv("PHOTO_ROOT", "./testdata/photos"))
 
@@ -55,7 +64,7 @@ def _safe_dir(rel: str) -> str:
     return resolved
 
 
-def _scan_dir_basic(real_path: str, root: str) -> tuple[list[FolderItem], list[tuple[str, str, int]]]:
+def _scan_dir_basic(real_path: str, root: str, hidden_paths: list[str]) -> tuple[list[FolderItem], list[tuple[str, str, int]]]:
     """폴더 목록과 기본 사진 정보(full_path, name, size)를 반환. EXIF 없음."""
     folders: list[FolderItem] = []
     basics: list[tuple[str, str, int]] = []
@@ -64,13 +73,15 @@ def _scan_dir_basic(real_path: str, root: str) -> tuple[list[FolderItem], list[t
             if _is_hidden(entry.name):
                 continue
             if entry.is_dir(follow_symlinks=False):
+                rel = os.path.relpath(entry.path, root).replace("\\", "/")
+                if _is_path_hidden(rel, hidden_paths):
+                    continue
                 try:
                     child_count = sum(
                         1 for e in os.scandir(entry.path) if not _is_hidden(e.name)
                     )
                 except PermissionError:
                     child_count = 0
-                rel = os.path.relpath(entry.path, root).replace("\\", "/")
                 folders.append(FolderItem(path=rel, name=entry.name, child_count=child_count))
             elif entry.is_file():
                 if Path(entry.name).suffix.lower() not in IMAGE_EXTENSIONS:
@@ -84,11 +95,16 @@ def _walk_photos_basic(
     start_dir: str,
     root: str,
     q: Optional[str],
+    hidden_paths: list[str],
 ) -> list[tuple[str, str, int]]:
     """파일명 필터로 사진을 재귀 탐색. EXIF 없이 (full_path, name, size) 반환."""
     results: list[tuple[str, str, int]] = []
     for dirpath, dirnames, filenames in os.walk(start_dir):
-        dirnames[:] = sorted(d for d in dirnames if not _is_hidden(d))
+        dirnames[:] = sorted(
+            d for d in dirnames
+            if not _is_hidden(d)
+            and not _is_path_hidden(os.path.relpath(os.path.join(dirpath, d), root).replace("\\", "/"), hidden_paths)
+        )
         for fname in sorted(filenames):
             if _is_hidden(fname):
                 continue
@@ -171,9 +187,11 @@ async def browse(
     _: str = Depends(get_current_admin),
     db=Depends(get_db),
 ):
+    settings = await get_settings(db)
+    hidden_paths = settings.get("browse_hidden_paths", [])
     real_path = _safe_dir(path)
     root = _photo_root()
-    folders, basics = await asyncio.to_thread(_scan_dir_basic, real_path, root)
+    folders, basics = await asyncio.to_thread(_scan_dir_basic, real_path, root, hidden_paths)
     photos = await _enrich_photos(basics, root, db)
     return BrowseResponse(folders=folders, photos=photos)
 
@@ -189,6 +207,8 @@ async def search(
     _: str = Depends(get_current_admin),
     db=Depends(get_db),
 ):
+    settings = await get_settings(db)
+    hidden_paths = settings.get("browse_hidden_paths", [])
     root = _photo_root()
     start_dir = _safe_dir(folder) if folder else root
 
@@ -199,7 +219,7 @@ async def search(
         else None
     )
 
-    basics = await asyncio.to_thread(_walk_photos_basic, start_dir, root, q)
+    basics = await asyncio.to_thread(_walk_photos_basic, start_dir, root, q, hidden_paths)
     all_items = await _enrich_photos(basics, root, db)
 
     if df or dt:

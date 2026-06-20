@@ -156,6 +156,7 @@ class SettingsResponse(BaseModel):
     slideshow_music: bool
     slideshow_volume: int
     slideshow_loop: bool
+    browse_hidden_paths: list[str] = []
 
 class SettingsUpdate(BaseModel):
     timezone_offset: Optional[int] = None
@@ -166,6 +167,7 @@ class SettingsUpdate(BaseModel):
     slideshow_music: Optional[bool] = None
     slideshow_volume: Optional[int] = None
     slideshow_loop: Optional[bool] = None
+    browse_hidden_paths: Optional[list[str]] = None
 
 
 # ── Share (public viewer) ─────────────────────────────────────────────────────
