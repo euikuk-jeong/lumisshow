@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.2] - 2026-06-21
+
+### Fixed
+- 사진이 없는 앨범의 공유 뷰어에서 전체 다운로드 버튼 비활성화 처리
+
 ## [0.4.1] - 2026-06-21
 
 ### Changed
