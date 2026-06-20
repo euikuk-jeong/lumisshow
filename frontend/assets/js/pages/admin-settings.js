@@ -87,6 +87,7 @@ export async function renderAdminSettings() {
 }
 
 function renderSettingsForm(settings) {
+  const hiddenCount = (settings.browse_hidden_paths || []).length;
   const el = document.getElementById('settings-content');
   el.innerHTML = `
     <div class="settings-page">
@@ -112,6 +113,17 @@ function renderSettingsForm(settings) {
         <div class="settings-actions">
           <button class="btn btn-primary btn-sm" id="btn-save-timezone">저장</button>
           <span id="tz-ok" class="text-success text-sm" style="display:none">저장됨 ✓</span>
+        </div>
+      </div>
+
+      <!-- 탐색기 숨김 경로 -->
+      <div class="settings-section card">
+        <div class="settings-nav-row">
+          <div>
+            <p class="section-title">탐색기 숨김 경로 <span class="badge-count">${hiddenCount}</span></p>
+            <p class="text-muted text-sm">사진 탐색 화면에서 표시하지 않을 폴더</p>
+          </div>
+          <a href="/admin/hidden-paths" class="btn btn-ghost btn-sm" data-link>관리 →</a>
         </div>
       </div>
 
@@ -223,11 +235,8 @@ function initTimezoneSelect(currentLabel) {
   input.addEventListener('blur', () => {
     setTimeout(() => {
       dropdown.classList.remove('open');
-      // 입력값이 목록에 없으면 이전 선택값으로 복원
       const match = TIMEZONES.find(z => z.label === input.value);
-      if (!match) {
-        input.value = hidLbl.value;
-      }
+      if (!match) input.value = hidLbl.value;
     }, 150);
   });
 }
