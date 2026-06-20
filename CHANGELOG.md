@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-06-21
+
+### Added
+- **멀티 테마 시스템**: 8종 테마 지원 — Dark / OLED Black / Slate / Warm Dark / Light / Sepia / Sky / Rose
+- **Glassmorphism UI**: 네비게이션 바·모달·뷰어 설정 패널·슬라이드쇼 툴바에 `backdrop-filter: blur()` frosted glass 적용
+- **Liquid Glass 요소**: Primary 버튼 hover glow, ghost 버튼 반투명 배경, 선택 상태 glow outline
+- **Elevation 시스템**: 그림자 대신 lightness 기반 4단계 표면 계층 + 카드 상단 inset highlight
+- **앨범별 테마 설정**: 앨범 편집 화면에서 각 앨범에 독립 테마 지정 가능
+- **서버 기본 테마 옵션**: 앨범 테마를 '서버 기본'으로 설정하면 Admin 설정의 기본 테마를 자동 적용
+- **Admin 테마 서버 저장**: Admin 설정에서 테마 변경 시 서버에도 저장 → 신규 앨범 생성 시 해당 테마가 기본값으로 적용
+- **테마 모듈** (`theme.js`): 테마 목록·색상 정의, localStorage 기반 개인 설정 관리
+- **FOUC 방지**: `<head>` 인라인 스크립트로 페이지 렌더 전 `data-theme` 즉시 설정
+
+### Changed
+- Admin UI 테마가 뷰어에서 앨범 테마로 변경된 뒤 Admin 페이지로 돌아올 때 개인 테마(localStorage)로 자동 복원
+- `AlbumResponse.ui_theme = null`은 서버 기본 테마 사용을 의미 (기존 앨범은 null → 서버 기본값 적용)
+
 ## [0.3.8] - 2026-06-21
 
 ### Added
