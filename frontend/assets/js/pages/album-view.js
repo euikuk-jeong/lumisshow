@@ -84,7 +84,7 @@ export async function renderAlbumView(token) {
           <button class="btn btn-ghost btn-lg" id="btn-settings">⚙ 설정</button>
         </div>
         <a class="btn btn-ghost w-full viewer-download"
-           href="/api/share/${token}/download">⬇ 전체 다운로드 (ZIP)</a>
+           ${photos.length > 0 ? `href="/api/share/${token}/download"` : 'aria-disabled="true" tabindex="-1" style="opacity:0.4;pointer-events:none;cursor:not-allowed"'}>⬇ 전체 다운로드 (ZIP)</a>
         ${photos.length > 0 ? `
           <div class="viewer-grid" id="thumb-grid">
             ${photos.map((p, i) => `
