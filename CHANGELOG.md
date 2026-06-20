@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.8] - 2026-06-21
+
+### Added
+- 탐색기 숨김 경로 설정 기능: Admin 설정에서 사진 탐색 화면에 표시하지 않을 폴더를 관리 (PHOTO_ROOT 기준 상대 경로)
+- 숨김 경로 전용 관리 화면 (`/admin/hidden-paths`): 목록 조회·추가·삭제·저장, 설정 페이지에 개수 배지 표시
+- 경로 추가 시 서버에서 실제 폴더 존재 여부를 사전 검증하여 오입력 방지 (`GET /api/admin/path-exists`)
+
 ## [0.3.7] - 2026-06-20
 
 ### Added
