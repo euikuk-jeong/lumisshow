@@ -88,14 +88,74 @@
   --glass-border:      rgba(0, 0, 0, 0.08);
 }
 
-/* Light theme: badge/alert overrides (dark hardcoded colors won't work on light bg) */
-[data-theme="light"] .badge-active   { background: #dcfce7; color: #15803d; }
-[data-theme="light"] .badge-inactive { background: #f3f4f6; color: #6b7280; }
-[data-theme="light"] .badge-expired  { background: #fef9c3; color: #b45309; }
-[data-theme="light"] .alert-error    { background: #fef2f2; border-color: #fca5a5; }
-[data-theme="light"] .alert-success  { background: #f0fdf4; border-color: #86efac; }
-[data-theme="light"] .btn-danger     { background: #fee2e2; color: #dc2626; border: 1px solid #fca5a5; }
-[data-theme="light"] .btn-danger:hover:not(:disabled) { background: #fecaca; }
+/* Sepia */
+[data-theme="sepia"] {
+  --bg:                #f5f0e6;
+  --surface:           #fffcf5;
+  --elevated:          #ede8da;
+  --border:            #d5cdb8;
+  --primary:           #8b6f47;
+  --primary-h:         #7a5f3a;
+  --text:              #2d2416;
+  --muted:             #6b5d4a;
+  --success:           #4a7c59;
+  --error:             #c0392b;
+  --warning:           #9c6915;
+  --surface-rgb:       255, 252, 245;
+  --primary-glow:      rgba(139, 111, 71, 0.3);
+  --primary-glow-soft: rgba(139, 111, 71, 0.12);
+  --glass-bg:          rgba(255, 252, 245, 0.85);
+  --glass-border:      rgba(0, 0, 0, 0.07);
+}
+
+/* Sky */
+[data-theme="sky"] {
+  --bg:                #eef2f7;
+  --surface:           #ffffff;
+  --elevated:          #dde5f0;
+  --border:            #bfcfe5;
+  --primary:           #3b82f6;
+  --primary-h:         #2563eb;
+  --text:              #0f1729;
+  --muted:             #4e6587;
+  --success:           #16a34a;
+  --error:             #dc2626;
+  --warning:           #d97706;
+  --surface-rgb:       255, 255, 255;
+  --primary-glow:      rgba(59, 130, 246, 0.3);
+  --primary-glow-soft: rgba(59, 130, 246, 0.12);
+  --glass-bg:          rgba(255, 255, 255, 0.85);
+  --glass-border:      rgba(0, 0, 0, 0.07);
+}
+
+/* Rose */
+[data-theme="rose"] {
+  --bg:                #fdf2f4;
+  --surface:           #ffffff;
+  --elevated:          #f5e0e5;
+  --border:            #e0c4cc;
+  --primary:           #db2777;
+  --primary-h:         #be185d;
+  --text:              #1f1215;
+  --muted:             #7d5260;
+  --success:           #16a34a;
+  --error:             #dc2626;
+  --warning:           #d97706;
+  --surface-rgb:       255, 255, 255;
+  --primary-glow:      rgba(219, 39, 119, 0.3);
+  --primary-glow-soft: rgba(219, 39, 119, 0.12);
+  --glass-bg:          rgba(255, 255, 255, 0.85);
+  --glass-border:      rgba(0, 0, 0, 0.07);
+}
+
+/* Light-based themes: badge/alert overrides (dark hardcoded colors won't work on light bg) */
+:is([data-theme="light"], [data-theme="sepia"], [data-theme="sky"], [data-theme="rose"]) .badge-active   { background: #dcfce7; color: #15803d; }
+:is([data-theme="light"], [data-theme="sepia"], [data-theme="sky"], [data-theme="rose"]) .badge-inactive { background: #f3f4f6; color: #6b7280; }
+:is([data-theme="light"], [data-theme="sepia"], [data-theme="sky"], [data-theme="rose"]) .badge-expired  { background: #fef9c3; color: #b45309; }
+:is([data-theme="light"], [data-theme="sepia"], [data-theme="sky"], [data-theme="rose"]) .alert-error    { background: #fef2f2; border-color: #fca5a5; }
+:is([data-theme="light"], [data-theme="sepia"], [data-theme="sky"], [data-theme="rose"]) .alert-success  { background: #f0fdf4; border-color: #86efac; }
+:is([data-theme="light"], [data-theme="sepia"], [data-theme="sky"], [data-theme="rose"]) .btn-danger     { background: #fee2e2; color: #dc2626; border: 1px solid #fca5a5; }
+:is([data-theme="light"], [data-theme="sepia"], [data-theme="sky"], [data-theme="rose"]) .btn-danger:hover:not(:disabled) { background: #fecaca; }
 
 /* ── Reset ──────────────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }

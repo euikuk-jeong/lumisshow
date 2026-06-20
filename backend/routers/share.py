@@ -194,7 +194,7 @@ async def get_album(token: str, request: Request, db=Depends(get_db)):
         "cover_index": cover_index,
         "slideshow_defaults": slideshow_defaults,
         "timezone_offset": sv["timezone_offset"],
-        "ui_theme": row["ui_theme"] or "dark",
+        "ui_theme": row["ui_theme"] or sv["ui_theme"],
     }
 
 

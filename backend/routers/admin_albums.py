@@ -73,8 +73,6 @@ def _row_to_album_dict(row) -> dict:
     for col, default in _PHOTO_SORT_DEFAULTS.items():
         if d.get(col) is None:
             d[col] = default
-    if d.get('ui_theme') is None:
-        d['ui_theme'] = 'dark'
     for col in ('slideshow_music', 'slideshow_loop'):
         if not isinstance(d[col], bool):
             d[col] = bool(d[col])

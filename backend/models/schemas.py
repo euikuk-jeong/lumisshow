@@ -99,7 +99,7 @@ class AlbumResponse(BaseModel):
     slideshow_loop: bool = True
     photo_sort_by: str = "taken_at"
     photo_sort_dir: str = "asc"
-    ui_theme: str = "dark"
+    ui_theme: Optional[str] = None
 
 class AlbumDetail(AlbumResponse):
     photos: list[AlbumPhotoResponse]
