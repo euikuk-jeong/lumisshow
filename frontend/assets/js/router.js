@@ -66,6 +66,13 @@ async function renderRoute() {
   if (!isPublic && !authed) { navigate('/admin/login', true); return; }
   if (isPublic  &&  authed && path === '/admin/login') { navigate('/admin', true); return; }
 
+  // Admin 페이지로 돌아올 때 개인 테마(localStorage) 복원
+  // 뷰어에서 앨범 테마를 적용했더라도 admin UI는 개인 설정을 따름
+  if (path.startsWith('/admin')) {
+    document.documentElement.dataset.theme =
+      localStorage.getItem('lumisshow_theme') || 'dark';
+  }
+
   app.innerHTML = '<div class="loading"></div>';
   try {
     await renderFn();

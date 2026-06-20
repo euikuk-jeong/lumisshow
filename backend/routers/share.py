@@ -139,7 +139,7 @@ async def get_album(token: str, request: Request, db=Depends(get_db)):
         SELECT a.name, a.description, a.music_path, a.cover_path, a.created_at,
                a.slideshow_interval, a.slideshow_order, a.slideshow_effect,
                a.slideshow_music, a.slideshow_volume, a.slideshow_loop,
-               sl.expires_at, COUNT(ap.id) AS photo_count
+               a.ui_theme, sl.expires_at, COUNT(ap.id) AS photo_count
         FROM share_links sl
         JOIN albums a ON a.id = sl.album_id
         LEFT JOIN album_photos ap ON ap.album_id = a.id
@@ -194,6 +194,7 @@ async def get_album(token: str, request: Request, db=Depends(get_db)):
         "cover_index": cover_index,
         "slideshow_defaults": slideshow_defaults,
         "timezone_offset": sv["timezone_offset"],
+        "ui_theme": row["ui_theme"] or sv["ui_theme"],
     }
 
 

@@ -1,6 +1,7 @@
 import { api } from '../api.js';
 import { renderAdminShell } from '../layout.js';
 import { esc } from '../utils.js';
+import { THEMES, getTheme, setTheme } from '../theme.js';
 
 const EFFECTS = ['fade','slide-left','slide-right','slide-up','zoom-in','zoom-out','flip-h','blur','dissolve'];
 
@@ -91,6 +92,15 @@ function renderSettingsForm(settings) {
   const el = document.getElementById('settings-content');
   el.innerHTML = `
     <div class="settings-page">
+
+      <!-- 테마 -->
+      <div class="settings-section card">
+        <div class="settings-section-header">
+          <p class="section-title">테마</p>
+          <p class="text-muted text-sm">Admin UI 테마 · 신규 앨범의 기본 테마로도 사용됨 · 변경 즉시 적용</p>
+        </div>
+        <div class="theme-picker" id="theme-picker"></div>
+      </div>
 
       <!-- 서버 타임존 -->
       <div class="settings-section card">
@@ -186,8 +196,36 @@ function renderSettingsForm(settings) {
     </div>
   `;
 
+  initThemePicker();
   initTimezoneSelect(settings.timezone_label);
   bindSaveHandlers();
+}
+
+/* ── Theme Picker ───────────────────────────────────────── */
+function initThemePicker() {
+  const container = document.getElementById('theme-picker');
+  const current = getTheme();
+
+  container.innerHTML = THEMES.map(t => `
+    <div class="theme-swatch${t.id === current ? ' active' : ''}" data-theme-id="${t.id}" title="${t.label}">
+      <div class="theme-swatch-colors">
+        <div class="theme-swatch-bg" style="background:${t.bg}"></div>
+        <div class="theme-swatch-accent" style="background:${t.accent}"></div>
+      </div>
+      <span class="theme-swatch-label">${t.label}</span>
+    </div>
+  `).join('');
+
+  container.querySelectorAll('.theme-swatch').forEach(el => {
+    el.addEventListener('click', () => {
+      const themeId = el.dataset.themeId;
+      setTheme(themeId);
+      container.querySelectorAll('.theme-swatch').forEach(s => s.classList.remove('active'));
+      el.classList.add('active');
+      // 서버에도 저장 → 신규 앨범 생성 시 기본 테마로 사용
+      api.patch('/api/admin/settings', { ui_theme: themeId }).catch(() => {});
+    });
+  });
 }
 
 /* ── Timezone searchable select ─────────────────────────── */

@@ -18,6 +18,7 @@ DEFAULTS: dict = {
     "slideshow_volume": 25,
     "slideshow_loop": True,
     "browse_hidden_paths": [],
+    "ui_theme": "dark",
 }
 
 
