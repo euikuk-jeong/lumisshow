@@ -52,7 +52,7 @@ _ALLOWED_UPDATE_COLS = {
     "name", "description", "cover_path",
     "slideshow_interval", "slideshow_order", "slideshow_effect",
     "slideshow_music", "slideshow_volume", "slideshow_loop",
-    "photo_sort_by", "photo_sort_dir",
+    "photo_sort_by", "photo_sort_dir", "ui_theme",
 }
 
 
@@ -73,6 +73,8 @@ def _row_to_album_dict(row) -> dict:
     for col, default in _PHOTO_SORT_DEFAULTS.items():
         if d.get(col) is None:
             d[col] = default
+    if d.get('ui_theme') is None:
+        d['ui_theme'] = 'dark'
     for col in ('slideshow_music', 'slideshow_loop'):
         if not isinstance(d[col], bool):
             d[col] = bool(d[col])
@@ -169,12 +171,13 @@ async def create_album(
            (name, description,
             slideshow_interval, slideshow_order, slideshow_effect,
             slideshow_music, slideshow_volume, slideshow_loop,
-            photo_sort_by, photo_sort_dir)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            photo_sort_by, photo_sort_dir, ui_theme)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (body.name, body.description,
          sv["slideshow_interval"], sv["slideshow_order"], sv["slideshow_effect"],
          int(sv["slideshow_music"]), sv["slideshow_volume"], int(sv["slideshow_loop"]),
-         _PHOTO_SORT_DEFAULTS["photo_sort_by"], _PHOTO_SORT_DEFAULTS["photo_sort_dir"]),
+         _PHOTO_SORT_DEFAULTS["photo_sort_by"], _PHOTO_SORT_DEFAULTS["photo_sort_dir"],
+         sv.get("ui_theme", "dark")),
     ) as cur:
         album_id = cur.lastrowid
 

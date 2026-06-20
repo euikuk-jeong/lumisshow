@@ -2,6 +2,7 @@ import { api } from '../api.js';
 import { renderAdminShell } from '../layout.js';
 import { esc } from '../utils.js';
 import { openLightbox } from '../lightbox.js';
+import { THEMES } from '../theme.js';
 
 const EFFECTS = ['random','fade','slide-left','slide-right','slide-up','zoom-in','zoom-out','flip-h','blur','dissolve'];
 const EFFECT_LABELS = {
@@ -136,6 +137,11 @@ function renderEditForm(album, links, tzOffset) {
           <div id="ss-error" class="alert alert-error" style="display:none"></div>
           <form id="ss-form" class="flex-col gap-3">
             <div class="form-group">
+              <label class="form-label">앨범 테마</label>
+              <div class="theme-picker" id="album-theme-picker"></div>
+              <input type="hidden" id="ss-ui-theme" value="${album.ui_theme || 'dark'}">
+            </div>
+            <div class="form-group">
               <label class="form-label">전환 시간 (초)</label>
               <input id="ss-interval" type="number" min="2" max="60" class="form-input" style="width:100px"
                      value="${ss.slideshow_interval ?? 5}">
@@ -230,6 +236,8 @@ function renderEditForm(album, links, tzOffset) {
       </div>
     </div>
   `;
+
+  initAlbumThemePicker(album.ui_theme || 'dark');
 
   let musicPaths = [...(album.music_paths || [])];
 
@@ -361,6 +369,7 @@ function bindSlideshowForm(albumId) {
         slideshow_music:    document.querySelector('input[name="ss-music"]:checked').value === 'on',
         slideshow_volume:   parseInt(document.getElementById('ss-volume').value, 10),
         slideshow_loop:     document.querySelector('input[name="ss-loop"]:checked').value === 'on',
+        ui_theme:           document.getElementById('ss-ui-theme').value,
       });
       okEl.style.display = 'inline';
       setTimeout(() => { okEl.style.display = 'none'; }, 2000);
@@ -775,6 +784,27 @@ function bindPhotoPreview(albumId, photoState, refresh) {
         photoState.photos = photoState.photos.filter(p => p.file_path !== path);
         refresh();
       },
+    });
+  });
+}
+
+function initAlbumThemePicker(currentTheme) {
+  const container = document.getElementById('album-theme-picker');
+  if (!container) return;
+  container.innerHTML = THEMES.map(t => `
+    <div class="theme-swatch${t.id === currentTheme ? ' active' : ''}" data-theme-id="${t.id}" title="${t.label}">
+      <div class="theme-swatch-colors">
+        <div class="theme-swatch-bg" style="background:${t.bg}"></div>
+        <div class="theme-swatch-accent" style="background:${t.accent}"></div>
+      </div>
+      <span class="theme-swatch-label">${t.label}</span>
+    </div>
+  `).join('');
+  container.querySelectorAll('.theme-swatch').forEach(el => {
+    el.addEventListener('click', () => {
+      document.getElementById('ss-ui-theme').value = el.dataset.themeId;
+      container.querySelectorAll('.theme-swatch').forEach(s => s.classList.remove('active'));
+      el.classList.add('active');
     });
   });
 }

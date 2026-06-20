@@ -71,6 +71,7 @@ class AlbumUpdate(BaseModel):
     slideshow_loop: Optional[bool] = None
     photo_sort_by: Optional[str] = None
     photo_sort_dir: Optional[str] = None
+    ui_theme: Optional[str] = None
 
 class AlbumPhotoResponse(BaseModel):
     id: int
@@ -98,6 +99,7 @@ class AlbumResponse(BaseModel):
     slideshow_loop: bool = True
     photo_sort_by: str = "taken_at"
     photo_sort_dir: str = "asc"
+    ui_theme: str = "dark"
 
 class AlbumDetail(AlbumResponse):
     photos: list[AlbumPhotoResponse]
@@ -157,6 +159,7 @@ class SettingsResponse(BaseModel):
     slideshow_volume: int
     slideshow_loop: bool
     browse_hidden_paths: list[str] = []
+    ui_theme: str = "dark"
 
 class SettingsUpdate(BaseModel):
     timezone_offset: Optional[int] = None
@@ -168,6 +171,7 @@ class SettingsUpdate(BaseModel):
     slideshow_volume: Optional[int] = None
     slideshow_loop: Optional[bool] = None
     browse_hidden_paths: Optional[list[str]] = None
+    ui_theme: Optional[str] = None
 
 
 # ── Share (public viewer) ─────────────────────────────────────────────────────
@@ -187,6 +191,7 @@ class ShareAlbumResponse(BaseModel):
     cover_index: Optional[int] = None
     slideshow_defaults: Optional[SlideshowDefaults] = None
     timezone_offset: int = 0
+    ui_theme: str = "dark"
 
 class SharePhotoItem(BaseModel):
     id: int

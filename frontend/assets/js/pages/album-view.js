@@ -55,6 +55,9 @@ export async function renderAlbumView(token) {
     return;
   }
 
+  // 앨범에 설정된 테마를 뷰어에 적용 (localStorage 개인 설정과 별개)
+  document.documentElement.dataset.theme = album.ui_theme || 'dark';
+
   const photos = photosData.photos;
   const coverPhoto = album.cover_index != null ? photos[album.cover_index] : photos[0];
   const coverUrl = coverPhoto ? coverPhoto.thumb_medium_url : null;
