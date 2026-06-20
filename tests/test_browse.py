@@ -208,3 +208,28 @@ async def test_browse_hidden_path_segment_boundary(auth_client, photo_root):
     r = await auth_client.get("/api/admin/browse")
     folder_names = [f["name"] for f in r.json()["folders"]]
     assert "privatefoo" in folder_names
+
+
+# ── path-exists ───────────────────────────────────────────────────────────────
+
+async def test_path_exists_existing_dir(auth_client, photo_root):
+    r = await auth_client.get("/api/admin/path-exists?path=sub")
+    assert r.status_code == 200
+    assert r.json()["exists"] is True
+
+
+async def test_path_exists_nonexistent(auth_client):
+    r = await auth_client.get("/api/admin/path-exists?path=no_such_folder")
+    assert r.status_code == 200
+    assert r.json()["exists"] is False
+
+
+async def test_path_exists_traversal_blocked(auth_client):
+    r = await auth_client.get("/api/admin/path-exists?path=../../etc")
+    assert r.status_code == 200
+    assert r.json()["exists"] is False
+
+
+async def test_path_exists_requires_auth(client):
+    r = await client.get("/api/admin/path-exists?path=sub")
+    assert r.status_code == 401

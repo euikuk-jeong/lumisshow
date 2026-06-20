@@ -86,11 +86,8 @@ export async function renderAdminSettings() {
   }
 }
 
-function normalizePath(p) {
-  return p.trim().replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
-}
-
 function renderSettingsForm(settings) {
+  const hiddenCount = (settings.browse_hidden_paths || []).length;
   const el = document.getElementById('settings-content');
   el.innerHTML = `
     <div class="settings-page">
@@ -121,20 +118,12 @@ function renderSettingsForm(settings) {
 
       <!-- 탐색기 숨김 경로 -->
       <div class="settings-section card">
-        <div class="settings-section-header">
-          <p class="section-title">탐색기 숨김 경로</p>
-          <p class="text-muted text-sm">사진 탐색 화면에서 표시하지 않을 폴더 (PHOTO_ROOT 기준 상대 경로)</p>
-        </div>
-        <div class="settings-group">
-          <div id="hidden-paths-list" class="hidden-paths-list"></div>
-          <div class="hidden-path-add-row">
-            <input id="s-hidden-path-input" type="text" class="form-input" placeholder="예: private/family">
-            <button class="btn btn-ghost btn-sm" id="btn-add-hidden-path">추가</button>
+        <div class="settings-nav-row">
+          <div>
+            <p class="section-title">탐색기 숨김 경로 <span class="badge-count">${hiddenCount}</span></p>
+            <p class="text-muted text-sm">사진 탐색 화면에서 표시하지 않을 폴더</p>
           </div>
-        </div>
-        <div class="settings-actions">
-          <button class="btn btn-primary btn-sm" id="btn-save-hidden-paths">저장</button>
-          <span id="hp-ok" class="text-success text-sm" style="display:none">저장됨 ✓</span>
+          <a href="/admin/hidden-paths" class="btn btn-ghost btn-sm" data-link>관리 →</a>
         </div>
       </div>
 
@@ -198,36 +187,7 @@ function renderSettingsForm(settings) {
   `;
 
   initTimezoneSelect(settings.timezone_label);
-  initHiddenPaths(settings.browse_hidden_paths || []);
   bindSaveHandlers();
-}
-
-/* ── Hidden paths ───────────────────────────────────────── */
-let _hiddenPaths = [];
-
-function initHiddenPaths(paths) {
-  _hiddenPaths = [...paths];
-  renderHiddenPathsList();
-}
-
-function renderHiddenPathsList() {
-  const el = document.getElementById('hidden-paths-list');
-  if (!_hiddenPaths.length) {
-    el.innerHTML = '<p class="text-muted text-sm" style="margin:4px 0">숨김 경로 없음</p>';
-    return;
-  }
-  el.innerHTML = _hiddenPaths.map((p, i) =>
-    `<div class="hidden-path-item">
-      <span class="hidden-path-value">${esc(p)}</span>
-      <button class="btn btn-ghost btn-sm btn-icon hidden-path-delete" data-index="${i}" title="삭제">✕</button>
-    </div>`
-  ).join('');
-  el.querySelectorAll('.hidden-path-delete').forEach(btn => {
-    btn.addEventListener('click', () => {
-      _hiddenPaths.splice(parseInt(btn.dataset.index, 10), 1);
-      renderHiddenPathsList();
-    });
-  });
 }
 
 /* ── Timezone searchable select ─────────────────────────── */
@@ -275,45 +235,14 @@ function initTimezoneSelect(currentLabel) {
   input.addEventListener('blur', () => {
     setTimeout(() => {
       dropdown.classList.remove('open');
-      // 입력값이 목록에 없으면 이전 선택값으로 복원
       const match = TIMEZONES.find(z => z.label === input.value);
-      if (!match) {
-        input.value = hidLbl.value;
-      }
+      if (!match) input.value = hidLbl.value;
     }, 150);
   });
 }
 
 /* ── Save handlers ──────────────────────────────────────── */
 function bindSaveHandlers() {
-  document.getElementById('btn-add-hidden-path').addEventListener('click', () => {
-    const input = document.getElementById('s-hidden-path-input');
-    const val = normalizePath(input.value);
-    if (!val) return;
-    if (!_hiddenPaths.includes(val)) {
-      _hiddenPaths.push(val);
-      renderHiddenPathsList();
-    }
-    input.value = '';
-  });
-
-  document.getElementById('s-hidden-path-input').addEventListener('keydown', e => {
-    if (e.key === 'Enter') document.getElementById('btn-add-hidden-path').click();
-  });
-
-  document.getElementById('btn-save-hidden-paths').addEventListener('click', async () => {
-    const btn = document.getElementById('btn-save-hidden-paths');
-    btn.disabled = true;
-    try {
-      await api.patch('/api/admin/settings', { browse_hidden_paths: _hiddenPaths });
-      showOk('hp-ok');
-    } catch (e) {
-      alert(e.message);
-    } finally {
-      btn.disabled = false;
-    }
-  });
-
   document.getElementById('btn-save-timezone').addEventListener('click', async () => {
     const btn = document.getElementById('btn-save-timezone');
     btn.disabled = true;

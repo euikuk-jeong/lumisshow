@@ -256,6 +256,18 @@ async def list_music(_: str = Depends(get_current_admin)):
     return {"files": files}
 
 
+@router.get("/path-exists")
+async def path_exists(
+    path: str = Query(...),
+    _: str = Depends(get_current_admin),
+):
+    if not path or not path.strip("/\\"):
+        return {"exists": False}
+    root = _photo_root()
+    resolved = os.path.realpath(os.path.join(root, path.lstrip("/\\")))
+    return {"exists": resolved.startswith(root + os.sep) and os.path.isdir(resolved)}
+
+
 @router.get("/thumb")
 async def admin_thumb(
     path: str = Query(...),
