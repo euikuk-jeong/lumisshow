@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.3] - 2026-06-21
+
+### Changed
+- 슬라이드쇼 전환 효과 목록(`EFFECTS`), 라벨, 기본 설정, `loadSlideshowSettings` 함수를 `slideshow-config.js` 공유 모듈로 추출 — 4개 파일에 분산되어 있던 중복 정의 제거
+- 슬라이드쇼 시작 시 `?i=N` URL 파라미터 제거 (`history.replaceState`) — 특정 사진에서 시작 후 URL이 깔끔하게 정리됨
+
 ## [0.4.2] - 2026-06-21
 
 ### Fixed
@@ -214,7 +220,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v0.3.6...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v0.4.3...HEAD
+[0.4.3]: https://github.com/euikuk-jeong/lumisshow/compare/v0.4.2...v0.4.3
+[0.4.2]: https://github.com/euikuk-jeong/lumisshow/compare/v0.4.1...v0.4.2
+[0.4.1]: https://github.com/euikuk-jeong/lumisshow/compare/v0.4.0...v0.4.1
+[0.4.0]: https://github.com/euikuk-jeong/lumisshow/compare/v0.3.8...v0.4.0
+[0.3.8]: https://github.com/euikuk-jeong/lumisshow/compare/v0.3.7...v0.3.8
+[0.3.7]: https://github.com/euikuk-jeong/lumisshow/compare/v0.3.6...v0.3.7
 [0.3.6]: https://github.com/euikuk-jeong/lumisshow/compare/v0.3.5...v0.3.6
 [0.3.5]: https://github.com/euikuk-jeong/lumisshow/compare/v0.3.4...v0.3.5
 [0.3.4]: https://github.com/euikuk-jeong/lumisshow/compare/v0.3.3...v0.3.4
