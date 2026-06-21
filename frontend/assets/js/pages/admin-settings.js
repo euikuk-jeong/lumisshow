@@ -195,6 +195,7 @@ function renderSettingsForm(settings) {
     </div>
   `;
 
+  if (settings.ui_theme) setTheme(settings.ui_theme);
   initThemePicker();
   initTimezoneSelect(settings.timezone_label);
   bindSaveHandlers();

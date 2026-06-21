@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.2] - 2026-06-22
+
+### Fixed
+- Admin 설정 페이지 진입 시 서버의 `ui_theme` 값을 localStorage에 동기화 — 한 기기에서 테마를 변경한 뒤 다른 기기에서 설정 페이지를 열면 변경된 테마가 즉시 반영됨
+
 ## [0.5.1] - 2026-06-22
 
 ### Changed
@@ -242,7 +247,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v0.5.1...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v0.5.2...HEAD
+[0.5.2]: https://github.com/euikuk-jeong/lumisshow/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/euikuk-jeong/lumisshow/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/euikuk-jeong/lumisshow/compare/v0.4.3...v0.5.0
 [0.4.3]: https://github.com/euikuk-jeong/lumisshow/compare/v0.4.2...v0.4.3
