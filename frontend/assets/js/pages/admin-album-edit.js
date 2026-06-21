@@ -3,13 +3,7 @@ import { renderAdminShell } from '../layout.js';
 import { esc } from '../utils.js';
 import { openLightbox } from '../lightbox.js';
 import { THEMES } from '../theme.js';
-
-const EFFECTS = ['random','fade','slide-left','slide-right','slide-up','zoom-in','zoom-out','flip-h','blur','dissolve'];
-const EFFECT_LABELS = {
-  random: '랜덤', fade: 'Fade', 'slide-left': 'Slide Left', 'slide-right': 'Slide Right',
-  'slide-up': 'Slide Up', 'zoom-in': 'Zoom In', 'zoom-out': 'Zoom Out',
-  'flip-h': 'Flip H', blur: 'Blur', dissolve: 'Dissolve',
-};
+import { EFFECTS, EFFECT_LABELS } from '../slideshow-config.js';
 
 export async function renderAdminAlbumEdit(albumId) {
   const isNew = !albumId;
@@ -156,7 +150,7 @@ function renderEditForm(album, links, tzOffset, serverTheme = 'dark') {
             <div class="form-group">
               <label class="form-label">전환 효과</label>
               <select id="ss-effect" class="form-select">
-                ${EFFECTS.map(e => `<option value="${e}" ${(ss.slideshow_effect ?? 'random') === e ? 'selected' : ''}>${EFFECT_LABELS[e]}</option>`).join('')}
+                ${['random', ...EFFECTS].map(e => `<option value="${e}" ${(ss.slideshow_effect ?? 'random') === e ? 'selected' : ''}>${EFFECT_LABELS[e]}</option>`).join('')}
               </select>
             </div>
             <div class="form-group">

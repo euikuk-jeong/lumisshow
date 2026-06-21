@@ -1,24 +1,9 @@
 import { shareApi, ShareAuthError } from '../api.js';
 import { esc } from '../utils.js';
+import { EFFECTS, DEFAULT_SETTINGS, loadSlideshowSettings } from '../slideshow-config.js';
 
 const TRANS_MS = 700;
 const KB_CLASSES = ['kb-tl','kb-tr','kb-bl','kb-br','kb-t','kb-b','kb-l','kb-r'];
-// Keep in sync with EFFECTS in album-view.js (excluding 'random')
-const EFFECTS = ['fade','slide-left','slide-right','slide-up','zoom-in','zoom-out','flip-h','blur','dissolve'];
-
-const DEFAULT_SETTINGS = { interval: 5, order: 'sequential', music: true, volume: 25, effect: 'random', loop: true };
-
-function loadSettings(albumDefaults = {}, token = '') {
-  // 앨범 DB 기본값 + 토큰별 localStorage 로컬 오버라이드
-  const base = { ...DEFAULT_SETTINGS, ...albumDefaults };
-  try {
-    const local = JSON.parse(localStorage.getItem(`slideshow_settings_${token}`) || '{}');
-    const s = { ...base, ...local };
-    if (!['sequential', 'random'].includes(s.order)) s.order = base.order;
-    if (s.effect !== 'random' && !EFFECTS.includes(s.effect)) s.effect = base.effect;
-    return s;
-  } catch { return { ...base }; }
-}
 
 function buildOrder(total, order, startIdx) {
   const seq = Array.from({ length: total }, (_, i) => i);
@@ -64,10 +49,17 @@ export async function renderSlideshow(token) {
     return;
   }
 
-  const cfg = loadSettings(album.slideshow_defaults || {}, token);
+  const cfg = loadSlideshowSettings(album.slideshow_defaults || {}, token);
   const rawI = parseInt(new URLSearchParams(location.search).get('i') ?? '', 10);
   const urlIdx = isNaN(rawI) ? null : Math.max(0, Math.min(photos.length - 1, rawI));
   const startIdx = urlIdx ?? (album.cover_index ?? 0);
+
+  // Remove ?i=N from URL — it was only needed to pick the start photo
+  if (urlIdx !== null) {
+    const url = new URL(location.href);
+    url.searchParams.delete('i');
+    history.replaceState(null, '', url.pathname + (url.search || ''));
+  }
   const displayOrder = buildOrder(photos.length, cfg.order, startIdx);
 
   // ── Mutable state ────────────────────────────────────────────

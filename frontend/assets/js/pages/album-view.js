@@ -1,27 +1,6 @@
 import { shareApi, ShareAuthError } from '../api.js';
 import { esc, getVersion } from '../utils.js';
-
-const EFFECTS = ['random', 'fade', 'slide-left', 'slide-right', 'slide-up',
-                 'zoom-in', 'zoom-out', 'flip-h', 'blur', 'dissolve'];
-const EFFECT_LABELS = {
-  random: '랜덤', fade: 'Fade', 'slide-left': 'Slide Left',
-  'slide-right': 'Slide Right', 'slide-up': 'Slide Up',
-  'zoom-in': 'Zoom In', 'zoom-out': 'Zoom Out',
-  'flip-h': 'Flip H', blur: 'Blur', dissolve: 'Dissolve',
-};
-const DEFAULT_SETTINGS = { interval: 5, order: 'sequential', music: true, volume: 25, effect: 'random', loop: true };
-
-function loadSettingsForViewer(albumDefaults = {}, token = '') {
-  // 앨범 DB 기본값 + 로컬 사용자 변경 오버라이드 (토큰별 localStorage)
-  const base = { ...DEFAULT_SETTINGS, ...albumDefaults };
-  try {
-    const local = JSON.parse(localStorage.getItem(`slideshow_settings_${token}`) || '{}');
-    const s = { ...base, ...local };
-    if (!['sequential', 'random'].includes(s.order)) s.order = base.order;
-    if (!EFFECTS.includes(s.effect)) s.effect = base.effect;
-    return s;
-  } catch { return { ...base }; }
-}
+import { EFFECTS, EFFECT_LABELS, loadSlideshowSettings } from '../slideshow-config.js';
 
 function saveSettings(token, s) {
   localStorage.setItem(`slideshow_settings_${token}`, JSON.stringify(s));
@@ -130,7 +109,7 @@ export async function renderAlbumView(token) {
         <div class="form-group">
           <label class="form-label">전환 효과</label>
           <select id="s-effect" class="form-select">
-            ${EFFECTS.map(e => `<option value="${e}">${EFFECT_LABELS[e]}</option>`).join('')}
+            ${['random', ...EFFECTS].map(e => `<option value="${e}">${EFFECT_LABELS[e]}</option>`).join('')}
           </select>
         </div>
         <div class="settings-actions">
@@ -160,7 +139,7 @@ export async function renderAlbumView(token) {
 }
 
 function _initSettingsPanel(token, album) {
-  const s = loadSettingsForViewer(album.slideshow_defaults || {}, token);
+  const s = loadSlideshowSettings(album.slideshow_defaults || {}, token);
 
   document.getElementById('s-interval').value = s.interval;
   document.querySelector(`input[name="s-order"][value="${s.order}"]`).checked = true;

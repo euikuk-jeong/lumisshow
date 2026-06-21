@@ -2,8 +2,7 @@ import { api } from '../api.js';
 import { renderAdminShell } from '../layout.js';
 import { esc } from '../utils.js';
 import { THEMES, getTheme, setTheme } from '../theme.js';
-
-const EFFECTS = ['fade','slide-left','slide-right','slide-up','zoom-in','zoom-out','flip-h','blur','dissolve'];
+import { EFFECTS } from '../slideshow-config.js';
 
 const TIMEZONES = [
   // UTC+12 ~ UTC+14
