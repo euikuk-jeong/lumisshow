@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-06-21
+
+### Added
+- **사진 단독 확대 보기**: 공유 앨범 화면에서 썸네일 클릭 시 슬라이드쇼 대신 해당 사진만 전체화면으로 확대 표시
+  - 하단에 파일명 · 현재 번호/전체 수 표시
+  - 다운로드 버튼 및 EXIF 정보 보기 버튼 (슬라이드쇼와 동일 기능)
+  - 좌우 화살표 버튼 및 키보드(←/→/Esc) 탐색
+- **줌인/아웃**: 확대 보기 화면에서 다양한 방법으로 사진 확대/축소
+  - 마우스 휠: 커서 위치 기준 확대/축소
+  - 더블클릭: 클릭 위치 기준 2× 확대 / 원래 크기 복귀 토글
+  - 드래그: 확대 상태에서 이미지 패닝
+  - 핀치 제스처 (모바일): 두 손가락 핀치로 줌인/아웃 + 패닝
+  - 키보드 `+`/`-`: 1.3× 단계 줌인/아웃, `0`: 리셋
+  - 마우스 가운데 버튼: 줌 즉시 초기화
+
 ## [0.4.3] - 2026-06-21
 
 ### Changed
@@ -220,7 +235,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v0.4.3...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/euikuk-jeong/lumisshow/compare/v0.4.3...v0.5.0
 [0.4.3]: https://github.com/euikuk-jeong/lumisshow/compare/v0.4.2...v0.4.3
 [0.4.2]: https://github.com/euikuk-jeong/lumisshow/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/euikuk-jeong/lumisshow/compare/v0.4.0...v0.4.1

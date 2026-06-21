@@ -134,8 +134,281 @@ export async function renderAlbumView(token) {
 
   document.getElementById('thumb-grid')?.addEventListener('click', (e) => {
     const thumb = e.target.closest('.viewer-thumb');
-    if (thumb) window.navigate(`/s/${token}/slideshow?i=${thumb.dataset.idx}`);
+    if (thumb) _openSharePhotoViewer(photos, parseInt(thumb.dataset.idx, 10));
   });
+}
+
+function _openSharePhotoViewer(photos, startIdx) {
+  let idx = startIdx;
+  let infoVisible = false;
+  let zoom = 1;
+  let panX = 0;
+  let panY = 0;
+  const MIN_ZOOM = 1;
+  const MAX_ZOOM = 4;
+
+  const overlay = document.createElement('div');
+  overlay.className = 'spv-overlay';
+  overlay.innerHTML = `
+    <button class="spv-close" title="닫기">✕</button>
+    <div class="spv-body">
+      <button class="spv-nav spv-prev">‹</button>
+      <img class="spv-img" src="" alt="">
+      <div class="spv-info" style="display:none"></div>
+      <button class="spv-nav spv-next">›</button>
+    </div>
+    <div class="spv-footer">
+      <div class="spv-caption">
+        <span class="spv-filename"></span>
+        <span class="spv-counter"></span>
+      </div>
+      <div class="spv-actions">
+        <a class="spv-btn" download>⬇ 다운로드</a>
+        <button class="spv-btn spv-info-btn">i 정보</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+
+  const imgEl      = overlay.querySelector('.spv-img');
+  const bodyEl     = overlay.querySelector('.spv-body');
+  const prevBtn    = overlay.querySelector('.spv-prev');
+  const nextBtn    = overlay.querySelector('.spv-next');
+  const filenameEl = overlay.querySelector('.spv-filename');
+  const counterEl  = overlay.querySelector('.spv-counter');
+  const dlBtn      = overlay.querySelector('.spv-btn[download]');
+  const infoBtnEl  = overlay.querySelector('.spv-info-btn');
+  const infoEl     = overlay.querySelector('.spv-info');
+
+  // ── Zoom & Pan ──────────────────────────────────────────────
+
+  function clampPan() {
+    const maxX = Math.max(0, (imgEl.offsetWidth * zoom - bodyEl.offsetWidth) / 2);
+    const maxY = Math.max(0, (imgEl.offsetHeight * zoom - bodyEl.offsetHeight) / 2);
+    panX = Math.max(-maxX, Math.min(maxX, panX));
+    panY = Math.max(-maxY, Math.min(maxY, panY));
+  }
+
+  function applyTransform() {
+    imgEl.style.transform = zoom > 1 ? `translate(${panX}px, ${panY}px) scale(${zoom})` : '';
+    imgEl.style.cursor = zoom > 1 ? 'grab' : '';
+    prevBtn.style.visibility = (zoom <= 1 && idx > 0) ? 'visible' : 'hidden';
+    nextBtn.style.visibility = (zoom <= 1 && idx < photos.length - 1) ? 'visible' : 'hidden';
+  }
+
+  function resetZoom() {
+    zoom = MIN_ZOOM; panX = 0; panY = 0;
+    applyTransform();
+  }
+
+  // Zoom toward screen point (ox, oy) = offset from body center in screen px
+  function changeZoom(factor, ox = 0, oy = 0) {
+    const newZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, zoom * factor));
+    if (newZoom === zoom) return;
+    const scale = newZoom / zoom;
+    panX = ox * (1 - scale) + panX * scale;
+    panY = oy * (1 - scale) + panY * scale;
+    zoom = newZoom;
+    if (zoom <= MIN_ZOOM) { panX = 0; panY = 0; }
+    clampPan();
+    applyTransform();
+  }
+
+  // ── Middle click: reset zoom ────────────────────────────────
+  bodyEl.addEventListener('mousedown', (e) => {
+    if (e.button === 1) { e.preventDefault(); resetZoom(); }
+  });
+
+  // ── Mouse wheel zoom ────────────────────────────────────────
+  bodyEl.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const rect = bodyEl.getBoundingClientRect();
+    const ox = e.clientX - (rect.left + rect.width / 2);
+    const oy = e.clientY - (rect.top + rect.height / 2);
+    changeZoom(e.deltaY < 0 ? 1.2 : 1 / 1.2, ox, oy);
+  }, { passive: false });
+
+  // ── Double-click: toggle 2× / reset ────────────────────────
+  imgEl.addEventListener('dblclick', (e) => {
+    if (zoom > 1) {
+      resetZoom();
+    } else {
+      const rect = bodyEl.getBoundingClientRect();
+      const ox = e.clientX - (rect.left + rect.width / 2);
+      const oy = e.clientY - (rect.top + rect.height / 2);
+      changeZoom(2, ox, oy);
+    }
+  });
+
+  // ── Mouse drag (pan when zoomed) ────────────────────────────
+  let dragging = false;
+  let dragPrev = null;
+
+  imgEl.addEventListener('mousedown', (e) => {
+    if (zoom <= 1) return;
+    dragging = true;
+    dragPrev = { x: e.clientX, y: e.clientY };
+    imgEl.style.cursor = 'grabbing';
+    e.preventDefault();
+  });
+
+  function onMouseMove(e) {
+    if (!dragging) return;
+    panX += e.clientX - dragPrev.x;
+    panY += e.clientY - dragPrev.y;
+    dragPrev = { x: e.clientX, y: e.clientY };
+    clampPan();
+    applyTransform();
+  }
+
+  function onMouseUp() {
+    if (!dragging) return;
+    dragging = false;
+    dragPrev = null;
+    if (zoom > 1) imgEl.style.cursor = 'grab';
+  }
+
+  document.addEventListener('mousemove', onMouseMove);
+  document.addEventListener('mouseup', onMouseUp);
+
+  // ── Touch: pinch zoom + single-finger pan ───────────────────
+  let lastPinchDist = null;
+  let lastPinchMid  = null;
+  let lastTouchPos  = null;
+
+  bodyEl.addEventListener('touchstart', (e) => {
+    if (e.touches.length === 2) {
+      lastPinchDist = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+      lastPinchMid = {
+        x: (e.touches[0].clientX + e.touches[1].clientX) / 2,
+        y: (e.touches[0].clientY + e.touches[1].clientY) / 2,
+      };
+      lastTouchPos = null;
+    } else if (e.touches.length === 1 && zoom > 1) {
+      lastTouchPos = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      lastPinchDist = null;
+    }
+  }, { passive: true });
+
+  bodyEl.addEventListener('touchmove', (e) => {
+    if (e.touches.length === 2 && lastPinchDist !== null) {
+      e.preventDefault();
+      const dist = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+      const mid = {
+        x: (e.touches[0].clientX + e.touches[1].clientX) / 2,
+        y: (e.touches[0].clientY + e.touches[1].clientY) / 2,
+      };
+      const rect = bodyEl.getBoundingClientRect();
+      const ox = mid.x - (rect.left + rect.width / 2);
+      const oy = mid.y - (rect.top + rect.height / 2);
+      changeZoom(dist / lastPinchDist, ox, oy);
+      // Additional pan with midpoint translation
+      panX += mid.x - lastPinchMid.x;
+      panY += mid.y - lastPinchMid.y;
+      clampPan();
+      applyTransform();
+      lastPinchDist = dist;
+      lastPinchMid  = mid;
+    } else if (e.touches.length === 1 && zoom > 1 && lastTouchPos) {
+      e.preventDefault();
+      panX += e.touches[0].clientX - lastTouchPos.x;
+      panY += e.touches[0].clientY - lastTouchPos.y;
+      lastTouchPos = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      clampPan();
+      applyTransform();
+    }
+  }, { passive: false });
+
+  bodyEl.addEventListener('touchend', (e) => {
+    if (e.touches.length < 2) { lastPinchDist = null; lastPinchMid = null; }
+    if (e.touches.length === 0) lastTouchPos = null;
+  }, { passive: true });
+
+  // ── EXIF info formatter ─────────────────────────────────────
+
+  function formatInfo(photo) {
+    const rows = [];
+    const add = (label, value) => { if (value != null && value !== '') rows.push([label, String(value)]); };
+    add('Filename', photo.filename);
+    if (photo.taken_at) {
+      const d = new Date(photo.taken_at);
+      const pad = n => String(n).padStart(2, '0');
+      add('Date', `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`);
+    }
+    if (photo.width && photo.height) add('Resolution', `${photo.width} × ${photo.height}`);
+    add('Make', photo.make);
+    add('Camera', photo.camera);
+    add('Software', photo.software);
+    add('Shoot Mode', photo.shoot_mode);
+    add('Exposure', photo.shutter);
+    add('Aperture', photo.aperture);
+    add('ISO', photo.iso);
+    add('Focal Length', photo.focal_length);
+    add('Flash', photo.flash);
+    add('Metering', photo.metering);
+    add('Exposure Mode', photo.exposure_mode);
+    return rows.map(([l, v]) =>
+      `<div class="ss-info-row"><span class="ss-info-label">${esc(l)}</span><span class="ss-info-value">${esc(v)}</span></div>`
+    ).join('');
+  }
+
+  // ── Photo display ───────────────────────────────────────────
+
+  function show(i) {
+    idx = i;
+    const photo = photos[idx];
+    imgEl.style.opacity = '0.4';
+    imgEl.onload = () => { imgEl.style.opacity = '1'; };
+    imgEl.src = photo.thumb_medium_url;
+    filenameEl.textContent = photo.filename || '';
+    counterEl.textContent = `${idx + 1} / ${photos.length}`;
+    dlBtn.href = photo.url;
+    dlBtn.download = photo.filename || 'photo.jpg';
+    resetZoom();
+    if (infoVisible) infoEl.innerHTML = formatInfo(photo);
+  }
+
+  function close() {
+    document.removeEventListener('keydown', onKey);
+    document.removeEventListener('mousemove', onMouseMove);
+    document.removeEventListener('mouseup', onMouseUp);
+    overlay.remove();
+  }
+
+  function onKey(e) {
+    if (e.key === 'Escape') { close(); return; }
+    if (zoom <= 1) {
+      if (e.key === 'ArrowLeft'  && idx > 0) show(idx - 1);
+      if (e.key === 'ArrowRight' && idx < photos.length - 1) show(idx + 1);
+    }
+    if (e.key === '+' || e.key === '=') changeZoom(1.3);
+    if (e.key === '-') changeZoom(1 / 1.3);
+    if (e.key === '0') resetZoom();
+  }
+
+  overlay.querySelector('.spv-close').addEventListener('click', close);
+  prevBtn.addEventListener('click', () => show(idx - 1));
+  nextBtn.addEventListener('click', () => show(idx + 1));
+  document.addEventListener('keydown', onKey);
+
+  infoBtnEl.addEventListener('click', () => {
+    infoVisible = !infoVisible;
+    if (infoVisible) {
+      infoEl.innerHTML = formatInfo(photos[idx]);
+      infoEl.style.display = 'flex';
+      infoBtnEl.classList.add('active');
+    } else {
+      infoEl.style.display = 'none';
+      infoBtnEl.classList.remove('active');
+    }
+  });
+
+  show(startIdx);
 }
 
 function _initSettingsPanel(token, album) {
