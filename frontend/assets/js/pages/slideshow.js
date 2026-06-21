@@ -466,9 +466,9 @@ export async function renderSlideshow(token) {
     if (dx < 15 && dy < 15 && dt < 300) {
       const rect = wrap.getBoundingClientRect();
       const relX = (e.changedTouches[0].clientX - rect.left) / rect.width;
-      if (relX < 0.35) advance(-1);
-      else if (relX > 0.65) advance(1);
-      else showUI();
+      if (relX < 0.35) { advance(-1); showUI(); }
+      else if (relX > 0.65) { advance(1); showUI(); }
+      else toggleUI();
     }
   }, { passive: true });
 
@@ -485,8 +485,17 @@ export async function renderSlideshow(token) {
     clearTimeout(hideTimer);
     hideTimer = setTimeout(() => wrap.classList.add('ss-ui-hidden'), 3000);
   }
-  wrap.addEventListener('mousemove', showUI);
-  wrap.addEventListener('touchstart', showUI, { passive: true });
+  function toggleUI() {
+    if (wrap.classList.contains('ss-ui-hidden')) {
+      showUI();
+    } else {
+      clearTimeout(hideTimer);
+      wrap.classList.add('ss-ui-hidden');
+    }
+  }
+  if (!window.matchMedia('(pointer: coarse) and (hover: none)').matches) {
+    wrap.addEventListener('mousemove', showUI);
+  }
   showUI();
 
   // ── Fullscreen ───────────────────────────────────────────────

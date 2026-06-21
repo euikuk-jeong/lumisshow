@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-06-22
+
+### Changed
+- 슬라이드쇼 툴바 배경 완전 투명화: 모든 디바이스에서 하단 버튼 영역 그라디언트·블러 제거
+- 모바일 중앙 탭 동작 변경: 툴바 표시 → 즉시 숨김 토글 (`toggleUI`)
+- 모바일에서 `mousemove` 리스너 미등록: 터치 후 브라우저가 생성하는 합성 mousemove 이벤트로 툴바가 다시 표시되던 문제 수정
+
 ## [0.5.0] - 2026-06-21
 
 ### Added
@@ -235,7 +242,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v0.5.1...HEAD
+[0.5.1]: https://github.com/euikuk-jeong/lumisshow/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/euikuk-jeong/lumisshow/compare/v0.4.3...v0.5.0
 [0.4.3]: https://github.com/euikuk-jeong/lumisshow/compare/v0.4.2...v0.4.3
 [0.4.2]: https://github.com/euikuk-jeong/lumisshow/compare/v0.4.1...v0.4.2
