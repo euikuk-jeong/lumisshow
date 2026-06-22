@@ -241,3 +241,56 @@ async def test_download_zip_with_photos(admin_client, tmp_path):
     assert r.status_code == 200
     assert r.headers["content-type"] == "application/zip"
     assert "attachment" in r.headers["content-disposition"]
+
+
+# ── photos 페이지네이션 ────────────────────────────────────────────────────────
+
+async def test_photos_pagination_first_page(admin_client):
+    token = await _setup_link(admin_client, with_photos=True)
+    await _auth(admin_client, token)
+    data = (await admin_client.get(f"/api/share/{token}/photos?size=1")).json()
+    assert data["total"] == 2
+    assert len(data["photos"]) == 1
+    assert data["page"] == 1
+
+
+async def test_photos_pagination_second_page(admin_client):
+    token = await _setup_link(admin_client, with_photos=True)
+    await _auth(admin_client, token)
+    data = (await admin_client.get(f"/api/share/{token}/photos?page=2&size=1")).json()
+    assert data["total"] == 2
+    assert len(data["photos"]) == 1
+    assert data["page"] == 2
+
+
+async def test_photos_size_zero_returns_all(admin_client):
+    """size=0(기본값)이면 전체 반환."""
+    token = await _setup_link(admin_client, with_photos=True)
+    await _auth(admin_client, token)
+    data = (await admin_client.get(f"/api/share/{token}/photos?size=0")).json()
+    assert data["total"] == 2
+    assert len(data["photos"]) == 2
+
+
+# ── 브루트포스 잠금 (DB 기반) ─────────────────────────────────────────────────
+
+async def test_brute_force_lockout_persists_across_requests(admin_client):
+    """DB 기반 실패 기록이 요청 간 유지되어 잠금이 작동해야 한다."""
+    token = await _setup_link(admin_client, password="secret")
+    for _ in range(5):
+        r = await _auth(admin_client, token, password="wrong")
+        assert r.status_code == 401
+    r = await _auth(admin_client, token, password="wrong")
+    assert r.status_code == 429
+
+
+async def test_brute_force_resets_on_correct_password(admin_client):
+    """올바른 패스워드 입력 후 실패 카운터가 초기화된다."""
+    token = await _setup_link(admin_client, password="secret")
+    for _ in range(4):
+        await _auth(admin_client, token, password="wrong")
+    r = await _auth(admin_client, token, password="secret")
+    assert r.status_code == 200
+    # 카운터 리셋 후 재시도 가능
+    r = await _auth(admin_client, token, password="wrong")
+    assert r.status_code == 401  # 429가 아닌 401

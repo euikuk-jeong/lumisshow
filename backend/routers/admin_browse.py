@@ -53,9 +53,10 @@ def _photo_root() -> str:
     return os.path.realpath(os.getenv("PHOTO_ROOT", "./testdata/photos"))
 
 
-def _safe_dir(rel: str) -> str:
+def _safe_dir(rel: str, root: str | None = None) -> str:
     """rel 경로를 PHOTO_ROOT 하위로 한정. 벗어나면 400."""
-    root = _photo_root()
+    if root is None:
+        root = _photo_root()
     resolved = os.path.realpath(os.path.join(root, rel.lstrip("/\\")))
     if resolved != root and not resolved.startswith(root + os.sep):
         raise HTTPException(status_code=400, detail="Invalid path")
@@ -77,9 +78,7 @@ def _scan_dir_basic(real_path: str, root: str, hidden_paths: list[str]) -> tuple
                 if _is_path_hidden(rel, hidden_paths):
                     continue
                 try:
-                    child_count = sum(
-                        1 for e in os.scandir(entry.path) if not _is_hidden(e.name)
-                    )
+                    child_count = sum(1 for n in os.listdir(entry.path) if not _is_hidden(n))
                 except PermissionError:
                     child_count = 0
                 folders.append(FolderItem(path=rel, name=entry.name, child_count=child_count))
@@ -118,49 +117,92 @@ def _walk_photos_basic(
     return results
 
 
+_CACHE_INSERT_SQL = """
+INSERT OR REPLACE INTO photo_meta_cache
+    (file_path, taken_at, width, height, make, camera, software,
+     shutter, aperture, iso, focal_length, shoot_mode, flash, metering, exposure_mode,
+     cache_version)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+"""
+
+_CACHE_CHUNK = 900  # SQLite host-param limit safety margin
+
+
+def _meta_to_row(rel: str, meta: dict) -> tuple:
+    return (
+        rel,
+        meta["taken_at"].isoformat() if meta.get("taken_at") else None,
+        meta.get("width"),
+        meta.get("height"),
+        meta.get("make"),
+        meta.get("camera"),
+        meta.get("software"),
+        meta.get("shutter"),
+        meta.get("aperture"),
+        meta.get("iso"),
+        meta.get("focal_length"),
+        meta.get("shoot_mode"),
+        meta.get("flash"),
+        meta.get("metering"),
+        meta.get("exposure_mode"),
+    )
+
+
+def _row_to_meta(row) -> dict:
+    taken_at = datetime.fromisoformat(row["taken_at"]) if row["taken_at"] else None
+    return {
+        "taken_at": taken_at,
+        "width": row["width"],
+        "height": row["height"],
+        "make": row["make"],
+        "camera": row["camera"],
+        "software": row["software"],
+        "shutter": row["shutter"],
+        "aperture": row["aperture"],
+        "iso": row["iso"],
+        "focal_length": row["focal_length"],
+        "shoot_mode": row["shoot_mode"],
+        "flash": row["flash"],
+        "metering": row["metering"],
+        "exposure_mode": row["exposure_mode"],
+    }
+
+
 async def _enrich_photos(
     basic_items: list[tuple[str, str, int]],
     root: str,
     db,
 ) -> list[PhotoItem]:
-    """basic_items의 각 사진에 EXIF 메타데이터를 추가. photo_meta_cache 활용."""
+    """basic_items의 각 사진에 EXIF 메타데이터를 추가. photo_meta_cache 활용 (IN 쿼리)."""
     if not basic_items:
         return []
 
     rel_map = {fp: os.path.relpath(fp, root).replace("\\", "/") for fp, _, _ in basic_items}
+    all_rels = list(rel_map.values())
 
     meta_by_rel: dict[str, dict] = {}
-    uncached: list[tuple[str, str]] = []  # (rel, full_path)
 
-    for full_path, _, _ in basic_items:
-        rel = rel_map[full_path]
+    # 청크 단위 IN 쿼리로 캐시 일괄 조회 (cache_version >= 1인 완전한 행만 사용)
+    for i in range(0, len(all_rels), _CACHE_CHUNK):
+        chunk = all_rels[i:i + _CACHE_CHUNK]
+        placeholders = ",".join("?" * len(chunk))
         async with db.execute(
-            "SELECT taken_at, width, height FROM photo_meta_cache WHERE file_path = ?", (rel,)
+            f"SELECT * FROM photo_meta_cache WHERE cache_version >= 1 AND file_path IN ({placeholders})", chunk
         ) as cur:
-            row = await cur.fetchone()
-        if row:
-            taken_at = datetime.fromisoformat(row["taken_at"]) if row["taken_at"] else None
-            meta_by_rel[rel] = {"taken_at": taken_at, "width": row["width"], "height": row["height"]}
-        else:
-            uncached.append((rel, full_path))
+            for row in await cur.fetchall():
+                meta_by_rel[row["file_path"]] = _row_to_meta(row)
+
+    uncached = [(rel, fp) for fp, _, _ in basic_items
+                if (rel := rel_map[fp]) not in meta_by_rel]
 
     if uncached:
         metas = await asyncio.gather(*[
             asyncio.to_thread(get_image_meta, fp) for _, fp in uncached
         ])
-        inserts = []
+        inserts = [_meta_to_row(rel, meta) for (rel, _), meta in zip(uncached, metas)]
         for (rel, _), meta in zip(uncached, metas):
             meta_by_rel[rel] = meta
-            inserts.append((
-                rel,
-                meta["taken_at"].isoformat() if meta.get("taken_at") else None,
-                meta.get("width"),
-                meta.get("height"),
-            ))
-        await db.executemany(
-            "INSERT OR REPLACE INTO photo_meta_cache (file_path, taken_at, width, height) VALUES (?, ?, ?, ?)",
-            inserts,
-        )
+        await db.executemany(_CACHE_INSERT_SQL, inserts)
         await db.commit()
 
     items = []
@@ -187,10 +229,10 @@ async def browse(
     _: str = Depends(get_current_admin),
     db=Depends(get_db),
 ):
+    root = _photo_root()
     settings = await get_settings(db)
     hidden_paths = settings.get("browse_hidden_paths", [])
-    real_path = _safe_dir(path)
-    root = _photo_root()
+    real_path = _safe_dir(path, root)
     folders, basics = await asyncio.to_thread(_scan_dir_basic, real_path, root, hidden_paths)
     photos = await _enrich_photos(basics, root, db)
     return BrowseResponse(folders=folders, photos=photos)
@@ -207,10 +249,10 @@ async def search(
     _: str = Depends(get_current_admin),
     db=Depends(get_db),
 ):
+    root = _photo_root()
     settings = await get_settings(db)
     hidden_paths = settings.get("browse_hidden_paths", [])
-    root = _photo_root()
-    start_dir = _safe_dir(folder) if folder else root
+    start_dir = _safe_dir(folder, root) if folder else root
 
     df = datetime.strptime(date_from, "%Y-%m-%d") if date_from else None
     dt = (
@@ -220,21 +262,25 @@ async def search(
     )
 
     basics = await asyncio.to_thread(_walk_photos_basic, start_dir, root, q, hidden_paths)
-    all_items = await _enrich_photos(basics, root, db)
 
     if df or dt:
-        filtered = []
-        for item in all_items:
-            if df and (not item.taken_at or item.taken_at < df):
-                continue
-            if dt and (not item.taken_at or item.taken_at > dt):
-                continue
-            filtered.append(item)
-        all_items = filtered
-
-    total = len(all_items)
-    offset = (page - 1) * size
-    return SearchResponse(items=all_items[offset: offset + size], total=total, page=page)
+        # 날짜 필터: 전체 EXIF 필요 → 먼저 enrich, 필터 후 페이지네이션
+        all_items = await _enrich_photos(basics, root, db)
+        filtered = [
+            item for item in all_items
+            if (not df or (item.taken_at and item.taken_at >= df))
+            and (not dt or (item.taken_at and item.taken_at <= dt))
+        ]
+        total = len(filtered)
+        offset = (page - 1) * size
+        return SearchResponse(items=filtered[offset: offset + size], total=total, page=page)
+    else:
+        # 날짜 필터 없음: 페이지네이션 후 enrich (해당 페이지만 EXIF 로드)
+        total = len(basics)
+        offset = (page - 1) * size
+        page_basics = basics[offset: offset + size]
+        items = await _enrich_photos(page_basics, root, db)
+        return SearchResponse(items=items, total=total, page=page)
 
 
 @router.get("/music")

@@ -1,5 +1,6 @@
 import hashlib
 import os
+import threading
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -30,19 +31,33 @@ def thumb_path(file_path: str, size: str) -> str:
     return os.path.join(_thumb_dir(), thumb_filename(file_path, size))
 
 
+_thumb_locks: dict[str, threading.Lock] = {}
+_thumb_locks_mutex = threading.Lock()
+
+
+def _get_thumb_lock(out_path: str) -> threading.Lock:
+    with _thumb_locks_mutex:
+        if out_path not in _thumb_locks:
+            _thumb_locks[out_path] = threading.Lock()
+        return _thumb_locks[out_path]
+
+
 def generate_thumbnail(file_path: str, size: str) -> str:
     """썸네일 생성 (이미 존재하면 재사용). 생성된 썸네일 절대 경로 반환."""
     out_path = thumb_path(file_path, size)
     if os.path.exists(out_path):
         return out_path
 
-    os.makedirs(_thumb_dir(), exist_ok=True)
-    max_w, max_h = SIZES[size]
-
-    with Image.open(file_path) as img:
-        img = ImageOps.exif_transpose(img)
-        img.thumbnail((max_w, max_h), Image.LANCZOS)
-        img.convert("RGB").save(out_path, "JPEG", quality=85, optimize=True)
+    lock = _get_thumb_lock(out_path)
+    with lock:
+        if os.path.exists(out_path):
+            return out_path
+        os.makedirs(_thumb_dir(), exist_ok=True)
+        max_w, max_h = SIZES[size]
+        with Image.open(file_path) as img:
+            img = ImageOps.exif_transpose(img)
+            img.thumbnail((max_w, max_h), Image.LANCZOS)
+            img.convert("RGB").save(out_path, "JPEG", quality=85, optimize=True)
 
     return out_path
 

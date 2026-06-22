@@ -283,3 +283,31 @@ async def test_list_music_rel_path_format(auth_client, tmp_path):
 async def test_list_music_requires_auth(client):
     r = await client.get("/api/admin/music")
     assert r.status_code == 401
+
+
+# ── search 페이지네이션 최적화 (날짜 필터 없을 때 해당 페이지만 enrich) ─────────
+
+async def test_search_no_date_filter_pagination_returns_correct_total(auth_client):
+    """날짜 필터 없이 페이지 크기 1로 조회해도 total은 전체 개수를 반환한다."""
+    r = await auth_client.get("/api/admin/search?size=1&page=1")
+    data = r.json()
+    assert data["total"] == 4  # photo0,1,2 + nested
+    assert len(data["items"]) == 1
+
+
+async def test_search_no_date_filter_second_page(auth_client):
+    """페이지 2는 1페이지와 다른 항목을 반환한다."""
+    r1 = await auth_client.get("/api/admin/search?size=1&page=1")
+    r2 = await auth_client.get("/api/admin/search?size=1&page=2")
+    assert r1.json()["items"][0]["name"] != r2.json()["items"][0]["name"]
+
+
+# ── photo_meta_cache IN 쿼리 (N+1 제거) ──────────────────────────────────────
+
+async def test_browse_caches_exif_metadata(auth_client):
+    """browse 두 번 호출 시 두 번째는 캐시 히트 (결과가 동일해야 한다)."""
+    r1 = await auth_client.get("/api/admin/browse")
+    r2 = await auth_client.get("/api/admin/browse")
+    photos1 = sorted(r1.json()["photos"], key=lambda p: p["name"])
+    photos2 = sorted(r2.json()["photos"], key=lambda p: p["name"])
+    assert photos1 == photos2

@@ -28,11 +28,12 @@ export async function renderSlideshow(token) {
   window._pageCleanup?.();
   window._pageCleanup = null;
 
-  let album, photosData;
+  const PAGE_SIZE = 50;
+  let album, firstPage;
   try {
-    [album, photosData] = await Promise.all([
+    [album, firstPage] = await Promise.all([
       shareApi.get(`/api/share/${token}/album`),
-      shareApi.get(`/api/share/${token}/photos`),
+      shareApi.get(`/api/share/${token}/photos?size=${PAGE_SIZE}`),
     ]);
   } catch (e) {
     if (e instanceof ShareAuthError || /404|not found/i.test(e.message)) {
@@ -43,15 +44,19 @@ export async function renderSlideshow(token) {
     return;
   }
 
-  const photos = photosData.photos;
-  if (!photos.length) {
+  const totalPhotos = firstPage.total;
+  if (!totalPhotos) {
     app.innerHTML = '<div style="padding:40px;text-align:center;color:var(--muted)">사진이 없습니다.</div>';
     return;
   }
 
+  // photos는 희소 배열: 로드된 항목만 채워짐. 나머지는 undefined.
+  const photos = new Array(totalPhotos);
+  firstPage.photos.forEach((p, i) => { photos[i] = p; });
+
   const cfg = loadSlideshowSettings(album.slideshow_defaults || {}, token);
   const rawI = parseInt(new URLSearchParams(location.search).get('i') ?? '', 10);
-  const urlIdx = isNaN(rawI) ? null : Math.max(0, Math.min(photos.length - 1, rawI));
+  const urlIdx = isNaN(rawI) ? null : Math.max(0, Math.min(totalPhotos - 1, rawI));
   const startIdx = urlIdx ?? (album.cover_index ?? 0);
 
   // Remove ?i=N from URL — it was only needed to pick the start photo
@@ -60,7 +65,21 @@ export async function renderSlideshow(token) {
     url.searchParams.delete('i');
     history.replaceState(null, '', url.pathname + (url.search || ''));
   }
-  const displayOrder = buildOrder(photos.length, cfg.order, startIdx);
+  const displayOrder = buildOrder(totalPhotos, cfg.order, startIdx);
+
+  // 나머지 페이지 백그라운드 로드
+  let bgLoadAborted = false;
+  (async () => {
+    const totalPages = Math.ceil(totalPhotos / PAGE_SIZE);
+    for (let p = 2; p <= totalPages; p++) {
+      if (bgLoadAborted) break;
+      try {
+        const data = await shareApi.get(`/api/share/${token}/photos?page=${p}&size=${PAGE_SIZE}`);
+        const offset = (p - 1) * PAGE_SIZE;
+        data.photos.forEach((photo, i) => { photos[offset + i] = photo; });
+      } catch (_) { break; }
+    }
+  })();
 
   // ── Mutable state ────────────────────────────────────────────
   let pos = 0;
@@ -163,20 +182,21 @@ export async function renderSlideshow(token) {
   // ── Helpers ──────────────────────────────────────────────────
 
   function photoAt(p) {
-    return photos[displayOrder[((p % photos.length) + photos.length) % photos.length]];
+    return photos[displayOrder[((p % totalPhotos) + totalPhotos) % totalPhotos]];
   }
 
   function preload(p) {
-    const idx = displayOrder[((p % photos.length) + photos.length) % photos.length];
-    if (!preloadCache[idx]) {
+    const idx = displayOrder[((p % totalPhotos) + totalPhotos) % totalPhotos];
+    const photo = photos[idx];
+    if (photo && !preloadCache[idx]) {
       const img = new Image();
-      img.src = photos[idx].thumb_medium_url;
+      img.src = photo.thumb_medium_url;
       preloadCache[idx] = img;
     }
   }
 
   function unload(p) {
-    const idx = displayOrder[((p % photos.length) + photos.length) % photos.length];
+    const idx = displayOrder[((p % totalPhotos) + totalPhotos) % totalPhotos];
     if (preloadCache[idx]) { preloadCache[idx].src = ''; delete preloadCache[idx]; }
   }
 
@@ -220,7 +240,8 @@ export async function renderSlideshow(token) {
   }
 
   function renderInfoContent() {
-    const photoHtml = formatInfo(photoAt(pos));
+    const photo = photoAt(pos);
+    const photoHtml = photo ? formatInfo(photo) : '';
     if (!audio || !musicOn) return photoHtml;
 
     const names = album.music_names || [];
@@ -243,9 +264,11 @@ export async function renderSlideshow(token) {
   function updateUI() {
     const photo = photoAt(pos);
     const dlBtn = document.getElementById('ss-dl-btn');
-    dlBtn.href = photo.url;
-    dlBtn.download = photo.filename || 'photo.jpg';
-    document.getElementById('ss-counter').textContent = `${pos + 1} / ${photos.length}`;
+    if (photo) {
+      dlBtn.href = photo.url;
+      dlBtn.download = photo.filename || 'photo.jpg';
+    }
+    document.getElementById('ss-counter').textContent = `${pos + 1} / ${totalPhotos}`;
     const pauseBtn = document.getElementById('ss-pause-btn');
     pauseBtn.innerHTML = playing ? '&#9646;&#9646;' : '&#9654;';
     pauseBtn.title = playing ? '일시정지' : '재개';
@@ -255,7 +278,7 @@ export async function renderSlideshow(token) {
   function scheduleNext() {
     clearTimeout(timer);
     if (playing && !transitioning) {
-      if (!cfg.loop && pos === photos.length - 1) {
+      if (!cfg.loop && pos === totalPhotos - 1) {
         timer = setTimeout(() => {
           playing = false;
           updateUI();
@@ -269,12 +292,19 @@ export async function renderSlideshow(token) {
 
   function advance(dir) {
     if (transitioning) return;
-    if (!cfg.loop && ((dir < 0 && pos === 0) || (dir > 0 && pos === photos.length - 1))) return;
+    if (!cfg.loop && ((dir < 0 && pos === 0) || (dir > 0 && pos === totalPhotos - 1))) return;
     clearTimeout(timer);
 
-    const nextPos = ((pos + dir) % photos.length + photos.length) % photos.length;
-    const wrapped = cfg.loop && dir > 0 && pos === photos.length - 1 && nextPos === 0;
+    const nextPos = ((pos + dir) % totalPhotos + totalPhotos) % totalPhotos;
+    const wrapped = cfg.loop && dir > 0 && pos === totalPhotos - 1 && nextPos === 0;
     const incoming = activeSlot === 'a' ? 'b' : 'a';
+
+    const nextPhoto = photoAt(nextPos);
+    if (!nextPhoto) {
+      // 아직 백그라운드 로드 중 — 200ms 후 재시도
+      timer = setTimeout(() => advance(dir), 200);
+      return;
+    }
 
     // Pick effect
     let eff = cfg.effect === 'random'
@@ -282,8 +312,8 @@ export async function renderSlideshow(token) {
       : cfg.effect;
 
     // Set next image in incoming slot
-    imgEls[incoming].src = photoAt(nextPos).thumb_medium_url;
-    slotEls[incoming].style.setProperty('--ss-bg-img', `url("${photoAt(nextPos).thumb_medium_url}")`);
+    imgEls[incoming].src = nextPhoto.thumb_medium_url;
+    slotEls[incoming].style.setProperty('--ss-bg-img', `url("${nextPhoto.thumb_medium_url}")`);
 
     // incoming on top
     slotEls[incoming].style.zIndex = 3;
@@ -350,6 +380,7 @@ export async function renderSlideshow(token) {
 
   // ── Cleanup (registered early so navigation during init is safe) ──
   function cleanup() {
+    bgLoadAborted = true;
     clearTimeout(timer);
     clearTimeout(transTimer);
     clearTimeout(musicToastTimer);
