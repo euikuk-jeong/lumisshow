@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.1] - 2026-06-22
+
+### Fixed
+- **슬라이드쇼 사진 품질 저하 수정**: 슬라이드쇼가 원본 대신 800×600 JPEG 썸네일(`thumb_medium_url`)을 표시하던 문제 수정 — `photo.url`(원본)로 교체. 초기 표시·전환·프리로드 모두 수정 (`slideshow.js`)
+- **공유 뷰어 사진 단독 보기 품질 저하 수정**: 썸네일 클릭 시 나타나는 단독 보기 화면도 동일하게 썸네일이 표시되던 문제 수정 (`album-view.js`)
+- **Admin 라이트박스 품질 저하 수정**: 앨범 편집·탐색기 라이트박스가 medium 썸네일을 표시하던 문제 수정 — `GET /api/admin/photo` 엔드포인트 신규 추가하여 원본 직접 서빙 (`lightbox.js`, `admin_browse.py`)
+
 ## [0.8.0] - 2026-06-22
 
 ### Performance
@@ -305,7 +312,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v0.8.1...HEAD
+[0.8.1]: https://github.com/euikuk-jeong/lumisshow/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/euikuk-jeong/lumisshow/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/euikuk-jeong/lumisshow/compare/v0.6.1...v0.7.0
 [0.6.1]: https://github.com/euikuk-jeong/lumisshow/compare/v0.6.0...v0.6.1

@@ -365,7 +365,7 @@ function _openSharePhotoViewer(token, photos, startIdx) {
     const photo = photos[idx];
     imgEl.style.opacity = '0.4';
     imgEl.onload = () => { imgEl.style.opacity = '1'; };
-    imgEl.src = photo.thumb_medium_url;
+    imgEl.src = photo.url;
     filenameEl.textContent = photo.filename || '';
     counterEl.textContent = `${idx + 1} / ${photos.length}`;
     dlBtn.href = photo.url;
