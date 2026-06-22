@@ -131,11 +131,25 @@ async def init_db() -> None:
     os.makedirs(os.path.dirname(path), exist_ok=True)
     async with aiosqlite.connect(path) as db:
         await db.executescript(_DDL)
-        for migration in _META_CACHE_MIGRATIONS + _ALBUM_MIGRATIONS:
+
+        # photo_meta_cache에 새 EXIF 컬럼이 추가될 때 기존 불완전 캐시 행 삭제.
+        # (기존 행은 make/camera 등이 NULL이라 EXIF 정보가 표시되지 않음)
+        meta_cache_extended = False
+        for migration in _META_CACHE_MIGRATIONS:
+            try:
+                await db.execute(migration)
+                meta_cache_extended = True
+            except aiosqlite.OperationalError:
+                pass
+        if meta_cache_extended:
+            await db.execute("DELETE FROM photo_meta_cache")
+
+        for migration in _ALBUM_MIGRATIONS:
             try:
                 await db.execute(migration)
             except aiosqlite.OperationalError:
-                pass  # 이미 존재하는 컬럼이면 무시
+                pass
+
         await _migrate_absolute_to_relative(db)
         await db.commit()
 
