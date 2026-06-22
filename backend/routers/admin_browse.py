@@ -333,3 +333,20 @@ async def admin_thumb(
         raise HTTPException(status_code=404, detail="File not found")
     out = await asyncio.to_thread(generate_thumbnail, full_path, size)
     return FileResponse(out, media_type="image/jpeg")
+
+
+@router.get("/photo")
+async def admin_photo(
+    path: str = Query(...),
+    _: str = Depends(_admin_image_auth),
+):
+    root = _photo_root()
+    if os.path.isabs(path):
+        full_path = os.path.realpath(path)
+    else:
+        full_path = os.path.realpath(os.path.join(root, path.lstrip("/\\")))
+    if full_path != root and not full_path.startswith(root + os.sep):
+        raise HTTPException(status_code=400, detail="Invalid path")
+    if not os.path.isfile(full_path):
+        raise HTTPException(status_code=404, detail="File not found")
+    return FileResponse(full_path)

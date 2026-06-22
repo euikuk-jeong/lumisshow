@@ -169,6 +169,28 @@ async def test_thumb_requires_auth(client):
     assert r.status_code == 401
 
 
+# ── photo (원본 이미지 서빙) ────────────────────────────────────────────────────
+
+async def test_photo_returns_original_image(auth_client):
+    r = await auth_client.get("/api/admin/photo?path=photo0.jpg")
+    assert r.status_code == 200
+
+
+async def test_photo_path_traversal_blocked(auth_client):
+    r = await auth_client.get("/api/admin/photo?path=../../etc/passwd")
+    assert r.status_code == 400
+
+
+async def test_photo_nonexistent_file(auth_client):
+    r = await auth_client.get("/api/admin/photo?path=no_such.jpg")
+    assert r.status_code == 404
+
+
+async def test_photo_requires_auth(client):
+    r = await client.get("/api/admin/photo?path=photo0.jpg")
+    assert r.status_code == 401
+
+
 # ── browse hidden paths ───────────────────────────────────────────────────────
 
 async def test_browse_hidden_folder_not_shown(auth_client, photo_root):
