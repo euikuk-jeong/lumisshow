@@ -323,6 +323,106 @@ async def test_photo_sort_invalid_values_sanitized(admin_client):
     assert data["photo_sort_dir"] == "asc"
 
 
+# ── 복제 ─────────────────────────────────────────────────────────────────────
+
+async def test_duplicate_album_basic(admin_client):
+    r = await admin_client.post("/api/admin/albums", json={"name": "Original"})
+    album_id = r.json()["id"]
+
+    r = await admin_client.post(
+        f"/api/admin/albums/{album_id}/duplicate",
+        json={"name": "Copy"},
+    )
+    assert r.status_code == 201
+    data = r.json()
+    assert data["name"] == "Copy"
+    assert data["id"] != album_id
+
+
+async def test_duplicate_album_copies_photos(admin_client):
+    r = await admin_client.post(
+        "/api/admin/albums",
+        json={"name": "Src", "photo_paths": ["a.jpg", "b.jpg"]},
+    )
+    album_id = r.json()["id"]
+
+    r = await admin_client.post(
+        f"/api/admin/albums/{album_id}/duplicate",
+        json={"name": "Dup"},
+    )
+    new_id = r.json()["id"]
+
+    r = await admin_client.get(f"/api/admin/albums/{new_id}")
+    assert r.json()["photo_count"] == 2
+
+
+async def test_duplicate_album_copies_slideshow_settings(admin_client):
+    r = await admin_client.post("/api/admin/albums", json={"name": "Src"})
+    album_id = r.json()["id"]
+    await admin_client.put(
+        f"/api/admin/albums/{album_id}",
+        json={"slideshow_interval": 12, "slideshow_order": "random"},
+    )
+
+    r = await admin_client.post(
+        f"/api/admin/albums/{album_id}/duplicate",
+        json={"name": "Dup"},
+    )
+    data = r.json()
+    assert data["slideshow_interval"] == 12
+    assert data["slideshow_order"] == "random"
+
+
+async def test_duplicate_album_description_copied(admin_client):
+    r = await admin_client.post(
+        "/api/admin/albums",
+        json={"name": "Src", "description": "A nice description"},
+    )
+    album_id = r.json()["id"]
+
+    r = await admin_client.post(
+        f"/api/admin/albums/{album_id}/duplicate",
+        json={"name": "Dup"},
+    )
+    assert r.json()["description"] == "A nice description"
+
+
+async def test_duplicate_album_not_found(admin_client):
+    r = await admin_client.post(
+        "/api/admin/albums/999/duplicate",
+        json={"name": "X"},
+    )
+    assert r.status_code == 404
+
+
+async def test_duplicate_album_requires_auth(client):
+    r = await client.post("/api/admin/albums/1/duplicate", json={"name": "X"})
+    assert r.status_code == 401
+
+
+# ── 조회수 리셋 ────────────────────────────────────────────────────────────────
+
+async def test_reset_view_count(admin_client):
+    r = await admin_client.post("/api/admin/albums", json={"name": "A"})
+    album_id = r.json()["id"]
+    # view_count를 직접 올릴 DB 접근 대신, 초기값 0임을 확인 후 리셋 호출
+    r = await admin_client.delete(f"/api/admin/albums/{album_id}/view-count")
+    assert r.status_code == 204
+
+    r = await admin_client.get(f"/api/admin/albums/{album_id}")
+    assert r.json()["view_count"] == 0
+
+
+async def test_reset_view_count_not_found(admin_client):
+    r = await admin_client.delete("/api/admin/albums/999/view-count")
+    assert r.status_code == 404
+
+
+async def test_reset_view_count_requires_auth(client):
+    r = await client.delete("/api/admin/albums/1/view-count")
+    assert r.status_code == 401
+
+
 # ── 인증 필요 ─────────────────────────────────────────────────────────────────
 
 async def test_list_albums_requires_auth(client):
