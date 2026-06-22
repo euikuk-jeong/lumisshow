@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.4] - 2026-06-23
+
+### Fixed
+- **슬라이드쇼 시작 위치와 커버 설정 분리**: 앨범 커버를 지정하면 슬라이드쇼가 커버 이미지 위치부터 재생되던 문제 수정 — 슬라이드쇼는 항상 sort_order 기준 첫 번째 사진부터 시작하며, 커버 이미지는 앨범 뷰 표지 표시에만 사용 (`slideshow.js`)
+
 ## [0.8.3] - 2026-06-23
 
 ### Fixed
@@ -325,7 +330,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v0.8.3...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v0.8.4...HEAD
+[0.8.4]: https://github.com/euikuk-jeong/lumisshow/compare/v0.8.3...v0.8.4
 [0.8.3]: https://github.com/euikuk-jeong/lumisshow/compare/v0.8.2...v0.8.3
 [0.8.2]: https://github.com/euikuk-jeong/lumisshow/compare/v0.8.1...v0.8.2
 [0.8.1]: https://github.com/euikuk-jeong/lumisshow/compare/v0.8.0...v0.8.1
