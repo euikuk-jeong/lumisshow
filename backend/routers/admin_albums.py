@@ -9,6 +9,7 @@ from backend.models.database import get_db
 from backend.models.schemas import (
     AlbumCreate,
     AlbumDetail,
+    AlbumDuplicateRequest,
     AlbumResponse,
     AlbumUpdate,
     PhotoOrderRequest,
@@ -207,6 +208,43 @@ async def get_album(
 
     album["photos"] = [dict(r) for r in photo_rows]
     return album
+
+
+@router.post("/{album_id}/duplicate", response_model=AlbumResponse, status_code=201)
+async def duplicate_album(
+    album_id: int,
+    body: AlbumDuplicateRequest,
+    _: str = Depends(get_current_admin),
+    db=Depends(get_db),
+):
+    await _get_album_or_404(album_id, db)
+
+    async with db.execute("SELECT * FROM albums WHERE id = ?", (album_id,)) as cur:
+        src = await cur.fetchone()
+
+    async with db.execute(
+        """INSERT INTO albums
+           (name, description, cover_path, music_path,
+            slideshow_interval, slideshow_order, slideshow_effect,
+            slideshow_music, slideshow_volume, slideshow_loop,
+            photo_sort_by, photo_sort_dir, ui_theme)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (body.name, src["description"], src["cover_path"], src["music_path"],
+         src["slideshow_interval"], src["slideshow_order"], src["slideshow_effect"],
+         src["slideshow_music"], src["slideshow_volume"], src["slideshow_loop"],
+         src["photo_sort_by"], src["photo_sort_dir"], src["ui_theme"]),
+    ) as cur:
+        new_id = cur.lastrowid
+
+    await db.execute(
+        """INSERT INTO album_photos (album_id, file_path, sort_order)
+           SELECT ?, file_path, sort_order FROM album_photos WHERE album_id = ?
+           ORDER BY sort_order, id""",
+        (new_id, album_id),
+    )
+
+    await db.commit()
+    return await _fetch_album(new_id, db)
 
 
 @router.put("/{album_id}", response_model=AlbumResponse)

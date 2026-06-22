@@ -20,3 +20,7 @@ export function loadSlideshowSettings(albumDefaults = {}, token = '') {
     return s;
   } catch { return { ...base }; }
 }
+
+export function saveSlideshowSettings(token, s) {
+  localStorage.setItem(`slideshow_settings_${token}`, JSON.stringify(s));
+}

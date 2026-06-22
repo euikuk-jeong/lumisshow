@@ -1,6 +1,6 @@
 import { shareApi, ShareAuthError } from '../api.js';
 import { esc } from '../utils.js';
-import { EFFECTS, DEFAULT_SETTINGS, loadSlideshowSettings } from '../slideshow-config.js';
+import { EFFECTS, DEFAULT_SETTINGS, loadSlideshowSettings, saveSlideshowSettings } from '../slideshow-config.js';
 
 const TRANS_MS = 700;
 const KB_CLASSES = ['kb-tl','kb-tr','kb-bl','kb-br','kb-t','kb-b','kb-l','kb-r'];
@@ -129,6 +129,11 @@ export async function renderSlideshow(token) {
       <div class="ss-toolbar">
         ${musicHtml}
         <div class="ss-toolbar-spacer"></div>
+        <div class="ss-speed-group">
+          <button class="ss-tb-btn" id="ss-speed-down" title="느리게">&#8722;</button>
+          <span class="ss-speed-label" id="ss-speed-label">${cfg.interval}s</span>
+          <button class="ss-tb-btn" id="ss-speed-up" title="빠르게">&#43;</button>
+        </div>
         <button class="ss-tb-btn" id="ss-pause-btn" title="일시정지">&#9646;&#9646;</button>
         <button class="ss-tb-btn" id="ss-prev-btn" title="이전">&#9664;</button>
         <span class="ss-counter" id="ss-counter">1 / ${photos.length}</span>
@@ -277,6 +282,7 @@ export async function renderSlideshow(token) {
 
     // Set next image in incoming slot
     imgEls[incoming].src = photoAt(nextPos).thumb_medium_url;
+    slotEls[incoming].style.setProperty('--ss-bg-img', `url("${photoAt(nextPos).thumb_medium_url}")`);
 
     // incoming on top
     slotEls[incoming].style.zIndex = 3;
@@ -357,6 +363,7 @@ export async function renderSlideshow(token) {
 
   // ── Initial display ──────────────────────────────────────────
   imgEls.a.src = photoAt(0).thumb_medium_url;
+  slotEls.a.style.setProperty('--ss-bg-img', `url("${photoAt(0).thumb_medium_url}")`);
   startKenBurns('a');
   preload(1);
   preload(2);
@@ -385,6 +392,19 @@ export async function renderSlideshow(token) {
     if (playing) scheduleNext(); else clearTimeout(timer);
     updateUI();
   });
+
+  const SPEED_STEPS = [2, 3, 5, 8, 10, 15, 20, 30];
+  function changeSpeed(delta) {
+    const idx = SPEED_STEPS.reduce((best, s, i) =>
+      Math.abs(s - cfg.interval) < Math.abs(SPEED_STEPS[best] - cfg.interval) ? i : best, 0);
+    cfg.interval = SPEED_STEPS[Math.max(0, Math.min(SPEED_STEPS.length - 1, idx + delta))];
+    document.getElementById('ss-speed-label').textContent = cfg.interval + 's';
+    saveSlideshowSettings(token, cfg);
+    clearTimeout(timer);
+    scheduleNext();
+  }
+  document.getElementById('ss-speed-down').addEventListener('click', () => changeSpeed(-1));
+  document.getElementById('ss-speed-up').addEventListener('click', () => changeSpeed(1));
 
   document.getElementById('ss-prev-btn').addEventListener('click', () => advance(-1));
   document.getElementById('ss-next-btn').addEventListener('click', () => advance(1));

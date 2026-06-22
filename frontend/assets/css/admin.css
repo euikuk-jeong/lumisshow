@@ -143,11 +143,22 @@
 .album-edit-layout {
   display: grid;
   grid-template-columns: 1fr 320px;
+  grid-template-areas:
+    "info   links"
+    "ss     links"
+    "photos links";
   gap: 24px;
   align-items: start;
 }
+.aei-info   { grid-area: info; }
+.aei-ss     { grid-area: ss; }
+.aei-links  { grid-area: links; }
+.aei-photos { grid-area: photos; }
 @media (max-width: 768px) {
-  .album-edit-layout { grid-template-columns: 1fr; }
+  .album-edit-layout {
+    grid-template-columns: 1fr;
+    grid-template-areas: "info" "ss" "links" "photos";
+  }
 }
 
 .section-title {

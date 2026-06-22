@@ -16,12 +16,26 @@
   overflow: hidden;
 }
 
+.ss-slot::before {
+  content: '';
+  position: absolute;
+  inset: -30px;
+  background-image: var(--ss-bg-img, none);
+  background-size: cover;
+  background-position: center;
+  filter: blur(24px);
+  opacity: 0.65;
+  z-index: 0;
+}
+
 .ss-img {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
   display: block;
   transform-origin: center center;
+  position: relative;
+  z-index: 1;
 }
 
 /* Empty image hidden */
@@ -98,6 +112,20 @@
 .ss-toolbar-spacer {
   flex: 1;
   min-width: 4px;
+}
+
+.ss-speed-group {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.ss-speed-label {
+  color: rgba(255,255,255,0.85);
+  font-size: 13px;
+  min-width: 28px;
+  text-align: center;
 }
 
 .ss-vol {
