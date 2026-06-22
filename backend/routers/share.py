@@ -269,7 +269,7 @@ async def get_photos(
         chunk = rels[i:i + _CACHE_CHUNK]
         placeholders = ",".join("?" * len(chunk))
         async with db.execute(
-            f"SELECT * FROM photo_meta_cache WHERE file_path IN ({placeholders})", chunk
+            f"SELECT * FROM photo_meta_cache WHERE cache_version >= 1 AND file_path IN ({placeholders})", chunk
         ) as cur:
             for row in await cur.fetchall():
                 cached[row["file_path"]] = _row_to_meta(row)

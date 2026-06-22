@@ -120,8 +120,9 @@ def _walk_photos_basic(
 _CACHE_INSERT_SQL = """
 INSERT OR REPLACE INTO photo_meta_cache
     (file_path, taken_at, width, height, make, camera, software,
-     shutter, aperture, iso, focal_length, shoot_mode, flash, metering, exposure_mode)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     shutter, aperture, iso, focal_length, shoot_mode, flash, metering, exposure_mode,
+     cache_version)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
 """
 
 _CACHE_CHUNK = 900  # SQLite host-param limit safety margin
@@ -181,12 +182,12 @@ async def _enrich_photos(
 
     meta_by_rel: dict[str, dict] = {}
 
-    # 청크 단위 IN 쿼리로 캐시 일괄 조회
+    # 청크 단위 IN 쿼리로 캐시 일괄 조회 (cache_version >= 1인 완전한 행만 사용)
     for i in range(0, len(all_rels), _CACHE_CHUNK):
         chunk = all_rels[i:i + _CACHE_CHUNK]
         placeholders = ",".join("?" * len(chunk))
         async with db.execute(
-            f"SELECT * FROM photo_meta_cache WHERE file_path IN ({placeholders})", chunk
+            f"SELECT * FROM photo_meta_cache WHERE cache_version >= 1 AND file_path IN ({placeholders})", chunk
         ) as cur:
             for row in await cur.fetchall():
                 meta_by_rel[row["file_path"]] = _row_to_meta(row)
