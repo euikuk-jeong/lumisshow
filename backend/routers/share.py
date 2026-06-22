@@ -31,18 +31,32 @@ _COOKIE_MAX_AGE = 24 * 3600
 
 _MAX_ATTEMPTS = 5
 _LOCKOUT_SECONDS = 15 * 60
-# token -> (fail_count, locked_until: float)
-_fail_registry: dict[str, tuple[int, float]] = {}
+# 실패 기록이 없는 토큰의 항목 TTL (잠금 시간과 동일)
+_FAIL_ENTRY_TTL = _LOCKOUT_SECONDS
+# token -> (fail_count, locked_until: float, recorded_at: float)
+_fail_registry: dict[str, tuple[int, float, float]] = {}
 
-# 세션 쿠키(JWT) 기준 조회수 중복 방지: 동일 세션의 새로고침은 카운트 안 함
-_counted_sessions: set[str] = set()
+# 세션 쿠키(JWT) 기준 조회수 중복 방지: cookie -> expires_at(float)
+_counted_sessions: dict[str, float] = {}
+
+
+def _purge_stale() -> None:
+    now = time.time()
+    stale_fail = [t for t, (_, locked, recorded) in _fail_registry.items()
+                  if (locked > 0 and now >= locked) or (locked == 0 and now - recorded >= _FAIL_ENTRY_TTL)]
+    for t in stale_fail:
+        del _fail_registry[t]
+    stale_sessions = [c for c, exp in _counted_sessions.items() if now >= exp]
+    for c in stale_sessions:
+        del _counted_sessions[c]
 
 
 def _check_lockout(token: str) -> None:
+    _purge_stale()
     entry = _fail_registry.get(token)
     if entry is None:
         return
-    count, locked_until = entry
+    count, locked_until, _ = entry
     if count >= _MAX_ATTEMPTS:
         if time.time() < locked_until:
             raise HTTPException(status_code=429, detail="Too many attempts. Try again later.")
@@ -50,10 +64,11 @@ def _check_lockout(token: str) -> None:
 
 
 def _record_failure(token: str) -> None:
-    count, _ = _fail_registry.get(token, (0, 0.0))
+    count, _, _ = _fail_registry.get(token, (0, 0.0, 0.0))
     count += 1
-    locked_until = time.time() + _LOCKOUT_SECONDS if count >= _MAX_ATTEMPTS else 0.0
-    _fail_registry[token] = (count, locked_until)
+    now = time.time()
+    locked_until = now + _LOCKOUT_SECONDS if count >= _MAX_ATTEMPTS else 0.0
+    _fail_registry[token] = (count, locked_until, now)
 
 
 def _clear_failures(token: str) -> None:
@@ -126,8 +141,9 @@ async def get_album(token: str, request: Request, db=Depends(get_db)):
     link = await _get_valid_link(token, db)
 
     cookie = request.cookies.get(_COOKIE_NAME)
-    if cookie not in _counted_sessions:
-        _counted_sessions.add(cookie)
+    now = time.time()
+    if cookie not in _counted_sessions or _counted_sessions[cookie] <= now:
+        _counted_sessions[cookie] = now + _COOKIE_MAX_AGE
         await db.execute(
             "UPDATE albums SET view_count = view_count + 1 WHERE id = ?",
             (link["album_id"],),

@@ -233,3 +233,53 @@ async def test_path_exists_traversal_blocked(auth_client):
 async def test_path_exists_requires_auth(client):
     r = await client.get("/api/admin/path-exists?path=sub")
     assert r.status_code == 401
+
+
+# ── list_music ────────────────────────────────────────────────────────────────
+
+async def test_list_music_empty_when_no_dir(auth_client):
+    r = await auth_client.get("/api/admin/music")
+    assert r.status_code == 200
+    assert r.json()["files"] == []
+
+
+async def test_list_music_returns_audio_files(auth_client, tmp_path, monkeypatch):
+    music_dir = tmp_path / "data" / "music"
+    music_dir.mkdir(parents=True)
+    (music_dir / "track.mp3").write_bytes(b"fake")
+    (music_dir / "song.flac").write_bytes(b"fake")
+
+    r = await auth_client.get("/api/admin/music")
+    assert r.status_code == 200
+    files = r.json()["files"]
+    names = {f["name"] for f in files}
+    assert names == {"track.mp3", "song.flac"}
+
+
+async def test_list_music_filters_non_audio(auth_client, tmp_path):
+    music_dir = tmp_path / "data" / "music"
+    music_dir.mkdir(parents=True)
+    (music_dir / "track.mp3").write_bytes(b"fake")
+    (music_dir / "readme.txt").write_text("skip")
+    (music_dir / "cover.jpg").write_bytes(b"skip")
+
+    r = await auth_client.get("/api/admin/music")
+    files = r.json()["files"]
+    assert len(files) == 1
+    assert files[0]["name"] == "track.mp3"
+
+
+async def test_list_music_rel_path_format(auth_client, tmp_path):
+    music_dir = tmp_path / "data" / "music" / "sub"
+    music_dir.mkdir(parents=True)
+    (music_dir / "track.mp3").write_bytes(b"fake")
+
+    r = await auth_client.get("/api/admin/music")
+    files = r.json()["files"]
+    assert len(files) == 1
+    assert files[0]["rel"] == "sub/track.mp3"
+
+
+async def test_list_music_requires_auth(client):
+    r = await client.get("/api/admin/music")
+    assert r.status_code == 401

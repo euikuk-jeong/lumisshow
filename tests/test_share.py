@@ -117,6 +117,38 @@ async def test_auth_inactive_link(admin_client):
     assert r.status_code == 404
 
 
+# ── 조회수 ────────────────────────────────────────────────────────────────────
+
+async def _get_view_count(admin_client, album_id: int) -> int:
+    r = await admin_client.get(f"/api/admin/albums/{album_id}")
+    return r.json()["view_count"]
+
+
+async def test_view_count_increments_on_first_access(admin_client):
+    r = await admin_client.post("/api/admin/albums", json={"name": "A"})
+    album_id = r.json()["id"]
+    r = await admin_client.post(f"/api/admin/albums/{album_id}/links", json={})
+    token = r.json()["token"]
+    await _auth(admin_client, token)
+
+    assert await _get_view_count(admin_client, album_id) == 0
+    await admin_client.get(f"/api/share/{token}/album")
+    assert await _get_view_count(admin_client, album_id) == 1
+
+
+async def test_view_count_not_incremented_twice_same_session(admin_client):
+    r = await admin_client.post("/api/admin/albums", json={"name": "A"})
+    album_id = r.json()["id"]
+    r = await admin_client.post(f"/api/admin/albums/{album_id}/links", json={})
+    token = r.json()["token"]
+    await _auth(admin_client, token)
+
+    await admin_client.get(f"/api/share/{token}/album")
+    await admin_client.get(f"/api/share/{token}/album")
+    # 같은 세션 쿠키로 두 번 조회해도 1만 증가
+    assert await _get_view_count(admin_client, album_id) == 1
+
+
 # ── 앨범 정보 ─────────────────────────────────────────────────────────────────
 
 async def test_get_album_after_auth(admin_client):
