@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-06-22
+
+### Added
+- **슬라이드쇼 속도 즉시 조절**: 툴바에 −/Ns/+ 버튼 추가 — 재생 중 전환 간격을 2·3·5·8·10·15·20·30초 프리셋으로 즉시 변경, localStorage 저장
+- **앨범 복제**: 앨범 편집 페이지 우상단 "복제" 버튼 — 앨범 설정(테마·슬라이드쇼·음악)과 사진 목록 전체를 새 앨범으로 복사 (`POST /api/admin/albums/{id}/duplicate`)
+
+### Changed
+- **슬라이드쇼 사진 비율 개선**: `object-fit: cover` → `contain`으로 변경, 남는 여백을 동일 사진의 블러 버전으로 채워 사진 전체 구도가 잘리지 않고 표시됨
+- **앨범 편집 모바일 섹션 순서 변경**: `grid-template-areas` 적용 — 모바일(768px 이하)에서 기본 정보 → 슬라이드쇼 기본 설정 → 공유 링크 → 사진 순으로 재배치
+
 ## [0.5.2] - 2026-06-22
 
 ### Fixed
@@ -247,7 +257,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v0.5.2...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/euikuk-jeong/lumisshow/compare/v0.5.2...v0.6.0
 [0.5.2]: https://github.com/euikuk-jeong/lumisshow/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/euikuk-jeong/lumisshow/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/euikuk-jeong/lumisshow/compare/v0.4.3...v0.5.0
