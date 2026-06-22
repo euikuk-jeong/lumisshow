@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-06-22
+
+### Fixed
+- **라이트박스 키보드 이벤트 리스너 누적 방지**: `close()` 함수에 `closed` 플래그 추가 — 비동기 삭제 중 Escape 등 중복 호출 경로에서 `removeEventListener`가 항상 정확히 1회 실행됨 (`lightbox.js`)
+- **비루프 슬라이드쇼 경계값 오동작 수정**: `loop=false`일 때 첫 사진에서 역방향(←) 이동 시 마지막 사진으로 이동하던 모듈로 연산 오류 수정 — 경계에서 `advance()` 호출 차단 (`slideshow.js`)
+- **공유 링크 메모리 무한 누적 방지**: `_fail_registry`에 `recorded_at` 타임스탬프 추가, `_counted_sessions`를 `set` → `dict[cookie, expires_at]`으로 변경 — `_purge_stale()` 기회적 정리로 장기 운영 시 메모리 누수 해소 (`share.py`)
+
+### Changed
+- **Unit Test 커버리지 확대**: 기존 53개 → 158개 (105개 추가)
+  - `test_admin_settings.py` 신규 (11개): GET 기본값, PATCH 각 필드, 인증 검증
+  - `test_admin_albums.py` 추가 (9개): 앨범 복제(`duplicate_album`) 5개, 조회수 리셋(`reset_view_count`) 3개, 인증 1개
+  - `test_share.py` 추가 (2개): 조회수 첫 접속 증가, 동일 세션 중복 방지
+  - `test_browse.py` 추가 (5개): `list_music` 빈 폴더·오디오 반환·비오디오 필터·rel 경로·인증
+
 ## [0.6.0] - 2026-06-22
 
 ### Added
@@ -257,7 +271,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v0.6.1...HEAD
+[0.6.1]: https://github.com/euikuk-jeong/lumisshow/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/euikuk-jeong/lumisshow/compare/v0.5.2...v0.6.0
 [0.5.2]: https://github.com/euikuk-jeong/lumisshow/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/euikuk-jeong/lumisshow/compare/v0.5.0...v0.5.1
