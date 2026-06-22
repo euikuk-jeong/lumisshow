@@ -220,3 +220,4 @@ class SharePhotoItem(BaseModel):
 class SharePhotosResponse(BaseModel):
     photos: list[SharePhotoItem]
     total: int
+    page: int = 1

@@ -42,10 +42,28 @@ CREATE TABLE IF NOT EXISTS thumbnail_cache (
 );
 
 CREATE TABLE IF NOT EXISTS photo_meta_cache (
-    file_path TEXT PRIMARY KEY,
-    taken_at  TEXT,
-    width     INTEGER,
-    height    INTEGER
+    file_path    TEXT PRIMARY KEY,
+    taken_at     TEXT,
+    width        INTEGER,
+    height       INTEGER,
+    make         TEXT,
+    camera       TEXT,
+    software     TEXT,
+    shutter      TEXT,
+    aperture     TEXT,
+    iso          INTEGER,
+    focal_length TEXT,
+    shoot_mode   TEXT,
+    flash        TEXT,
+    metering     TEXT,
+    exposure_mode TEXT
+);
+
+CREATE TABLE IF NOT EXISTS share_link_failures (
+    token        TEXT    PRIMARY KEY,
+    fail_count   INTEGER NOT NULL DEFAULT 0,
+    locked_until REAL    NOT NULL DEFAULT 0,
+    recorded_at  REAL    NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS settings (
@@ -55,6 +73,20 @@ CREATE TABLE IF NOT EXISTS settings (
 """
 
 # 기존 DB에 컬럼이 없을 때만 추가 (SQLite는 IF NOT EXISTS 미지원)
+_META_CACHE_MIGRATIONS = [
+    "ALTER TABLE photo_meta_cache ADD COLUMN make TEXT",
+    "ALTER TABLE photo_meta_cache ADD COLUMN camera TEXT",
+    "ALTER TABLE photo_meta_cache ADD COLUMN software TEXT",
+    "ALTER TABLE photo_meta_cache ADD COLUMN shutter TEXT",
+    "ALTER TABLE photo_meta_cache ADD COLUMN aperture TEXT",
+    "ALTER TABLE photo_meta_cache ADD COLUMN iso INTEGER",
+    "ALTER TABLE photo_meta_cache ADD COLUMN focal_length TEXT",
+    "ALTER TABLE photo_meta_cache ADD COLUMN shoot_mode TEXT",
+    "ALTER TABLE photo_meta_cache ADD COLUMN flash TEXT",
+    "ALTER TABLE photo_meta_cache ADD COLUMN metering TEXT",
+    "ALTER TABLE photo_meta_cache ADD COLUMN exposure_mode TEXT",
+]
+
 _ALBUM_MIGRATIONS = [
     "ALTER TABLE albums ADD COLUMN slideshow_interval INTEGER",
     "ALTER TABLE albums ADD COLUMN slideshow_order    TEXT",
@@ -99,7 +131,7 @@ async def init_db() -> None:
     os.makedirs(os.path.dirname(path), exist_ok=True)
     async with aiosqlite.connect(path) as db:
         await db.executescript(_DDL)
-        for migration in _ALBUM_MIGRATIONS:
+        for migration in _META_CACHE_MIGRATIONS + _ALBUM_MIGRATIONS:
             try:
                 await db.execute(migration)
             except aiosqlite.OperationalError:

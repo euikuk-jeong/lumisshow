@@ -4,7 +4,7 @@ import time
 from datetime import datetime, timezone
 from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from fastapi.responses import StreamingResponse
 
 from backend.models.database import get_db
@@ -16,6 +16,12 @@ from backend.models.schemas import (
     parse_music_paths,
 )
 from backend.routers.admin_settings import get_settings
+from backend.routers.admin_browse import (
+    _CACHE_CHUNK,
+    _CACHE_INSERT_SQL,
+    _meta_to_row,
+    _row_to_meta,
+)
 from backend.services.auth import (
     create_share_session_token,
     verify_password,
@@ -31,48 +37,56 @@ _COOKIE_MAX_AGE = 24 * 3600
 
 _MAX_ATTEMPTS = 5
 _LOCKOUT_SECONDS = 15 * 60
-# 실패 기록이 없는 토큰의 항목 TTL (잠금 시간과 동일)
 _FAIL_ENTRY_TTL = _LOCKOUT_SECONDS
-# token -> (fail_count, locked_until: float, recorded_at: float)
-_fail_registry: dict[str, tuple[int, float, float]] = {}
 
 # 세션 쿠키(JWT) 기준 조회수 중복 방지: cookie -> expires_at(float)
 _counted_sessions: dict[str, float] = {}
 
 
-def _purge_stale() -> None:
+async def _purge_stale_failures(db) -> None:
     now = time.time()
-    stale_fail = [t for t, (_, locked, recorded) in _fail_registry.items()
-                  if (locked > 0 and now >= locked) or (locked == 0 and now - recorded >= _FAIL_ENTRY_TTL)]
-    for t in stale_fail:
-        del _fail_registry[t]
-    stale_sessions = [c for c, exp in _counted_sessions.items() if now >= exp]
-    for c in stale_sessions:
-        del _counted_sessions[c]
+    await db.execute(
+        """
+        DELETE FROM share_link_failures
+        WHERE (locked_until > 0 AND ? >= locked_until)
+           OR (locked_until = 0 AND ? - recorded_at >= ?)
+        """,
+        (now, now, _FAIL_ENTRY_TTL),
+    )
+    await db.commit()
 
 
-def _check_lockout(token: str) -> None:
-    _purge_stale()
-    entry = _fail_registry.get(token)
-    if entry is None:
-        return
-    count, locked_until, _ = entry
-    if count >= _MAX_ATTEMPTS:
-        if time.time() < locked_until:
+async def _check_lockout(token: str, db) -> None:
+    await _purge_stale_failures(db)
+    async with db.execute(
+        "SELECT fail_count, locked_until FROM share_link_failures WHERE token = ?", (token,)
+    ) as cur:
+        row = await cur.fetchone()
+    if row and row["fail_count"] >= _MAX_ATTEMPTS:
+        if time.time() < row["locked_until"]:
             raise HTTPException(status_code=429, detail="Too many attempts. Try again later.")
-        del _fail_registry[token]
+        await db.execute("DELETE FROM share_link_failures WHERE token = ?", (token,))
+        await db.commit()
 
 
-def _record_failure(token: str) -> None:
-    count, _, _ = _fail_registry.get(token, (0, 0.0, 0.0))
-    count += 1
+async def _record_failure(token: str, db) -> None:
     now = time.time()
+    async with db.execute(
+        "SELECT fail_count FROM share_link_failures WHERE token = ?", (token,)
+    ) as cur:
+        row = await cur.fetchone()
+    count = (row["fail_count"] if row else 0) + 1
     locked_until = now + _LOCKOUT_SECONDS if count >= _MAX_ATTEMPTS else 0.0
-    _fail_registry[token] = (count, locked_until, now)
+    await db.execute(
+        "INSERT OR REPLACE INTO share_link_failures (token, fail_count, locked_until, recorded_at) VALUES (?, ?, ?, ?)",
+        (token, count, locked_until, now),
+    )
+    await db.commit()
 
 
-def _clear_failures(token: str) -> None:
-    _fail_registry.pop(token, None)
+async def _clear_failures(token: str, db) -> None:
+    await db.execute("DELETE FROM share_link_failures WHERE token = ?", (token,))
+    await db.commit()
 
 
 async def _get_valid_link(token: str, db):
@@ -112,13 +126,13 @@ async def auth_link(
     db=Depends(get_db),
 ):
     """패스워드 검증 후 httpOnly 세션 쿠키 발급."""
-    _check_lockout(token)
+    await _check_lockout(token, db)
     link = await _get_valid_link(token, db)
     if link["password_hash"]:
         if not body.password or not verify_password(body.password, link["password_hash"]):
-            _record_failure(token)
+            await _record_failure(token, db)
             raise HTTPException(status_code=401, detail="Invalid password")
-    _clear_failures(token)
+    await _clear_failures(token, db)
 
     session_jwt = create_share_session_token(token)
     base_url = os.getenv("BASE_URL", "")
@@ -189,7 +203,6 @@ async def get_album(token: str, request: Request, db=Depends(get_db)):
 
     music_paths = parse_music_paths(row["music_path"])
     sv = await get_settings(db)
-    # 앨범별 슬라이드쇼 설정 사용 (NULL이면 서버 기본값 폴백)
     slideshow_defaults = {
         "interval": row["slideshow_interval"] or sv["slideshow_interval"],
         "order":    row["slideshow_order"]    or sv["slideshow_order"],
@@ -215,7 +228,13 @@ async def get_album(token: str, request: Request, db=Depends(get_db)):
 
 
 @router.get("/{token}/photos", response_model=SharePhotosResponse)
-async def get_photos(token: str, request: Request, db=Depends(get_db)):
+async def get_photos(
+    token: str,
+    request: Request,
+    page: int = Query(default=1, ge=1),
+    size: int = Query(default=0, ge=0),
+    db=Depends(get_db),
+):
     verify_share_session_cookie(token, request.cookies.get(_COOKIE_NAME))
     await _get_valid_link(token, db)
 
@@ -229,42 +248,68 @@ async def get_photos(token: str, request: Request, db=Depends(get_db)):
         """,
         (token,),
     ) as cur:
-        rows = await cur.fetchall()
+        all_rows = await cur.fetchall()
+
+    total = len(all_rows)
+    if size > 0:
+        offset = (page - 1) * size
+        rows = all_rows[offset: offset + size]
+    else:
+        rows = all_rows
 
     photo_root = os.path.realpath(os.getenv("PHOTO_ROOT", "./testdata/photos"))
 
     def _abs(p: str) -> str:
         return p if os.path.isabs(p) else os.path.join(photo_root, p)
 
-    metas = await asyncio.gather(*[
-        asyncio.to_thread(get_image_meta, _abs(r["file_path"])) for r in rows
-    ])
+    # photo_meta_cache에서 IN 쿼리로 일괄 조회
+    rels = [r["file_path"] for r in rows]
+    cached: dict[str, dict] = {}
+    for i in range(0, len(rels), _CACHE_CHUNK):
+        chunk = rels[i:i + _CACHE_CHUNK]
+        placeholders = ",".join("?" * len(chunk))
+        async with db.execute(
+            f"SELECT * FROM photo_meta_cache WHERE file_path IN ({placeholders})", chunk
+        ) as cur:
+            for row in await cur.fetchall():
+                cached[row["file_path"]] = _row_to_meta(row)
 
-    photos = [
-        SharePhotoItem(
+    uncached_rows = [r for r in rows if r["file_path"] not in cached]
+    if uncached_rows:
+        metas = await asyncio.gather(*[
+            asyncio.to_thread(get_image_meta, _abs(r["file_path"])) for r in uncached_rows
+        ])
+        inserts = [_meta_to_row(r["file_path"], meta) for r, meta in zip(uncached_rows, metas)]
+        for r, meta in zip(uncached_rows, metas):
+            cached[r["file_path"]] = meta
+        await db.executemany(_CACHE_INSERT_SQL, inserts)
+        await db.commit()
+
+    photos = []
+    for r in rows:
+        meta = cached.get(r["file_path"], {})
+        photos.append(SharePhotoItem(
             id=r["id"],
             url=f"/media/{quote(r['file_path'])}",
             thumb_small_url=f"/thumb/{quote(r['file_path'])}?size=small",
             thumb_medium_url=f"/thumb/{quote(r['file_path'])}?size=medium",
             filename=os.path.basename(r["file_path"]),
-            taken_at=meta["taken_at"],
-            width=meta["width"],
-            height=meta["height"],
-            make=meta["make"],
-            camera=meta["camera"],
-            software=meta["software"],
-            shutter=meta["shutter"],
-            aperture=meta["aperture"],
-            iso=meta["iso"],
-            focal_length=meta["focal_length"],
-            shoot_mode=meta["shoot_mode"],
-            flash=meta["flash"],
-            metering=meta["metering"],
-            exposure_mode=meta["exposure_mode"],
-        )
-        for r, meta in zip(rows, metas)
-    ]
-    return SharePhotosResponse(photos=photos, total=len(photos))
+            taken_at=meta.get("taken_at"),
+            width=meta.get("width"),
+            height=meta.get("height"),
+            make=meta.get("make"),
+            camera=meta.get("camera"),
+            software=meta.get("software"),
+            shutter=meta.get("shutter"),
+            aperture=meta.get("aperture"),
+            iso=meta.get("iso"),
+            focal_length=meta.get("focal_length"),
+            shoot_mode=meta.get("shoot_mode"),
+            flash=meta.get("flash"),
+            metering=meta.get("metering"),
+            exposure_mode=meta.get("exposure_mode"),
+        ))
+    return SharePhotosResponse(photos=photos, total=total, page=page)
 
 
 @router.get("/{token}/download")
