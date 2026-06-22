@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-06-22
+
+### Performance
+- **슬라이드쇼 진보적 로딩**: 첫 50장을 즉시 시작 후 나머지를 백그라운드에서 로드 — 대용량 앨범(500장+)에서 진입 지연 대폭 감소 (`slideshow.js`)
+- **photo_meta_cache 전체 EXIF 저장**: `taken_at`·`width`·`height` 3개 → `make`·`camera`·`shutter`·`aperture`·`iso` 등 15개 컬럼으로 확장, `cache_version` 마킹으로 구 캐시 자동 무효화 (`database.py`, `admin_browse.py`, `share.py`)
+- **N+1 DB 쿼리 제거**: `_enrich_photos()`에서 사진별 개별 쿼리 → `WHERE file_path IN (?, ...)` 단일 쿼리 (청크 900) (`admin_browse.py`)
+- **검색 전량 enrich 제거**: 날짜 필터 없을 때 해당 페이지 사진만 EXIF enrich — 10,000장 중 20장 요청 시에도 전량 처리하던 구조 개선 (`admin_browse.py`)
+- **썸네일 앨범 검증 쿼리 감소**: 토큰별 30초 TTL 인메모리 캐시로 그리드 100장 로드 시 DB 쿼리 100회 → 1회 (`media.py`)
+- **서브폴더 child_count 산출 개선**: `os.scandir()` → `os.listdir()`로 불필요한 stat 오버헤드 제거 (`admin_browse.py`)
+- **`_photo_root()` 중복 계산 제거**: 각 핸들러에서 요청당 1회 계산 후 하위 함수에 전달 (`admin_browse.py`, `media.py`)
+
+### Added
+- **사진 목록 페이지네이션**: `GET /api/share/{token}/photos?page=N&size=N` 파라미터 추가 — 기본(size=0)은 전체 반환으로 하위 호환 (`share.py`, `schemas.py`)
+
+### Fixed
+- **슬라이드쇼 info 패널 EXIF 미표시**: 기존 `photo_meta_cache` 행에 신규 EXIF 컬럼이 NULL로 남아 info 패널이 비던 문제 — `cache_version < 1` 행을 앱 기동 시 자동 삭제 후 재캐싱 (`database.py`)
+- **썸네일 동시 생성 레이스 컨디션**: 존재 체크와 생성 사이 동시 요청 시 중복 생성 시도 가능하던 문제 — per-path `threading.Lock` 적용 (`thumbnail.py`)
+
+### Security
+- **브루트포스 잠금 DB 저장**: `_fail_registry` 메모리 dict → `share_link_failures` SQLite 테이블로 교체 — 컨테이너 재시작 후에도 잠금 상태 유지 (`share.py`, `database.py`)
+
 ## [0.7.0] - 2026-06-22
 
 ### Added
@@ -284,7 +305,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/euikuk-jeong/lumisshow/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/euikuk-jeong/lumisshow/compare/v0.6.1...v0.7.0
 [0.6.1]: https://github.com/euikuk-jeong/lumisshow/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/euikuk-jeong/lumisshow/compare/v0.5.2...v0.6.0
