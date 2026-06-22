@@ -13,7 +13,12 @@ export async function renderAdminAlbumEdit(albumId) {
     <a href="/admin" class="page-back" data-link>← 앨범 목록</a>
     <div class="page-header">
       <h1 class="page-title">${title}</h1>
-      ${!isNew ? `<button class="btn btn-danger btn-sm" id="btn-delete">삭제</button>` : ''}
+      ${!isNew ? `
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-secondary btn-sm" id="btn-duplicate">복제</button>
+          <button class="btn btn-danger btn-sm" id="btn-delete">삭제</button>
+        </div>
+      ` : ''}
     </div>
     <div id="edit-content"><div class="loading"></div></div>
   `, '/admin');
@@ -81,6 +86,7 @@ async function loadAlbum(albumId) {
       api.get('/api/admin/settings').catch(() => ({ timezone_offset: 0 })),
     ]);
     renderEditForm(album, links, settings.timezone_offset ?? 0, settings.ui_theme ?? 'dark');
+    bindDuplicateAlbum(albumId, album.name);
     bindDeleteAlbum(albumId);
   } catch (e) {
     el.innerHTML = `<div class="alert alert-error">${esc(e.message)}</div>`;
@@ -92,10 +98,8 @@ function renderEditForm(album, links, tzOffset, serverTheme = 'dark') {
   const ss    = album; // slideshow fields are on album object
   el.innerHTML = `
     <div class="album-edit-layout">
-      <!-- Left: Info + Photos -->
-      <div class="flex-col gap-4">
-        <!-- Info -->
-        <div class="card">
+      <!-- Info -->
+      <div class="card aei-info">
           <p class="section-title">기본 정보</p>
           <div id="info-error" class="alert alert-error" style="display:none"></div>
           <form id="info-form" class="flex-col gap-3">
@@ -125,8 +129,8 @@ function renderEditForm(album, links, tzOffset, serverTheme = 'dark') {
           </div>
         </div>
 
-        <!-- Slideshow defaults -->
-        <div class="card">
+      <!-- Slideshow defaults -->
+      <div class="card aei-ss">
           <p class="section-title">슬라이드쇼 기본 설정</p>
           <div id="ss-error" class="alert alert-error" style="display:none"></div>
           <form id="ss-form" class="flex-col gap-3">
@@ -178,8 +182,8 @@ function renderEditForm(album, links, tzOffset, serverTheme = 'dark') {
           </form>
         </div>
 
-        <!-- Photos -->
-        <div class="card">
+      <!-- Photos -->
+      <div class="card aei-photos">
           <div class="flex items-center justify-between" style="margin-bottom:12px">
             <p class="section-title" style="margin:0">사진 (${album.photos.length}장)</p>
             <div class="flex gap-2 items-center">
@@ -213,11 +217,10 @@ function renderEditForm(album, links, tzOffset, serverTheme = 'dark') {
           <div id="photo-grid" class="photo-grid">
             ${album.photos.map(p => photoThumb(p, album.cover_path)).join('') || '<p class="text-muted text-sm">사진이 없습니다</p>'}
           </div>
-        </div>
       </div>
 
-      <!-- Right: Share links -->
-      <div>
+      <!-- Share links -->
+      <div class="aei-links">
         <div class="card">
           <p class="section-title">공유 링크</p>
           <div id="links-container">${renderLinks(links, tzOffset)}</div>
@@ -504,6 +507,19 @@ function bindPhotoRemove(albumId, photoState, refresh) {
     } catch (err) {
       alert(err.message);
       btn.disabled = false;
+    }
+  });
+}
+
+function bindDuplicateAlbum(albumId, albumName) {
+  document.getElementById('btn-duplicate')?.addEventListener('click', async () => {
+    const newName = prompt('새 앨범 이름을 입력하세요:', `${albumName} (복사본)`);
+    if (!newName) return;
+    try {
+      const newAlbum = await api.post(`/api/admin/albums/${albumId}/duplicate`, { name: newName });
+      window.navigate(`/admin/albums/${newAlbum.id}`);
+    } catch (err) {
+      alert(err.message);
     }
   });
 }

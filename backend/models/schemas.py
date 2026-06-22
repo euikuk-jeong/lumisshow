@@ -58,6 +58,9 @@ class AlbumCreate(BaseModel):
     description: Optional[str] = None
     photo_paths: list[str] = []
 
+class AlbumDuplicateRequest(BaseModel):
+    name: str
+
 class AlbumUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
