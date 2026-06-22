@@ -57,7 +57,7 @@ export async function renderSlideshow(token) {
   const cfg = loadSlideshowSettings(album.slideshow_defaults || {}, token);
   const rawI = parseInt(new URLSearchParams(location.search).get('i') ?? '', 10);
   const urlIdx = isNaN(rawI) ? null : Math.max(0, Math.min(totalPhotos - 1, rawI));
-  const startIdx = urlIdx ?? (album.cover_index ?? 0);
+  const startIdx = urlIdx ?? 0;
 
   // Remove ?i=N from URL — it was only needed to pick the start photo
   if (urlIdx !== null) {
