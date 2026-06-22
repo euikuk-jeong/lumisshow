@@ -190,7 +190,7 @@ export async function renderSlideshow(token) {
     const photo = photos[idx];
     if (photo && !preloadCache[idx]) {
       const img = new Image();
-      img.src = photo.thumb_medium_url;
+      img.src = photo.url;
       preloadCache[idx] = img;
     }
   }
@@ -312,7 +312,7 @@ export async function renderSlideshow(token) {
       : cfg.effect;
 
     // Set next image in incoming slot
-    imgEls[incoming].src = nextPhoto.thumb_medium_url;
+    imgEls[incoming].src = nextPhoto.url;
     slotEls[incoming].style.setProperty('--ss-bg-img', `url("${nextPhoto.thumb_medium_url}")`);
 
     // incoming on top
@@ -394,7 +394,7 @@ export async function renderSlideshow(token) {
   window._pageCleanup = cleanup;
 
   // ── Initial display ──────────────────────────────────────────
-  imgEls.a.src = photoAt(0).thumb_medium_url;
+  imgEls.a.src = photoAt(0).url;
   slotEls.a.style.setProperty('--ss-bg-img', `url("${photoAt(0).thumb_medium_url}")`);
   startKenBurns('a');
   preload(1);
