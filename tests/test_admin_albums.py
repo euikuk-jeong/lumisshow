@@ -145,7 +145,10 @@ async def test_add_photos(admin_client):
         f"/api/admin/albums/{album_id}/photos",
         json={"photo_paths": ["c.jpg", "d.jpg"]},
     )
-    assert r.status_code == 204
+    assert r.status_code == 200
+    body = r.json()
+    assert body["added"] == 2
+    assert body["skipped"] == 0
     data = (await admin_client.get(f"/api/admin/albums/{album_id}")).json()
     assert data["photo_count"] == 2
 
@@ -155,12 +158,29 @@ async def test_add_photos_deduplication(admin_client):
         "/api/admin/albums", json={"name": "Dup", "photo_paths": ["e.jpg"]}
     )
     album_id = r.json()["id"]
-    await admin_client.post(
+    r = await admin_client.post(
         f"/api/admin/albums/{album_id}/photos",
         json={"photo_paths": ["e.jpg"]},
     )
+    assert r.status_code == 200
+    body = r.json()
+    assert body["added"] == 0
+    assert body["skipped"] == 1
     data = (await admin_client.get(f"/api/admin/albums/{album_id}")).json()
     assert data["photo_count"] == 1
+
+
+async def test_add_photos_empty_paths(admin_client):
+    r = await admin_client.post("/api/admin/albums", json={"name": "Empty"})
+    album_id = r.json()["id"]
+    r = await admin_client.post(
+        f"/api/admin/albums/{album_id}/photos",
+        json={"photo_paths": []},
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert body["added"] == 0
+    assert body["skipped"] == 0
 
 
 async def test_add_photos_appends_sort_order(admin_client):

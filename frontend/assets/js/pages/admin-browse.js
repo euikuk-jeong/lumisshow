@@ -256,9 +256,12 @@ async function addSelected(albumId, state, backUrl) {
   btn.disabled = true;
   btn.textContent = '추가 중...';
   try {
-    await api.post(`/api/admin/albums/${albumId}/photos`, {
+    const result = await api.post(`/api/admin/albums/${albumId}/photos`, {
       photo_paths: Array.from(state.selected),
     });
+    if (result && result.skipped > 0) {
+      alert(`${result.added}장 추가됨, ${result.skipped}장 중복 제외`);
+    }
     window.navigate(backUrl);
   } catch (err) {
     alert(err.message);
