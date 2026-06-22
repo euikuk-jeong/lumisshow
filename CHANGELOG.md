@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.3] - 2026-06-23
+
+### Fixed
+- **슬라이드쇼 시작 시 crash 수정**: 앨범 커버 또는 `?i=N` 시작 인덱스가 첫 페이지(50장) 범위를 초과할 때 `Cannot read properties of undefined (reading 'url')` 오류 발생 — 해당 페이지를 렌더링 전에 즉시 로드하도록 수정 (`slideshow.js`)
+
 ## [0.8.2] - 2026-06-23
 
 ### Fixed
@@ -320,7 +325,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v0.8.1...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v0.8.3...HEAD
+[0.8.3]: https://github.com/euikuk-jeong/lumisshow/compare/v0.8.2...v0.8.3
+[0.8.2]: https://github.com/euikuk-jeong/lumisshow/compare/v0.8.1...v0.8.2
 [0.8.1]: https://github.com/euikuk-jeong/lumisshow/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/euikuk-jeong/lumisshow/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/euikuk-jeong/lumisshow/compare/v0.6.1...v0.7.0

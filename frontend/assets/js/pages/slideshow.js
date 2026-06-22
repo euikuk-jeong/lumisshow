@@ -65,6 +65,17 @@ export async function renderSlideshow(token) {
     url.searchParams.delete('i');
     history.replaceState(null, '', url.pathname + (url.search || ''));
   }
+
+  // startIdx가 첫 페이지 범위(0~PAGE_SIZE-1)를 벗어나면 해당 페이지를 즉시 로드
+  if (!photos[startIdx]) {
+    const pageNum = Math.floor(startIdx / PAGE_SIZE) + 1;
+    try {
+      const data = await shareApi.get(`/api/share/${token}/photos?page=${pageNum}&size=${PAGE_SIZE}`);
+      const offset = (pageNum - 1) * PAGE_SIZE;
+      data.photos.forEach((photo, i) => { photos[offset + i] = photo; });
+    } catch (_) {}
+  }
+
   const displayOrder = buildOrder(totalPhotos, cfg.order, startIdx);
 
   // 나머지 페이지 백그라운드 로드
