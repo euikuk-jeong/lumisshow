@@ -30,3 +30,33 @@ async def test_me_with_invalid_token(client):
 async def test_logout(admin_client):
     r = await admin_client.post("/api/auth/logout")
     assert r.status_code == 200
+
+
+async def test_admin_lockout_after_max_failures(client):
+    # 5 wrong attempts each return 401
+    for _ in range(5):
+        r = await client.post("/api/auth/login", json={"password": "wrong"})
+        assert r.status_code == 401
+
+    # 6th attempt is rate-limited
+    r = await client.post("/api/auth/login", json={"password": "wrong"})
+    assert r.status_code == 429
+
+    # Correct password is also blocked during lockout
+    r = await client.post("/api/auth/login", json={"password": "testpass"})
+    assert r.status_code == 429
+
+
+async def test_admin_lockout_clears_on_success(client):
+    # 4 wrong attempts
+    for _ in range(4):
+        await client.post("/api/auth/login", json={"password": "wrong"})
+
+    # Success clears the failure counter
+    r = await client.post("/api/auth/login", json={"password": "testpass"})
+    assert r.status_code == 200
+
+    # 4 more wrong attempts should not trigger lockout (counter was reset)
+    for _ in range(4):
+        r = await client.post("/api/auth/login", json={"password": "wrong"})
+    assert r.status_code == 401  # still 401, not 429

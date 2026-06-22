@@ -156,6 +156,9 @@ async def get_album(token: str, request: Request, db=Depends(get_db)):
 
     cookie = request.cookies.get(_COOKIE_NAME)
     now = time.time()
+    # Evict expired entries to prevent unbounded dict growth in long-running containers
+    for k in [k for k, exp in _counted_sessions.items() if exp <= now]:
+        del _counted_sessions[k]
     if cookie not in _counted_sessions or _counted_sessions[cookie] <= now:
         _counted_sessions[cookie] = now + _COOKIE_MAX_AGE
         await db.execute(

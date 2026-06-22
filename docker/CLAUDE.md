@@ -53,3 +53,25 @@ python3 -c "import bcrypt; print(bcrypt.hashpw(b'your_password', bcrypt.gensalt(
 - `DATA_DIR` 볼륨은 컨테이너 외부에 마운트해야 재시작 후에도 DB와 썸네일 캐시가 유지됨.
 - Synology Container Manager는 docker-compose v2 기반이므로 `version:` 필드 없이도 동작.
 - HTTPS는 DSM의 Reverse Proxy(Application Portal)를 통해 처리하는 것을 권장.
+
+---
+
+## 쿠키 보안 참고사항
+
+`share_session` 및 `admin_img_session` 쿠키의 `Secure` 속성은 `BASE_URL` 환경변수를 기준으로 결정된다.
+
+**핵심**: 앱 자체가 HTTP로 동작하더라도 `BASE_URL`을 공개 HTTPS URL로 설정해야 `Secure` 플래그가 활성화된다.
+
+```
+# 올바른 설정 (DSM Reverse Proxy 뒤에서 HTTPS 서비스하는 경우)
+BASE_URL=https://your.domain.com
+
+# 잘못된 설정 — TLS 연결이어도 Secure 플래그 없이 쿠키 발급됨
+BASE_URL=http://192.168.1.100:8080
+```
+
+### Admin 로그인 속도 제한
+
+동일 IP에서 5회 연속 로그인 실패 시 15분간 해당 IP의 로그인이 차단된다 (`share_link_failures` 테이블 재사용, `admin:{ip}` 키).
+
+**주의**: DSM Reverse Proxy 뒤에서는 모든 클라이언트 IP가 프록시 IP(예: `127.0.0.1`)로 단일화될 수 있어, 속도 제한이 사실상 전역으로 동작한다. 이 경우 DSM 방화벽 또는 Reverse Proxy의 요청 속도 제한 기능을 함께 사용할 것을 권장한다.
