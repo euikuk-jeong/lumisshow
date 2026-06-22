@@ -2,6 +2,8 @@ import { api } from '../api.js';
 import { renderAdminShell } from '../layout.js';
 import { esc } from '../utils.js';
 
+let _albumsCache = null;
+
 export async function renderAdminAlbums() {
   renderAdminShell(`
     <div class="page-header">
@@ -11,30 +13,40 @@ export async function renderAdminAlbums() {
       </div>
       <a href="/admin/albums/new" class="btn btn-primary" data-link>+ 새 앨범</a>
     </div>
-    <div id="albums-content"><div class="loading"></div></div>
+    <div id="albums-content">${_albumsCache ? '' : '<div class="loading"></div>'}</div>
   `, '/admin');
 
   await loadAlbums();
 }
 
+function _renderAlbums(el, albums) {
+  if (!albums.length) {
+    el.innerHTML = `
+      <div class="empty-state">
+        <h3>앨범이 없습니다</h3>
+        <p>새 앨범 버튼을 눌러 첫 앨범을 만들어보세요</p>
+      </div>`;
+    return;
+  }
+  el.innerHTML = `<div class="album-grid">${albums.map(a => albumCard(a)).join('')}</div>`;
+  el.querySelectorAll('.album-card').forEach((card, i) => {
+    card.addEventListener('click', () => window.navigate(`/admin/albums/${albums[i].id}`));
+  });
+}
+
 async function loadAlbums() {
   const el = document.getElementById('albums-content');
+  if (_albumsCache !== null) {
+    _renderAlbums(el, _albumsCache);
+  }
   try {
     const albums = await api.get('/api/admin/albums');
-    if (albums.length === 0) {
-      el.innerHTML = `
-        <div class="empty-state">
-          <h3>앨범이 없습니다</h3>
-          <p>새 앨범 버튼을 눌러 첫 앨범을 만들어보세요</p>
-        </div>`;
-      return;
-    }
-    el.innerHTML = `<div class="album-grid">${albums.map(a => albumCard(a)).join('')}</div>`;
-    el.querySelectorAll('.album-card').forEach((card, i) => {
-      card.addEventListener('click', () => window.navigate(`/admin/albums/${albums[i].id}`));
-    });
+    _albumsCache = albums;
+    _renderAlbums(el, albums);
   } catch (e) {
-    el.innerHTML = `<div class="alert alert-error">${esc(e.message)}</div>`;
+    if (_albumsCache === null) {
+      el.innerHTML = `<div class="alert alert-error">${esc(e.message)}</div>`;
+    }
   }
 }
 

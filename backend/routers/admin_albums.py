@@ -315,7 +315,7 @@ async def delete_album(
 
 # ── 사진 관리 ─────────────────────────────────────────────────────────────────
 
-@router.post("/{album_id}/photos", status_code=204)
+@router.post("/{album_id}/photos")
 async def add_photos(
     album_id: int,
     body: PhotoPathsRequest,
@@ -323,12 +323,23 @@ async def add_photos(
     db=Depends(get_db),
 ):
     await _get_album_or_404(album_id, db)
+    resolved = list(dict.fromkeys(_resolve_paths(body.photo_paths)))
+    if not resolved:
+        return {"added": 0, "skipped": 0}
+
+    placeholders = ",".join("?" * len(resolved))
+    async with db.execute(
+        f"SELECT COUNT(*) FROM album_photos WHERE album_id = ? AND file_path IN ({placeholders})",
+        [album_id, *resolved],
+    ) as cur:
+        existing_count = (await cur.fetchone())[0]
+
     await db.executemany(
         """
         INSERT OR IGNORE INTO album_photos (album_id, file_path, sort_order)
         VALUES (?, ?, (SELECT COALESCE(MAX(sort_order), -1) + 1 FROM album_photos WHERE album_id = ?))
         """,
-        [(album_id, path, album_id) for path in _resolve_paths(body.photo_paths)],
+        [(album_id, path, album_id) for path in resolved],
     )
     # 사진 추가 후 앨범 sort 설정에 맞게 재정렬
     async with db.execute(
@@ -342,6 +353,7 @@ async def add_photos(
         db,
     )
     await db.commit()
+    return {"added": len(resolved) - existing_count, "skipped": existing_count}
 
 
 @router.delete("/{album_id}/photos", status_code=204)

@@ -134,11 +134,11 @@ export async function renderAlbumView(token) {
 
   document.getElementById('thumb-grid')?.addEventListener('click', (e) => {
     const thumb = e.target.closest('.viewer-thumb');
-    if (thumb) _openSharePhotoViewer(photos, parseInt(thumb.dataset.idx, 10));
+    if (thumb) _openSharePhotoViewer(token, photos, parseInt(thumb.dataset.idx, 10));
   });
 }
 
-function _openSharePhotoViewer(photos, startIdx) {
+function _openSharePhotoViewer(token, photos, startIdx) {
   let idx = startIdx;
   let infoVisible = false;
   let zoom = 1;
@@ -165,6 +165,7 @@ function _openSharePhotoViewer(photos, startIdx) {
       <div class="spv-actions">
         <a class="spv-btn" download>⬇ 다운로드</a>
         <button class="spv-btn spv-info-btn">i 정보</button>
+        <button class="spv-btn spv-ss-btn">▶ 슬라이드쇼</button>
       </div>
     </div>`;
   document.body.appendChild(overlay);
@@ -396,6 +397,11 @@ function _openSharePhotoViewer(photos, startIdx) {
   nextBtn.addEventListener('click', () => show(idx + 1));
   document.addEventListener('keydown', onKey);
 
+  overlay.querySelector('.spv-ss-btn').addEventListener('click', () => {
+    close();
+    window.navigate(`/s/${token}/slideshow?i=${idx}`);
+  });
+
   infoBtnEl.addEventListener('click', () => {
     infoVisible = !infoVisible;
     if (infoVisible) {
@@ -426,7 +432,18 @@ function _initSettingsPanel(token, album) {
     document.getElementById('s-volume-label').textContent = `${e.target.value}%`;
   });
 
+  function resetToSaved() {
+    document.getElementById('s-interval').value = s.interval;
+    document.querySelector(`input[name="s-order"][value="${s.order}"]`).checked = true;
+    document.querySelector(`input[name="s-music"][value="${s.music ? 'on' : 'off'}"]`).checked = true;
+    document.querySelector(`input[name="s-loop"][value="${s.loop ? 'on' : 'off'}"]`).checked = true;
+    document.getElementById('s-volume').value = s.volume;
+    document.getElementById('s-volume-label').textContent = `${s.volume}%`;
+    document.getElementById('s-effect').value = s.effect;
+  }
+
   document.getElementById('btn-cancel').addEventListener('click', () => {
+    resetToSaved();
     document.getElementById('settings-overlay').style.display = 'none';
   });
 
@@ -444,6 +461,9 @@ function _initSettingsPanel(token, album) {
   });
 
   document.getElementById('settings-overlay').addEventListener('click', (e) => {
-    if (e.target === e.currentTarget) e.currentTarget.style.display = 'none';
+    if (e.target === e.currentTarget) {
+      resetToSaved();
+      e.currentTarget.style.display = 'none';
+    }
   });
 }
