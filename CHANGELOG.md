@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.2] - 2026-06-23
+
+### Fixed
+- **세션 메모리 누수 수정**: 공유 링크 조회수 중복 방지용 `_counted_sessions` dict가 만료된 항목을 정리하지 않아 장시간 실행 컨테이너에서 무한 증가하던 문제 수정 — 각 요청 전 TTL 만료 항목 자동 퇴거 추가 (`share.py`)
+
+### Security
+- **Admin 로그인 무차별 대입 방지**: 동일 IP에서 5회 연속 로그인 실패 시 15분 잠금 적용 — `share_link_failures` 테이블 `admin:{ip}` 키 재사용으로 컨테이너 재시작 후에도 잠금 상태 유지 (`auth.py`)
+
 ## [0.8.1] - 2026-06-22
 
 ### Fixed
