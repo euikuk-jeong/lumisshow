@@ -69,7 +69,10 @@ export function openLightbox(paths, startIdx, options = {}) {
     updateSelectionUI();
   }
 
+  let closed = false;
   function close() {
+    if (closed) return;
+    closed = true;
     document.removeEventListener('keydown', onKey);
     overlay.remove();
   }

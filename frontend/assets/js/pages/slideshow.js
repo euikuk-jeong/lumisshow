@@ -269,6 +269,7 @@ export async function renderSlideshow(token) {
 
   function advance(dir) {
     if (transitioning) return;
+    if (!cfg.loop && ((dir < 0 && pos === 0) || (dir > 0 && pos === photos.length - 1))) return;
     clearTimeout(timer);
 
     const nextPos = ((pos + dir) % photos.length + photos.length) % photos.length;
