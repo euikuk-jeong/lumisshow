@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-06-22
+
+### Added
+- **공유 뷰어 사진 확대 중 슬라이드쇼 바로 시작**: 사진 단독 확대 보기 하단에 "▶ 슬라이드쇼" 버튼 추가 — 현재 보고 있는 사진 인덱스 기준으로 슬라이드쇼 즉시 진입 (`album-view.js`)
+
+### Fixed
+- **설정 패널 취소 시 DOM 롤백**: 값 변경 후 취소(버튼·백드롭 클릭 모두)하면 다음 번 패널 열 때 저장된 값으로 복원됨 (`album-view.js`)
+- **사진 추가 중복 피드백**: 탐색기에서 이미 앨범에 있는 사진 추가 시 "N장 추가됨, M장 중복 제외" alert 표시 — `POST /api/admin/albums/{id}/photos` 응답에 `added`/`skipped` 건수 추가 (`admin_albums.py`, `admin-browse.js`)
+
+### Changed
+- **앨범 목록 로딩 깜빡임 개선**: 재방문 시 이전 결과를 즉시 표시 후 백그라운드 갱신 (모듈 캐시 적용) (`admin-albums.js`)
+- **Unit Test 커버리지 확대**: 158개 → 159개 — `POST /photos` 빈 경로 목록·중복 건수 반환 테스트 추가
+
 ## [0.6.1] - 2026-06-22
 
 ### Fixed
@@ -271,7 +284,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v0.6.1...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/euikuk-jeong/lumisshow/compare/v0.6.1...v0.7.0
 [0.6.1]: https://github.com/euikuk-jeong/lumisshow/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/euikuk-jeong/lumisshow/compare/v0.5.2...v0.6.0
 [0.5.2]: https://github.com/euikuk-jeong/lumisshow/compare/v0.5.1...v0.5.2
