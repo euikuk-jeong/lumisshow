@@ -177,6 +177,13 @@ async def test_thumb_requires_auth(client):
     assert r.status_code == 401
 
 
+async def test_thumb_absolute_path(auth_client, photo_root):
+    """절대 경로로 관리자 썸네일 요청 시 정상 응답."""
+    abs_path = str(photo_root / "photo0.jpg")
+    r = await auth_client.get(f"/api/admin/thumb?path={abs_path}&size=small")
+    assert r.status_code == 200
+
+
 # ── photo (원본 이미지 서빙) ────────────────────────────────────────────────────
 
 async def test_photo_returns_original_image(auth_client):
@@ -197,6 +204,13 @@ async def test_photo_nonexistent_file(auth_client):
 async def test_photo_requires_auth(client):
     r = await client.get("/api/admin/photo?path=photo0.jpg")
     assert r.status_code == 401
+
+
+async def test_photo_absolute_path(auth_client, photo_root):
+    """절대 경로로 관리자 원본 사진 요청 시 정상 응답."""
+    abs_path = str(photo_root / "photo0.jpg")
+    r = await auth_client.get(f"/api/admin/photo?path={abs_path}")
+    assert r.status_code == 200
 
 
 # ── browse hidden paths ───────────────────────────────────────────────────────

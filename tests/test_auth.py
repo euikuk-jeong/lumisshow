@@ -47,6 +47,37 @@ async def test_admin_lockout_after_max_failures(client):
     assert r.status_code == 429
 
 
+async def test_login_with_bcrypt_hash_password(tmp_path, monkeypatch):
+    """ADMIN_PASSWORD_HASH(bcrypt) 환경변수로 로그인이 동작한다."""
+    import bcrypt
+    from httpx import ASGITransport, AsyncClient
+
+    pw_hash = bcrypt.hashpw(b"hashpass", bcrypt.gensalt()).decode()
+    monkeypatch.setenv("DATA_DIR", str(tmp_path / "data"))
+    monkeypatch.setenv("PHOTO_ROOT", str(tmp_path / "photos"))
+    monkeypatch.setenv("ADMIN_PASSWORD_HASH", pw_hash)
+    monkeypatch.setenv("JWT_SECRET", "testsecret")
+    (tmp_path / "photos").mkdir(parents=True, exist_ok=True)
+
+    from backend.models.database import init_db
+    await init_db()
+    from backend.main import app
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+        r = await c.post("/api/auth/login", json={"password": "hashpass"})
+        assert r.status_code == 200
+
+        r = await c.post("/api/auth/login", json={"password": "wronghash"})
+        assert r.status_code == 401
+
+
+async def test_me_with_share_session_token_fails(admin_client):
+    """공유 세션 토큰을 Admin Bearer로 사용하면 401 반환."""
+    from backend.services.auth import create_share_session_token
+    share_jwt = create_share_session_token("some-share-token")
+    r = await admin_client.get("/api/auth/me", headers={"Authorization": f"Bearer {share_jwt}"})
+    assert r.status_code == 401
+
+
 async def test_admin_lockout_clears_on_success(client):
     # 4 wrong attempts
     for _ in range(4):

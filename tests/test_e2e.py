@@ -1,8 +1,10 @@
 """E2E 테스트: 실 uvicorn 서버 기반으로 주요 사용자 플로우를 검증한다."""
+import io
 import os
 import socket
 import threading
 import time
+import zipfile
 
 import httpx
 import pytest
@@ -261,3 +263,235 @@ async def test_album_with_music_flow(live_server):
 
         r = await c.get(f"/music/{share_token}")
         assert r.status_code == 200
+
+
+# ── 플로우 5: 실제 파일 ZIP 다운로드 ────────────────────────────────────────────
+
+async def test_zip_download_with_real_files(live_server):
+    """실제 사진 파일이 있는 앨범 ZIP 다운로드 시 유효한 ZIP 파일이 반환된다."""
+    url = live_server["url"]
+    photo_path = live_server["photo_path"]
+
+    async with httpx.AsyncClient(base_url=url, timeout=15.0) as c:
+        r = await c.post("/api/auth/login", json={"password": "e2epass"})
+        auth = {"Authorization": f"Bearer {r.json()['access_token']}"}
+
+        r = await c.post(
+            "/api/admin/albums",
+            json={"name": "ZIP Real", "photo_paths": [photo_path]},
+            headers=auth,
+        )
+        album_id = r.json()["id"]
+        r = await c.post(f"/api/admin/albums/{album_id}/links", json={}, headers=auth)
+        share_token = r.json()["token"]
+        await c.post(f"/api/share/{share_token}/auth", json={})
+
+        r = await c.get(f"/api/share/{share_token}/download")
+        assert r.status_code == 200
+        assert r.headers["content-type"] == "application/zip"
+        with zipfile.ZipFile(io.BytesIO(r.content)) as zf:
+            assert "sample.jpg" in zf.namelist()
+
+
+# ── 플로우 6: ZIP 중복 파일명 자동 처리 ─────────────────────────────────────────
+
+async def test_zip_download_duplicate_filename_handling(live_server):
+    """서로 다른 폴더의 동일 파일명 사진 2장이 ZIP에 포함될 때 파일명을 자동 분리한다."""
+    url = live_server["url"]
+    photo_dir = os.path.dirname(live_server["photo_path"])
+
+    sub1 = os.path.join(photo_dir, "dup_sub1")
+    sub2 = os.path.join(photo_dir, "dup_sub2")
+    os.makedirs(sub1, exist_ok=True)
+    os.makedirs(sub2, exist_ok=True)
+    dup1 = os.path.join(sub1, "dup.jpg")
+    dup2 = os.path.join(sub2, "dup.jpg")
+    Image.new("RGB", (80, 80), color=(255, 0, 0)).save(dup1, "JPEG")
+    Image.new("RGB", (80, 80), color=(0, 255, 0)).save(dup2, "JPEG")
+
+    async with httpx.AsyncClient(base_url=url, timeout=15.0) as c:
+        r = await c.post("/api/auth/login", json={"password": "e2epass"})
+        auth = {"Authorization": f"Bearer {r.json()['access_token']}"}
+
+        r = await c.post(
+            "/api/admin/albums",
+            json={"name": "Dup ZIP", "photo_paths": [dup1, dup2]},
+            headers=auth,
+        )
+        album_id = r.json()["id"]
+        r = await c.post(f"/api/admin/albums/{album_id}/links", json={}, headers=auth)
+        share_token = r.json()["token"]
+        await c.post(f"/api/share/{share_token}/auth", json={})
+
+        r = await c.get(f"/api/share/{share_token}/download")
+        assert r.status_code == 200
+        with zipfile.ZipFile(io.BytesIO(r.content)) as zf:
+            names = zf.namelist()
+            assert len(names) == 2
+            assert "dup.jpg" in names
+            assert "dup_1.jpg" in names
+
+
+# ── 플로우 7: 앨범 커버 → cover_index 반환 ─────────────────────────────────────
+
+async def test_album_cover_index_in_share_response(live_server):
+    """앨범 커버 사진 설정 시 공유 뷰어 앨범 응답에 올바른 cover_index가 반환된다."""
+    url = live_server["url"]
+    photo_dir = os.path.dirname(live_server["photo_path"])
+
+    p2 = os.path.join(photo_dir, "cover_b.jpg")
+    p3 = os.path.join(photo_dir, "cover_c.jpg")
+    Image.new("RGB", (80, 80), color=(0, 0, 255)).save(p2, "JPEG")
+    Image.new("RGB", (80, 80), color=(255, 255, 0)).save(p3, "JPEG")
+
+    async with httpx.AsyncClient(base_url=url, timeout=10.0) as c:
+        r = await c.post("/api/auth/login", json={"password": "e2epass"})
+        auth = {"Authorization": f"Bearer {r.json()['access_token']}"}
+
+        r = await c.post(
+            "/api/admin/albums",
+            json={"name": "Cover Idx", "photo_paths": [live_server["photo_path"], p2, p3]},
+            headers=auth,
+        )
+        album_id = r.json()["id"]
+
+        # 두 번째 사진을 커버로 설정
+        album_detail = (await c.get(f"/api/admin/albums/{album_id}", headers=auth)).json()
+        cover_path = album_detail["photos"][1]["file_path"]
+        await c.put(f"/api/admin/albums/{album_id}", json={"cover_path": cover_path}, headers=auth)
+
+        r = await c.post(f"/api/admin/albums/{album_id}/links", json={}, headers=auth)
+        share_token = r.json()["token"]
+        await c.post(f"/api/share/{share_token}/auth", json={})
+
+        r = await c.get(f"/api/share/{share_token}/album")
+        assert r.status_code == 200
+        assert r.json()["cover_index"] == 1
+
+
+# ── 플로우 8: 멀티 트랙 음악 인덱스 네비게이션 ────────────────────────────────────
+
+async def test_multi_track_music_index_navigation(live_server):
+    """멀티 트랙 음악 앨범에서 index 파라미터로 각 트랙에 접근하고 범위 초과 시 404."""
+    url = live_server["url"]
+    data_dir = os.environ.get("DATA_DIR", "")
+    music_dir = os.path.join(data_dir, "music")
+    os.makedirs(music_dir, exist_ok=True)
+
+    track1 = os.path.join(music_dir, "multi_t1.mp3").replace("\\", "/")
+    track2 = os.path.join(music_dir, "multi_t2.mp3").replace("\\", "/")
+    with open(track1, "wb") as f:
+        f.write(b"ID3track1")
+    with open(track2, "wb") as f:
+        f.write(b"ID3track2")
+
+    async with httpx.AsyncClient(base_url=url, timeout=10.0) as c:
+        r = await c.post("/api/auth/login", json={"password": "e2epass"})
+        auth = {"Authorization": f"Bearer {r.json()['access_token']}"}
+
+        r = await c.post(
+            "/api/admin/albums",
+            json={"name": "Multi Track", "photo_paths": []},
+            headers=auth,
+        )
+        album_id = r.json()["id"]
+        await c.put(
+            f"/api/admin/albums/{album_id}",
+            json={"music_paths": [track1, track2]},
+            headers=auth,
+        )
+        r = await c.post(f"/api/admin/albums/{album_id}/links", json={}, headers=auth)
+        share_token = r.json()["token"]
+        await c.post(f"/api/share/{share_token}/auth", json={})
+
+        assert (await c.get(f"/music/{share_token}?index=0")).status_code == 200
+        assert (await c.get(f"/music/{share_token}?index=1")).status_code == 200
+        assert (await c.get(f"/music/{share_token}?index=99")).status_code == 404
+
+
+# ── 플로우 9: health / version / SPA 라우트 ──────────────────────────────────────
+
+async def test_health_version_and_spa_routes(live_server):
+    """/health, /version, SPA 라우트(/, /admin/*, /s/*)가 모두 200을 반환한다."""
+    url = live_server["url"]
+    async with httpx.AsyncClient(base_url=url, timeout=10.0) as c:
+        r = await c.get("/health")
+        assert r.status_code == 200
+        assert r.json()["status"] == "ok"
+
+        r = await c.get("/version")
+        assert r.status_code == 200
+        assert "version" in r.json()
+
+        assert (await c.get("/")).status_code == 200
+        assert (await c.get("/admin/login")).status_code == 200
+        assert (await c.get("/s/some-token")).status_code == 200
+
+
+# ── 플로우 10: Admin 전역 설정 → 공유 뷰어 슬라이드쇼 기본값 반영 ─────────────────
+
+async def test_admin_settings_propagate_to_viewer(live_server):
+    """Admin 전역 설정이 앨범 수준 설정이 없을 때 공유 뷰어 슬라이드쇼 기본값으로 반영된다."""
+    url = live_server["url"]
+    async with httpx.AsyncClient(base_url=url, timeout=10.0) as c:
+        r = await c.post("/api/auth/login", json={"password": "e2epass"})
+        auth = {"Authorization": f"Bearer {r.json()['access_token']}"}
+
+        await c.patch(
+            "/api/admin/settings",
+            json={"slideshow_interval": 15, "slideshow_order": "random"},
+            headers=auth,
+        )
+
+        r = await c.post("/api/admin/albums", json={"name": "Settings Album"}, headers=auth)
+        album_id = r.json()["id"]
+        r = await c.post(f"/api/admin/albums/{album_id}/links", json={}, headers=auth)
+        share_token = r.json()["token"]
+        await c.post(f"/api/share/{share_token}/auth", json={})
+
+        r = await c.get(f"/api/share/{share_token}/album")
+        assert r.status_code == 200
+        defaults = r.json()["slideshow_defaults"]
+        assert defaults["interval"] == 15
+        assert defaults["order"] == "random"
+
+        # 설정 복원
+        await c.patch(
+            "/api/admin/settings",
+            json={"slideshow_interval": 5, "slideshow_order": "sequential"},
+            headers=auth,
+        )
+
+
+# ── 플로우 11: 날짜 필터 검색 ─────────────────────────────────────────────────────
+
+async def test_admin_search_date_filter(live_server):
+    """날짜 필터(date_from/date_to)로 검색 시 지정 범위 내 사진만 반환된다."""
+    url = live_server["url"]
+    photo_dir = os.path.dirname(live_server["photo_path"])
+
+    def _make_exif_jpg(path, date_str):
+        img = Image.new("RGB", (100, 100))
+        exif = img.getexif()
+        exif[306] = date_str  # DateTime (IFD0 tag)
+        img.save(path, "JPEG", exif=exif.tobytes())
+
+    _make_exif_jpg(os.path.join(photo_dir, "date_2020.jpg"), "2020:06:15 10:00:00")
+    _make_exif_jpg(os.path.join(photo_dir, "date_2024.jpg"), "2024:06:15 10:00:00")
+
+    async with httpx.AsyncClient(base_url=url, timeout=15.0) as c:
+        r = await c.post("/api/auth/login", json={"password": "e2epass"})
+        auth = {"Authorization": f"Bearer {r.json()['access_token']}"}
+
+        # 2020년 범위 필터
+        r = await c.get("/api/admin/search?date_from=2020-01-01&date_to=2020-12-31", headers=auth)
+        assert r.status_code == 200
+        names = [item["name"] for item in r.json()["items"]]
+        assert "date_2020.jpg" in names
+        assert "date_2024.jpg" not in names
+
+        # 2024년 범위 필터
+        r = await c.get("/api/admin/search?date_from=2024-01-01&date_to=2024-12-31", headers=auth)
+        names = [item["name"] for item in r.json()["items"]]
+        assert "date_2024.jpg" in names
+        assert "date_2020.jpg" not in names
