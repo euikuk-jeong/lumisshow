@@ -7,11 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.8.5] - 2026-06-23
-
-### Fixed
-- **EXIF 캐시 버전 불일치 수정 (재발 방지)**: `_CACHE_INSERT_SQL`에 `cache_version = 1` 하드코딩으로 인해 버전 변경 후에도 새 캐시 행이 매 시작마다 삭제되는 버그 수정 — `_meta_to_row()`가 `_PHOTO_META_CACHE_VERSION` 상수를 동적으로 참조하도록 변경, SELECT 쿼리도 동일 상수로 통일 (`admin_browse.py`, `share.py`, `database.py`)
-- **EXIF 읽기 실패 결과 캐시 저장 금지**: NAS 절전 등으로 `get_image_meta`가 `width=None`을 반환할 때도 캐시에 저장되어 이후 요청이 빈 캐시를 히트하던 문제 수정 — 읽기 성공(`width not None`) 시에만 캐시 저장하여 재접근 시 자동 재시도 (`admin_browse.py`, `share.py`)
+## [0.8.6] - 2026-06-23
 
 ### Changed
 - **README 프로젝트명 유래 추가**: LumisShow 이름 결정 배경 (Lumis 충돌 → LumisShow 확정) 문서화
@@ -342,7 +338,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v0.8.5...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v0.8.6...HEAD
+[0.8.6]: https://github.com/euikuk-jeong/lumisshow/compare/v0.8.5...v0.8.6
 [0.8.5]: https://github.com/euikuk-jeong/lumisshow/compare/v0.8.4...v0.8.5
 [0.8.4]: https://github.com/euikuk-jeong/lumisshow/compare/v0.8.3...v0.8.4
 [0.8.3]: https://github.com/euikuk-jeong/lumisshow/compare/v0.8.2...v0.8.3
