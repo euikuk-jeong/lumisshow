@@ -1,6 +1,9 @@
 import os
 
 import pytest
+import pytest_asyncio
+from httpx import ASGITransport, AsyncClient
+from PIL import Image
 
 
 # ── 목록 & 생성 ───────────────────────────────────────────────────────────────
@@ -458,3 +461,75 @@ async def test_create_album_requires_auth(client):
 async def test_delete_album_requires_auth(client):
     r = await client.delete("/api/admin/albums/1")
     assert r.status_code == 401
+
+
+# ── taken_at 정렬 EXIF 검증 ──────────────────────────────────────────────────
+
+def _make_jpg_with_exif(path, taken_at_str: str):
+    """DateTime(IFD0/306) EXIF가 포함된 JPEG 생성."""
+    img = Image.new("RGB", (100, 100))
+    exif = img.getexif()
+    exif[306] = taken_at_str
+    img.save(str(path), "JPEG", exif=exif.tobytes())
+
+
+@pytest_asyncio.fixture
+async def dated_admin_client(tmp_path, monkeypatch):
+    """EXIF 촬영일이 다른 사진 3장이 세팅된 admin_client."""
+    photo_root = tmp_path / "photos"
+    photo_root.mkdir()
+    _make_jpg_with_exif(photo_root / "old.jpg",  "2022:01:15 08:00:00")
+    _make_jpg_with_exif(photo_root / "new.jpg",  "2023:06:01 10:00:00")
+    _make_jpg_with_exif(photo_root / "mid.jpg",  "2022:12:31 23:00:00")
+
+    monkeypatch.setenv("DATA_DIR", str(tmp_path / "data"))
+    monkeypatch.setenv("PHOTO_ROOT", str(photo_root))
+    monkeypatch.setenv("ADMIN_PASSWORD", "testpass")
+    monkeypatch.setenv("JWT_SECRET", "testsecret")
+
+    from backend.models.database import init_db
+    await init_db()
+
+    from backend.main import app
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+        r = await c.post("/api/auth/login", json={"password": "testpass"})
+        c.headers["Authorization"] = f"Bearer {r.json()['access_token']}"
+        yield c
+
+
+async def test_photo_sort_taken_at_uses_exif(dated_admin_client):
+    """taken_at 오름차순 정렬이 EXIF 날짜 순서를 따라야 한다."""
+    r = await dated_admin_client.post(
+        "/api/admin/albums",
+        json={"name": "Dated", "photo_paths": ["new.jpg", "old.jpg", "mid.jpg"]},
+    )
+    assert r.status_code == 201
+    album_id = r.json()["id"]
+
+    await dated_admin_client.put(
+        f"/api/admin/albums/{album_id}",
+        json={"photo_sort_by": "taken_at", "photo_sort_dir": "asc"},
+    )
+
+    photos = (await dated_admin_client.get(f"/api/admin/albums/{album_id}")).json()["photos"]
+    names = [os.path.basename(p["file_path"]) for p in photos]
+    assert names == ["old.jpg", "mid.jpg", "new.jpg"], f"EXIF 날짜 오름차순 정렬 실패: {names}"
+
+
+async def test_photo_sort_taken_at_desc_uses_exif(dated_admin_client):
+    """taken_at 내림차순 정렬이 EXIF 날짜 역순이어야 한다."""
+    r = await dated_admin_client.post(
+        "/api/admin/albums",
+        json={"name": "Dated Desc", "photo_paths": ["new.jpg", "old.jpg", "mid.jpg"]},
+    )
+    album_id = r.json()["id"]
+
+    await dated_admin_client.put(
+        f"/api/admin/albums/{album_id}",
+        json={"photo_sort_by": "taken_at", "photo_sort_dir": "desc"},
+    )
+
+    photos = (await dated_admin_client.get(f"/api/admin/albums/{album_id}")).json()["photos"]
+    names = [os.path.basename(p["file_path"]) for p in photos]
+    assert names == ["new.jpg", "mid.jpg", "old.jpg"], f"EXIF 날짜 내림차순 정렬 실패: {names}"
+

@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import FileResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
-from backend.models.database import get_db
+from backend.models.database import _PHOTO_META_CACHE_VERSION, get_db
 from backend.models.schemas import BrowseResponse, FolderItem, PhotoItem, SearchResponse
 from backend.routers.admin_settings import get_settings
 
@@ -122,7 +122,7 @@ INSERT OR REPLACE INTO photo_meta_cache
     (file_path, taken_at, width, height, make, camera, software,
      shutter, aperture, iso, focal_length, shoot_mode, flash, metering, exposure_mode,
      cache_version)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 """
 
 _CACHE_CHUNK = 900  # SQLite host-param limit safety margin
@@ -145,6 +145,7 @@ def _meta_to_row(rel: str, meta: dict) -> tuple:
         meta.get("flash"),
         meta.get("metering"),
         meta.get("exposure_mode"),
+        _PHOTO_META_CACHE_VERSION,
     )
 
 
@@ -182,12 +183,13 @@ async def _enrich_photos(
 
     meta_by_rel: dict[str, dict] = {}
 
-    # 청크 단위 IN 쿼리로 캐시 일괄 조회 (cache_version >= 1인 완전한 행만 사용)
+    # 청크 단위 IN 쿼리로 캐시 일괄 조회
     for i in range(0, len(all_rels), _CACHE_CHUNK):
         chunk = all_rels[i:i + _CACHE_CHUNK]
         placeholders = ",".join("?" * len(chunk))
         async with db.execute(
-            f"SELECT * FROM photo_meta_cache WHERE cache_version >= 1 AND file_path IN ({placeholders})", chunk
+            f"SELECT * FROM photo_meta_cache WHERE cache_version >= ? AND file_path IN ({placeholders})",
+            [_PHOTO_META_CACHE_VERSION] + chunk,
         ) as cur:
             for row in await cur.fetchall():
                 meta_by_rel[row["file_path"]] = _row_to_meta(row)
@@ -199,10 +201,13 @@ async def _enrich_photos(
         metas = await asyncio.gather(*[
             asyncio.to_thread(get_image_meta, fp) for _, fp in uncached
         ])
-        inserts = [_meta_to_row(rel, meta) for (rel, _), meta in zip(uncached, metas)]
         for (rel, _), meta in zip(uncached, metas):
             meta_by_rel[rel] = meta
-        await db.executemany(_CACHE_INSERT_SQL, inserts)
+        # 읽기 성공(width not None)한 경우만 캐시 저장 — 실패 결과는 저장 안 해 다음 요청에 재시도
+        inserts = [_meta_to_row(rel, meta) for (rel, _), meta in zip(uncached, metas)
+                   if meta.get("width") is not None]
+        if inserts:
+            await db.executemany(_CACHE_INSERT_SQL, inserts)
         await db.commit()
 
     items = []

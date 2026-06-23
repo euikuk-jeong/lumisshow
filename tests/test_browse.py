@@ -10,6 +10,14 @@ def _make_jpg(path):
     Image.new("RGB", (10, 10)).save(str(path), "JPEG")
 
 
+def _make_jpg_with_exif(path, taken_at_str: str):
+    """DateTime(IFD0/306) EXIF가 포함된 JPEG 생성."""
+    img = Image.new("RGB", (100, 100))
+    exif = img.getexif()
+    exif[306] = taken_at_str  # DateTime tag (IFD0)
+    img.save(str(path), "JPEG", exif=exif.tobytes())
+
+
 @pytest.fixture
 def photo_root(tmp_path):
     root = tmp_path / "photos"
@@ -333,3 +341,39 @@ async def test_browse_caches_exif_metadata(auth_client):
     photos1 = sorted(r1.json()["photos"], key=lambda p: p["name"])
     photos2 = sorted(r2.json()["photos"], key=lambda p: p["name"])
     assert photos1 == photos2
+
+
+# ── EXIF 재발 방지 테스트 ─────────────────────────────────────────────────────
+
+async def test_browse_exif_taken_at_returned(auth_client, photo_root):
+    """실제 EXIF DateTime이 있는 사진에서 taken_at이 올바르게 반환된다."""
+    _make_jpg_with_exif(photo_root / "dated.jpg", "2023:05:15 10:30:00")
+
+    r = await auth_client.get("/api/admin/browse")
+    assert r.status_code == 200
+    photos = {p["name"]: p for p in r.json()["photos"]}
+    assert "dated.jpg" in photos
+    p = photos["dated.jpg"]
+    assert p["taken_at"] is not None, "EXIF taken_at이 반환되어야 함"
+    assert p["taken_at"].startswith("2023-05-15")
+    assert p["width"] == 100
+
+
+async def test_failed_exif_not_cached(auth_client, monkeypatch):
+    """get_image_meta 실패(width=None) 결과는 캐시에 저장하지 않아 다음 요청에 재시도한다."""
+    from backend.routers import admin_browse as browse_mod
+    from backend.services.thumbnail import _EMPTY_META, get_image_meta as real_get_meta
+
+    # 1차 browse: EXIF 읽기 실패 시뮬레이션
+    monkeypatch.setattr(browse_mod, "get_image_meta", lambda fp: dict(_EMPTY_META))
+    r1 = await auth_client.get("/api/admin/browse")
+    assert r1.status_code == 200
+    assert all(p["width"] is None for p in r1.json()["photos"]), "실패 시 width=None이어야 함"
+
+    # 원래 함수 복구
+    monkeypatch.setattr(browse_mod, "get_image_meta", real_get_meta)
+
+    # 2차 browse: 실패 결과가 캐시되지 않았으므로 재시도해 실제 EXIF를 읽어야 함
+    r2 = await auth_client.get("/api/admin/browse")
+    assert r2.status_code == 200
+    assert all(p["width"] == 100 for p in r2.json()["photos"]), "재시도 후 width가 실제 값(100)이어야 함"

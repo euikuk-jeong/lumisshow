@@ -7,7 +7,7 @@ from urllib.parse import quote
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from fastapi.responses import StreamingResponse
 
-from backend.models.database import get_db
+from backend.models.database import _PHOTO_META_CACHE_VERSION, get_db
 from backend.models.schemas import (
     ShareAlbumResponse,
     ShareAuthRequest,
@@ -272,7 +272,8 @@ async def get_photos(
         chunk = rels[i:i + _CACHE_CHUNK]
         placeholders = ",".join("?" * len(chunk))
         async with db.execute(
-            f"SELECT * FROM photo_meta_cache WHERE cache_version >= 1 AND file_path IN ({placeholders})", chunk
+            f"SELECT * FROM photo_meta_cache WHERE cache_version >= ? AND file_path IN ({placeholders})",
+            [_PHOTO_META_CACHE_VERSION] + chunk,
         ) as cur:
             for row in await cur.fetchall():
                 cached[row["file_path"]] = _row_to_meta(row)
@@ -282,10 +283,13 @@ async def get_photos(
         metas = await asyncio.gather(*[
             asyncio.to_thread(get_image_meta, _abs(r["file_path"])) for r in uncached_rows
         ])
-        inserts = [_meta_to_row(r["file_path"], meta) for r, meta in zip(uncached_rows, metas)]
         for r, meta in zip(uncached_rows, metas):
             cached[r["file_path"]] = meta
-        await db.executemany(_CACHE_INSERT_SQL, inserts)
+        # 읽기 성공(width not None)한 경우만 캐시 저장 — 실패 결과는 저장 안 해 다음 요청에 재시도
+        inserts = [_meta_to_row(r["file_path"], meta) for r, meta in zip(uncached_rows, metas)
+                   if meta.get("width") is not None]
+        if inserts:
+            await db.executemany(_CACHE_INSERT_SQL, inserts)
         await db.commit()
 
     photos = []

@@ -97,5 +97,20 @@ services/
 ### 썸네일 및 EXIF
 두 가지 크기 — small(300×200, 그리드/탐색기), medium(800×600, 슬라이드쇼 프리로드). 최초 요청 시 on-demand 생성. EXIF 전체 메타 추출: 촬영일·해상도·제조사·카메라·소프트웨어·셔터·조리개·ISO·초점거리·촬영모드·플래시·측광·노출모드. 탐색기/검색 EXIF는 `photo_meta_cache` 테이블에 캐싱(기준키: PHOTO_ROOT 상대 경로).
 
+#### ⚠️ `_PHOTO_META_CACHE_VERSION` 운용 규칙 (`backend/models/database.py`)
+
+아래 경우에 **반드시** `_PHOTO_META_CACHE_VERSION` 값을 +1 올린다:
+- `photo_meta_cache` 테이블에 컬럼 추가/변경
+- `thumbnail.py`의 `get_image_meta()` 추출 로직 변경으로 기존 캐시 값이 틀릴 수 있는 경우
+
+버전을 올리면 컨테이너 재시작 시 기존 캐시 전체가 삭제되고, 다음 접근 때 EXIF를 새로 읽어 재구축한다.
+
+**버전만 올리고 `_CACHE_INSERT_SQL` 변경은 불필요**: `_meta_to_row()`가 `_PHOTO_META_CACHE_VERSION`을 동적으로 참조하므로 자동 반영된다.
+
+설계 불변식:
+- `_CACHE_INSERT_SQL`에서 `cache_version`은 `?` 플레이스홀더로, `_meta_to_row()`가 마지막 원소로 `_PHOTO_META_CACHE_VERSION`을 넘긴다.
+- SELECT 쿼리는 `cache_version >= ?`를 사용하며 `_PHOTO_META_CACHE_VERSION`을 파라미터로 전달한다 (`admin_browse.py`, `share.py` 모두).
+- EXIF 읽기 실패(`width is None`)는 캐시에 저장하지 않아 NAS 재접근 시 자동 재시도된다.
+
 ### ZIP 다운로드
 `StreamingResponse` + `zipstream-ng` 청크 스트리밍으로 서버 메모리에 전체 파일을 올리지 않음. 응답 헤더에 `Content-Disposition: attachment` 설정.
