@@ -187,6 +187,7 @@ function renderEditForm(album, links, tzOffset, serverTheme = 'dark') {
           <div class="flex items-center justify-between" style="margin-bottom:12px">
             <p class="section-title" style="margin:0">사진 (${album.photos.length}장)</p>
             <div class="flex gap-2 items-center">
+              <button type="button" class="btn btn-warning btn-sm" id="btn-repair-paths" style="display:none">경로 복구</button>
               <div class="photo-sort-wrap">
                 <button type="button" class="btn btn-ghost btn-sm" id="btn-photo-sort">정렬: ${photoSortLabel(album.photo_sort_by, album.photo_sort_dir)}</button>
                 <div class="photo-sort-popover" id="photo-sort-popover" style="display:none">
@@ -313,6 +314,22 @@ function renderEditForm(album, links, tzOffset, serverTheme = 'dark') {
   });
 
   const photoState = { viewMode: 'grid', coverPath: album.cover_path, photos: [...album.photos] };
+  let brokenDetected = false;
+
+  function onPhotoLoadError() {
+    if (brokenDetected) return;
+    brokenDetected = true;
+    const btn = document.getElementById('btn-repair-paths');
+    if (btn) btn.style.display = '';
+  }
+
+  function attachImageErrorTracking() {
+    document.querySelectorAll('#photo-grid img').forEach(img => {
+      if (img._repairTracked) return;
+      img._repairTracked = true;
+      img.addEventListener('error', onPhotoLoadError, { once: true });
+    });
+  }
 
   function refreshPhotoGrid() {
     const el = document.getElementById('photo-grid');
@@ -324,6 +341,7 @@ function renderEditForm(album, links, tzOffset, serverTheme = 'dark') {
             : photoThumb(p, photoState.coverPath)
         ).join('')
       : '<p class="text-muted text-sm">사진이 없습니다</p>';
+    attachImageErrorTracking();
   }
 
   document.getElementById('btn-photo-view-grid').addEventListener('click', () => {
@@ -346,7 +364,9 @@ function renderEditForm(album, links, tzOffset, serverTheme = 'dark') {
   bindCoverSet(album.id, photoState, refreshPhotoGrid);
   bindPhotoSort(album.id, photoState, refreshPhotoGrid);
   bindPhotoPreview(album.id, photoState, refreshPhotoGrid);
+  bindRepairPaths(album.id, photoState, refreshPhotoGrid, () => { brokenDetected = false; });
   bindLinkActions(album.id, links, tzOffset);
+  attachImageErrorTracking();
 }
 
 function bindSlideshowForm(albumId) {
@@ -845,4 +865,34 @@ function photoThumb(photo, coverPath) {
       <button class="photo-set-cover" data-path="${esc(photo.file_path)}">커버로 설정</button>
       <button class="photo-remove" data-path="${esc(photo.file_path)}" title="제외">✕</button>
     </div>`;
+}
+
+function bindRepairPaths(albumId, photoState, refresh, resetBroken) {
+  const btn = document.getElementById('btn-repair-paths');
+  if (!btn) return;
+  btn.addEventListener('click', async () => {
+    btn.disabled = true;
+    btn.textContent = '복구 중...';
+    try {
+      const result = await api.post(`/api/admin/albums/${albumId}/repair-paths`);
+      const { fixed, ambiguous, not_found } = result;
+
+      const updated = await api.get(`/api/admin/albums/${albumId}`);
+      photoState.photos = updated.photos;
+      photoState.coverPath = updated.cover_path;
+      resetBroken();
+      btn.style.display = 'none';
+      refresh();
+
+      const parts = [];
+      if (fixed.length)     parts.push(`${fixed.length}건 복구됨`);
+      if (ambiguous.length) parts.push(`${ambiguous.length}건 후보 여러 개 (수동 확인 필요)`);
+      if (not_found.length) parts.push(`${not_found.length}건 파일 없음`);
+      alert(parts.length ? parts.join('\n') : '복구할 경로가 없습니다.');
+    } catch (err) {
+      alert(err.message);
+      btn.disabled = false;
+      btn.textContent = '경로 복구';
+    }
+  });
 }

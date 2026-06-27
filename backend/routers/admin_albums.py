@@ -2,6 +2,7 @@ import asyncio
 import json
 import os
 from datetime import datetime
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException
 
@@ -18,7 +19,9 @@ from backend.models.schemas import (
 )
 from backend.routers.admin_settings import get_settings
 from backend.services.auth import get_current_admin
-from backend.services.thumbnail import get_image_meta
+from backend.services.thumbnail import IMAGE_EXTENSIONS, get_image_meta
+
+_PHOTO_SKIP_PREFIXES = (".", "@", "#")
 
 router = APIRouter(prefix="/api/admin/albums", tags=["admin-albums"])
 
@@ -384,3 +387,83 @@ async def reorder_photos(
         [(item.sort_order, item.id, album_id) for item in body.orders],
     )
     await db.commit()
+
+
+# ── 경로 복구 ──────────────────────────────────────────────────────────────────
+
+def _build_filename_index(photo_root: str) -> dict[str, list[str]]:
+    """PHOTO_ROOT 전체를 스캔해 {파일명(소문자) -> [상대경로]} 인덱스 반환."""
+    index: dict[str, list[str]] = {}
+    for dirpath, dirnames, filenames in os.walk(photo_root):
+        dirnames[:] = [d for d in dirnames if not d.startswith(_PHOTO_SKIP_PREFIXES)]
+        for fname in filenames:
+            if fname.startswith(_PHOTO_SKIP_PREFIXES):
+                continue
+            if Path(fname).suffix.lower() not in IMAGE_EXTENSIONS:
+                continue
+            rel = os.path.relpath(os.path.join(dirpath, fname), photo_root).replace("\\", "/")
+            index.setdefault(fname.lower(), []).append(rel)
+    return index
+
+
+@router.post("/{album_id}/repair-paths")
+async def repair_album_paths(
+    album_id: int,
+    _: str = Depends(get_current_admin),
+    db=Depends(get_db),
+):
+    """앨범 내 깨진 사진 경로를 파일명 기반으로 자동 복구."""
+    await _get_album_or_404(album_id, db)
+    photo_root = os.path.realpath(os.getenv("PHOTO_ROOT", "./testdata/photos"))
+
+    async with db.execute(
+        "SELECT DISTINCT file_path FROM album_photos WHERE album_id = ?", (album_id,)
+    ) as cur:
+        all_paths = [row[0] for row in await cur.fetchall()]
+
+    broken = [p for p in all_paths if not os.path.isfile(os.path.join(photo_root, p))]
+    total_checked = len(all_paths)
+
+    if not broken:
+        return {"total_checked": total_checked, "fixed": [], "ambiguous": [], "not_found": []}
+
+    index = await asyncio.to_thread(_build_filename_index, photo_root)
+
+    fixed, ambiguous, not_found = [], [], []
+
+    for old_path in broken:
+        basename = os.path.basename(old_path).lower()
+        candidates = index.get(basename, [])
+
+        if len(candidates) == 1:
+            new_path = candidates[0]
+            # 같은 앨범에 new_path가 이미 존재하면 중복 방지를 위해 old 행 삭제
+            await db.execute(
+                """DELETE FROM album_photos
+                   WHERE album_id = ? AND file_path = ? AND EXISTS (
+                       SELECT 1 FROM album_photos a2
+                       WHERE a2.album_id = ? AND a2.file_path = ?
+                   )""",
+                (album_id, old_path, album_id, new_path),
+            )
+            await db.execute(
+                "UPDATE album_photos SET file_path = ? WHERE album_id = ? AND file_path = ?",
+                (new_path, album_id, old_path),
+            )
+            await db.execute(
+                "UPDATE albums SET cover_path = ? WHERE id = ? AND cover_path = ?",
+                (new_path, album_id, old_path),
+            )
+            fixed.append({"old_path": old_path, "new_path": new_path})
+        elif len(candidates) > 1:
+            ambiguous.append({"old_path": old_path, "candidates": sorted(candidates)})
+        else:
+            not_found.append(old_path)
+
+    await db.commit()
+    return {
+        "total_checked": total_checked,
+        "fixed": fixed,
+        "ambiguous": ambiguous,
+        "not_found": not_found,
+    }
