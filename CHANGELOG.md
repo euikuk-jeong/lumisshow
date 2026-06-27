@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-06-28
+
+### Added
+- **Open Graph 메타 태그 서버사이드 주입**: 공유 링크 SPA 라우트(`/s/{token}`)를 동적 렌더링으로 교체 — DB에서 앨범명·설명·사진 수를 조회해 `og:title`, `og:description`, `og:type`, `og:site_name` 태그를 `</head>` 직전에 주입 (`main.py`)
+- **OG 커버 이미지 공개 엔드포인트**: `GET /api/share/{token}/og-image` 신규 추가 — 세션 쿠키 없이 SNS 크롤러가 접근 가능, 앨범 커버 미지정 시 정렬 기준 첫 번째 사진으로 자동 대체, `medium`(800×600) 썸네일 반환 (`share.py`)
+- **BASE_URL 조건부 주입**: `BASE_URL` 환경변수가 설정된 경우에만 `og:image`, `og:image:width`, `og:image:height`, `og:url` 절대 URL 태그를 추가해 크롤러가 상대경로를 사용하는 문제 방지
+
 ## [0.8.6] - 2026-06-23
 
 ### Changed
@@ -338,7 +345,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v0.8.6...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/euikuk-jeong/lumisshow/compare/v0.8.6...v0.9.0
 [0.8.6]: https://github.com/euikuk-jeong/lumisshow/compare/v0.8.5...v0.8.6
 [0.8.5]: https://github.com/euikuk-jeong/lumisshow/compare/v0.8.4...v0.8.5
 [0.8.4]: https://github.com/euikuk-jeong/lumisshow/compare/v0.8.3...v0.8.4

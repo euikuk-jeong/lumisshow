@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse
 
 from backend.models.database import _PHOTO_META_CACHE_VERSION, get_db
 from backend.models.schemas import (
@@ -27,7 +27,7 @@ from backend.services.auth import (
     verify_password,
     verify_share_session_cookie,
 )
-from backend.services.thumbnail import get_image_meta
+from backend.services.thumbnail import generate_thumbnail, get_image_meta
 from backend.services.zip_stream import zip_generator
 
 router = APIRouter(prefix="/api/share", tags=["share"])
@@ -317,6 +317,51 @@ async def get_photos(
             exposure_mode=meta.get("exposure_mode"),
         ))
     return SharePhotosResponse(photos=photos, total=total, page=page)
+
+
+@router.get("/{token}/og-image")
+async def og_cover_image(token: str, db=Depends(get_db)):
+    """카카오톡 등 SNS 미리보기용 커버 이미지. 세션 쿠키 불필요."""
+    await _get_valid_link(token, db)
+
+    async with db.execute(
+        """
+        SELECT a.cover_path FROM share_links sl
+        JOIN albums a ON a.id = sl.album_id
+        WHERE sl.token = ? AND sl.is_active = 1
+        """,
+        (token,),
+    ) as cur:
+        row = await cur.fetchone()
+
+    cover_path = row["cover_path"] if row else None
+
+    if not cover_path:
+        async with db.execute(
+            """
+            SELECT ap.file_path FROM share_links sl
+            JOIN album_photos ap ON ap.album_id = sl.album_id
+            WHERE sl.token = ? AND sl.is_active = 1
+            ORDER BY ap.sort_order, ap.id
+            LIMIT 1
+            """,
+            (token,),
+        ) as cur:
+            photo_row = await cur.fetchone()
+        if photo_row is None:
+            raise HTTPException(status_code=404, detail="No cover image")
+        cover_path = photo_row["file_path"]
+
+    photo_root = os.path.realpath(os.getenv("PHOTO_ROOT", "./testdata/photos"))
+    abs_path = cover_path if os.path.isabs(cover_path) else os.path.join(photo_root, cover_path)
+
+    if not os.path.isfile(abs_path):
+        raise HTTPException(status_code=404, detail="Cover image not found")
+
+    out_path = await asyncio.get_running_loop().run_in_executor(
+        None, generate_thumbnail, abs_path, "medium"
+    )
+    return FileResponse(out_path, media_type="image/jpeg")
 
 
 @router.get("/{token}/download")

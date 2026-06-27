@@ -1,4 +1,5 @@
 import pytest
+from PIL import Image
 
 
 # ── 헬퍼 ──────────────────────────────────────────────────────────────────────
@@ -270,6 +271,67 @@ async def test_photos_size_zero_returns_all(admin_client):
     data = (await admin_client.get(f"/api/share/{token}/photos?size=0")).json()
     assert data["total"] == 2
     assert len(data["photos"]) == 2
+
+
+# ── OG 이미지 ─────────────────────────────────────────────────────────────────
+
+async def test_og_image_invalid_token(admin_client):
+    r = await admin_client.get("/api/share/nonexistent/og-image")
+    assert r.status_code == 404
+
+
+async def test_og_image_empty_album(admin_client):
+    token = await _setup_link(admin_client, with_photos=False)
+    r = await admin_client.get(f"/api/share/{token}/og-image")
+    assert r.status_code == 404
+
+
+async def test_og_image_with_photos(admin_client, tmp_path):
+    photos_dir = tmp_path / "photos"
+    img_path = photos_dir / "cover.jpg"
+    Image.new("RGB", (400, 300), color="blue").save(str(img_path))
+
+    r = await admin_client.post(
+        "/api/admin/albums",
+        json={"name": "OG Test", "photo_paths": ["cover.jpg"]},
+    )
+    album_id = r.json()["id"]
+    r = await admin_client.post(f"/api/admin/albums/{album_id}/links", json={})
+    token = r.json()["token"]
+
+    r = await admin_client.get(f"/api/share/{token}/og-image")
+    assert r.status_code == 200
+    assert r.headers["content-type"] == "image/jpeg"
+
+
+# ── SPA OG 메타 태그 주입 ──────────────────────────────────────────────────────
+
+async def test_share_spa_og_tags_injected(admin_client, monkeypatch):
+    monkeypatch.setenv("BASE_URL", "https://example.com")
+    token = await _setup_link(admin_client)
+    r = await admin_client.get(f"/s/{token}")
+    assert r.status_code == 200
+    assert 'property="og:title"' in r.text
+    assert "Test Album" in r.text
+    assert f"/api/share/{token}/og-image" in r.text
+    assert f"/s/{token}" in r.text
+
+
+async def test_share_spa_og_skips_image_without_base_url(admin_client, monkeypatch):
+    monkeypatch.setenv("BASE_URL", "")
+    token = await _setup_link(admin_client)
+    r = await admin_client.get(f"/s/{token}")
+    assert r.status_code == 200
+    assert 'property="og:title"' in r.text
+    assert 'property="og:image"' not in r.text
+
+
+async def test_share_spa_invalid_token_still_returns_html(admin_client):
+    r = await admin_client.get("/s/nonexistent-token")
+    # index.html 존재 시 200, 없으면 dict 반환
+    assert r.status_code in (200, 404)
+    if r.status_code == 200:
+        assert 'property="og:title"' not in r.text
 
 
 # ── 브루트포스 잠금 (DB 기반) ─────────────────────────────────────────────────
