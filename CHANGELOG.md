@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.1] - 2026-06-28
+
+### Added
+- **앨범 사진 경로 자동 복구**: 폴더명 변경 등으로 깨진 사진 경로를 파일명 기반으로 자동 탐색·수정 (`POST /api/admin/albums/{id}/repair-paths`)
+  - 1:1 매칭 시 자동 수정, 동명 파일 여러 개일 경우 `ambiguous` 목록으로 반환
+  - `album_photos.file_path`와 `albums.cover_path` 모두 수정
+- **앨범 편집 화면 경로 복구 버튼**: 썸네일 로드 실패 감지 시 사진 섹션에 "경로 복구" 버튼 자동 표시, 클릭 시 복구 후 결과 요약 알림
+
 ## [0.9.0] - 2026-06-28
 
 ### Added
@@ -345,7 +353,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v0.9.0...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v0.9.1...HEAD
+[0.9.1]: https://github.com/euikuk-jeong/lumisshow/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/euikuk-jeong/lumisshow/compare/v0.8.6...v0.9.0
 [0.8.6]: https://github.com/euikuk-jeong/lumisshow/compare/v0.8.5...v0.8.6
 [0.8.5]: https://github.com/euikuk-jeong/lumisshow/compare/v0.8.4...v0.8.5
