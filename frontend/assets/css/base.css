@@ -156,6 +156,8 @@
 :is([data-theme="light"], [data-theme="sepia"], [data-theme="sky"], [data-theme="rose"]) .alert-success  { background: #f0fdf4; border-color: #86efac; }
 :is([data-theme="light"], [data-theme="sepia"], [data-theme="sky"], [data-theme="rose"]) .btn-danger     { background: #fee2e2; color: #dc2626; border: 1px solid #fca5a5; }
 :is([data-theme="light"], [data-theme="sepia"], [data-theme="sky"], [data-theme="rose"]) .btn-danger:hover:not(:disabled) { background: #fecaca; }
+:is([data-theme="light"], [data-theme="sepia"], [data-theme="sky"], [data-theme="rose"]) .btn-warning    { background: #fffbeb; color: #d97706; border: 1px solid #fcd34d; }
+:is([data-theme="light"], [data-theme="sepia"], [data-theme="sky"], [data-theme="rose"]) .btn-warning:hover:not(:disabled) { background: #fef3c7; }
 
 /* ── Reset ──────────────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -198,6 +200,8 @@ button { cursor: pointer; font: inherit; }
 .btn-ghost:hover:not(:disabled) { border-color: var(--primary); color: var(--primary); }
 .btn-danger { background: #7f1d1d; color: #fca5a5; }
 .btn-danger:hover:not(:disabled) { background: #991b1b; }
+.btn-warning { background: #78350f; color: #fcd34d; }
+.btn-warning:hover:not(:disabled) { background: #92400e; }
 .btn-sm { padding: 5px 10px; font-size: 12px; }
 
 /* ── Forms ──────────────────────────────────────────────── */
