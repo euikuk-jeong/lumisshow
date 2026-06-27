@@ -185,8 +185,8 @@ function renderEditForm(album, links, tzOffset, serverTheme = 'dark') {
       <!-- Photos -->
       <div class="card aei-photos">
           <div class="flex items-center justify-between" style="margin-bottom:12px">
-            <p class="section-title" style="margin:0">사진 (${album.photos.length}장)</p>
-            <div class="flex gap-2 items-center">
+            <p class="section-title" style="margin:0">사진 (<span id="photo-count-label">${album.photos.length}</span>장)</p>
+            <div class="flex gap-2 items-center" id="photo-normal-controls">
               <button type="button" class="btn btn-warning btn-sm" id="btn-repair-paths" style="display:none">경로 복구</button>
               <div class="photo-sort-wrap">
                 <button type="button" class="btn btn-ghost btn-sm" id="btn-photo-sort">정렬: ${photoSortLabel(album.photo_sort_by, album.photo_sort_dir)}</button>
@@ -213,6 +213,13 @@ function renderEditForm(album, links, tzOffset, serverTheme = 'dark') {
                 <button type="button" id="btn-photo-view-list" class="btn btn-ghost btn-sm" title="리스트 보기">☰</button>
               </div>
               <a href="/admin/browse?album_id=${album.id}" class="btn btn-ghost btn-sm" data-link>+ 사진 추가</a>
+              <button type="button" class="btn btn-danger btn-sm" id="btn-enter-remove-mode">사진 제외</button>
+            </div>
+            <div class="flex gap-2 items-center" id="photo-remove-controls" style="display:none">
+              <button type="button" class="btn btn-ghost btn-sm" id="btn-select-all-remove">전체 선택</button>
+              <span class="text-muted text-sm" id="remove-count-label">0개 선택됨</span>
+              <button type="button" class="btn btn-ghost btn-sm" id="btn-cancel-remove">취소</button>
+              <button type="button" class="btn btn-danger btn-sm" id="btn-confirm-remove" disabled>제외</button>
             </div>
           </div>
           <div id="photo-grid" class="photo-grid">
@@ -313,7 +320,7 @@ function renderEditForm(album, links, tzOffset, serverTheme = 'dark') {
     document.getElementById('ss-vol-label').textContent = `${e.target.value}%`;
   });
 
-  const photoState = { viewMode: 'grid', coverPath: album.cover_path, photos: [...album.photos] };
+  const photoState = { viewMode: 'grid', coverPath: album.cover_path, photos: [...album.photos], removeMode: false, removeSelected: new Set() };
   let brokenDetected = false;
 
   function onPhotoLoadError() {
@@ -334,14 +341,17 @@ function renderEditForm(album, links, tzOffset, serverTheme = 'dark') {
   function refreshPhotoGrid() {
     const el = document.getElementById('photo-grid');
     el.className = photoState.viewMode === 'list' ? 'photo-list' : 'photo-grid';
+    if (photoState.removeMode) el.classList.add('remove-mode');
     el.innerHTML = photoState.photos.length
       ? photoState.photos.map(p =>
           photoState.viewMode === 'list'
-            ? photoListItemEdit(p, photoState.coverPath)
-            : photoThumb(p, photoState.coverPath)
+            ? photoListItemEdit(p, photoState.coverPath, photoState.removeMode, photoState.removeSelected.has(p.file_path))
+            : photoThumb(p, photoState.coverPath, photoState.removeMode, photoState.removeSelected.has(p.file_path))
         ).join('')
       : '<p class="text-muted text-sm">사진이 없습니다</p>';
     attachImageErrorTracking();
+    const countEl = document.getElementById('photo-count-label');
+    if (countEl) countEl.textContent = photoState.photos.length;
   }
 
   document.getElementById('btn-photo-view-grid').addEventListener('click', () => {
@@ -360,7 +370,7 @@ function renderEditForm(album, links, tzOffset, serverTheme = 'dark') {
   bindInfoForm(album.id, () => musicPaths);
   bindViewCountReset(album.id);
   bindSlideshowForm(album.id);
-  bindPhotoRemove(album.id, photoState, refreshPhotoGrid);
+  bindPhotoRemoveMode(album.id, photoState, refreshPhotoGrid);
   bindCoverSet(album.id, photoState, refreshPhotoGrid);
   bindPhotoSort(album.id, photoState, refreshPhotoGrid);
   bindPhotoPreview(album.id, photoState, refreshPhotoGrid);
@@ -513,21 +523,95 @@ function bindCoverSet(albumId, photoState, refresh) {
   });
 }
 
-function bindPhotoRemove(albumId, photoState, refresh) {
-  document.getElementById('photo-grid').addEventListener('click', async e => {
-    const btn = e.target.closest('.photo-remove');
-    if (!btn) return;
-    const filePath = btn.dataset.path;
-    if (!confirm('이 사진을 앨범에서 제외하시겠습니까?')) return;
-    btn.disabled = true;
+function bindPhotoRemoveMode(albumId, photoState, refresh) {
+  const enterBtn   = document.getElementById('btn-enter-remove-mode');
+  const cancelBtn  = document.getElementById('btn-cancel-remove');
+  const confirmBtn = document.getElementById('btn-confirm-remove');
+  const selectAll  = document.getElementById('btn-select-all-remove');
+  const normalCtrl = document.getElementById('photo-normal-controls');
+  const removeCtrl = document.getElementById('photo-remove-controls');
+  const countLabel = document.getElementById('remove-count-label');
+
+  function updateCount() {
+    const n = photoState.removeSelected.size;
+    countLabel.textContent = `${n}개 선택됨`;
+    confirmBtn.disabled = n === 0;
+  }
+
+  function enterMode() {
+    photoState.removeMode = true;
+    photoState.removeSelected.clear();
+    normalCtrl.style.display = 'none';
+    removeCtrl.style.display = '';
+    refresh();
+    updateCount();
+  }
+
+  function exitMode() {
+    photoState.removeMode = false;
+    photoState.removeSelected.clear();
+    normalCtrl.style.display = '';
+    removeCtrl.style.display = 'none';
+    refresh();
+  }
+
+  enterBtn.addEventListener('click', enterMode);
+  cancelBtn.addEventListener('click', exitMode);
+
+  selectAll.addEventListener('click', () => {
+    photoState.photos.forEach(p => photoState.removeSelected.add(p.file_path));
+    refresh();
+    updateCount();
+  });
+
+  confirmBtn.addEventListener('click', async () => {
+    const paths = Array.from(photoState.removeSelected);
+    if (!paths.length) return;
+    if (!confirm(`선택한 ${paths.length}장을 앨범에서 제외하시겠습니까?`)) return;
+    confirmBtn.disabled = true;
     try {
-      await api.delete(`/api/admin/albums/${albumId}/photos`, { photo_paths: [filePath] });
-      photoState.photos = photoState.photos.filter(p => p.file_path !== filePath);
-      refresh();
+      await api.delete(`/api/admin/albums/${albumId}/photos`, { photo_paths: paths });
+      photoState.photos = photoState.photos.filter(p => !photoState.removeSelected.has(p.file_path));
+      exitMode();
     } catch (err) {
       alert(err.message);
-      btn.disabled = false;
+      updateCount();
     }
+  });
+
+  document.getElementById('photo-grid').addEventListener('click', e => {
+    if (!photoState.removeMode) return;
+    const cb = e.target.closest('input.remove-check');
+    if (!cb) {
+      // 체크박스 외 영역 클릭 시 토글
+      const item = e.target.closest('[data-path]');
+      if (!item || e.target.closest('button')) return;
+      const path = item.dataset.path;
+      if (photoState.removeSelected.has(path)) {
+        photoState.removeSelected.delete(path);
+        item.classList.remove('remove-selected');
+        const itemCb = item.querySelector('input.remove-check');
+        if (itemCb) itemCb.checked = false;
+      } else {
+        photoState.removeSelected.add(path);
+        item.classList.add('remove-selected');
+        const itemCb = item.querySelector('input.remove-check');
+        if (itemCb) itemCb.checked = true;
+      }
+      updateCount();
+      return;
+    }
+    const item = cb.closest('[data-path]');
+    if (!item) return;
+    const path = item.dataset.path;
+    if (cb.checked) {
+      photoState.removeSelected.add(path);
+      item.classList.add('remove-selected');
+    } else {
+      photoState.removeSelected.delete(path);
+      item.classList.remove('remove-selected');
+    }
+    updateCount();
   });
 }
 
@@ -722,7 +806,7 @@ function bindDatePicker() {
   });
 }
 
-function photoListItemEdit(photo, coverPath) {
+function photoListItemEdit(photo, coverPath, removeMode = false, isSelected = false) {
   const thumbUrl = `/api/admin/thumb?path=${encodeURIComponent(photo.file_path)}&size=small`;
   const isCover  = photo.file_path === coverPath;
   const name     = photo.file_path.split(/[\\/]/).pop();
@@ -730,7 +814,8 @@ function photoListItemEdit(photo, coverPath) {
     ? new Date(photo.added_at).toLocaleDateString('ko-KR')
     : '—';
   return `
-    <div class="photo-list-item${isCover ? ' is-cover' : ''}" data-path="${esc(photo.file_path)}">
+    <div class="photo-list-item${isCover ? ' is-cover' : ''}${isSelected ? ' remove-selected' : ''}" data-path="${esc(photo.file_path)}">
+      <input type="checkbox" class="remove-check" ${isSelected ? 'checked' : ''}>
       <div class="photo-list-thumb">
         <img src="${thumbUrl}" alt="" loading="lazy" onerror="this.style.opacity='0.3'">
       </div>
@@ -739,7 +824,6 @@ function photoListItemEdit(photo, coverPath) {
       <div class="photo-list-meta"><span>추가: ${addedAt}</span></div>
       <div class="photo-list-actions">
         ${!isCover ? `<button class="photo-set-cover btn btn-ghost btn-sm" data-path="${esc(photo.file_path)}">커버로 설정</button>` : ''}
-        <button class="photo-remove btn btn-ghost btn-sm" data-path="${esc(photo.file_path)}" title="제외">✕</button>
       </div>
     </div>`;
 }
@@ -793,6 +877,7 @@ function bindPhotoSort(albumId, photoState, refresh) {
 
 function bindPhotoPreview(albumId, photoState, refresh) {
   document.getElementById('photo-grid').addEventListener('click', e => {
+    if (photoState.removeMode) return;
     if (e.target.closest('button')) return;
     const item = e.target.closest('.photo-thumb[data-path], .photo-list-item[data-path]');
     if (!item) return;
@@ -855,15 +940,15 @@ function initAlbumThemePicker(currentTheme, serverTheme = 'dark') {
   });
 }
 
-function photoThumb(photo, coverPath) {
+function photoThumb(photo, coverPath, removeMode = false, isSelected = false) {
   const thumbUrl = `/api/admin/thumb?path=${encodeURIComponent(photo.file_path)}&size=small`;
   const isCover  = photo.file_path === coverPath;
   return `
-    <div class="photo-thumb${isCover ? ' is-cover' : ''}" data-path="${esc(photo.file_path)}">
+    <div class="photo-thumb${isCover ? ' is-cover' : ''}${isSelected ? ' remove-selected' : ''}" data-path="${esc(photo.file_path)}">
       <img src="${thumbUrl}" alt="" loading="lazy" onerror="this.style.opacity='0.3'">
       ${isCover ? '<span class="cover-badge">커버</span>' : ''}
+      <input type="checkbox" class="remove-check" ${isSelected ? 'checked' : ''}>
       <button class="photo-set-cover" data-path="${esc(photo.file_path)}">커버로 설정</button>
-      <button class="photo-remove" data-path="${esc(photo.file_path)}" title="제외">✕</button>
     </div>`;
 }
 

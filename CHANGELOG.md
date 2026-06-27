@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.2] - 2026-06-28
+
+### Changed
+- **앨범 편집 사진 제외 UI 개선**: 개별 ✕ 버튼 제거 → 헤더 "사진 제외" 버튼으로 체크박스 다중선택 모드 진입
+  - 전체 선택 버튼, 선택 수 표시, 제외 확인·취소 컨트롤 지원
+  - 그리드·리스트 양쪽 뷰 모두 지원
+  - 제외 모드 중 라이트박스 비활성화 (단일 삭제는 크게보기에서 유지)
+
 ## [0.9.1] - 2026-06-28
 
 ### Added
@@ -353,7 +361,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v0.9.1...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v0.9.2...HEAD
+[0.9.2]: https://github.com/euikuk-jeong/lumisshow/compare/v0.9.1...v0.9.2
 [0.9.1]: https://github.com/euikuk-jeong/lumisshow/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/euikuk-jeong/lumisshow/compare/v0.8.6...v0.9.0
 [0.8.6]: https://github.com/euikuk-jeong/lumisshow/compare/v0.8.5...v0.8.6

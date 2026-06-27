@@ -191,23 +191,6 @@
   object-fit: cover;
   transition: opacity 0.15s;
 }
-.photo-thumb .photo-remove {
-  position: absolute;
-  top: 4px;
-  right: 4px;
-  width: 22px;
-  height: 22px;
-  background: rgba(0,0,0,0.7);
-  border: none;
-  border-radius: 50%;
-  color: #fff;
-  font-size: 14px;
-  line-height: 1;
-  display: none;
-  align-items: center;
-  justify-content: center;
-}
-.photo-thumb:hover .photo-remove { display: flex; }
 .photo-thumb { cursor: zoom-in; }
 .photo-thumb.selectable { cursor: zoom-in; }
 .photo-thumb.selectable input[type=checkbox] {
@@ -222,6 +205,42 @@
   outline: 2px solid var(--primary);
   outline-offset: -2px;
   box-shadow: 0 0 14px var(--primary-glow);
+}
+
+/* ── Photo Remove Mode ──────────────────────────────────── */
+.photo-thumb .remove-check {
+  display: none;
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  width: 16px;
+  height: 16px;
+  accent-color: var(--primary);
+  cursor: pointer;
+}
+.remove-mode .photo-thumb .remove-check { display: block; }
+.remove-mode .photo-thumb .photo-set-cover { display: none !important; }
+.remove-mode .photo-thumb { cursor: default; }
+.photo-thumb.remove-selected {
+  outline: 2px solid var(--primary);
+  outline-offset: -2px;
+  box-shadow: 0 0 14px var(--primary-glow);
+}
+
+.photo-list-item .remove-check {
+  display: none;
+  flex-shrink: 0;
+  width: 15px;
+  height: 15px;
+  accent-color: var(--primary);
+  cursor: pointer;
+}
+.remove-mode .photo-list-item .remove-check { display: block; }
+.remove-mode .photo-list-item .photo-list-actions { display: none; }
+.remove-mode .photo-list-item { cursor: default; }
+.photo-list-item.remove-selected {
+  border-color: var(--primary);
+  background: rgba(124,140,248,0.08);
 }
 .cover-badge {
   position: absolute;
