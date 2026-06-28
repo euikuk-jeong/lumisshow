@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.3] - 2026-06-28
+
+### Fixed
+- **SQLite `database is locked` 에러 수정**: 슬라이드쇼 로딩 시 브라우저가 `/album`과 `/photos`를 동시에 요청할 때 커넥션 간 쓰기 충돌로 발생하던 문제 수정 — WAL 모드(`journal_mode=WAL`) 적용으로 동시 읽기 허용, `busy_timeout=5000ms`로 lock 경합 시 즉시 실패 대신 재시도 (`database.py`)
+
 ## [0.9.2] - 2026-06-28
 
 ### Changed
@@ -361,7 +366,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v0.9.2...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v0.9.3...HEAD
+[0.9.3]: https://github.com/euikuk-jeong/lumisshow/compare/v0.9.2...v0.9.3
 [0.9.2]: https://github.com/euikuk-jeong/lumisshow/compare/v0.9.1...v0.9.2
 [0.9.1]: https://github.com/euikuk-jeong/lumisshow/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/euikuk-jeong/lumisshow/compare/v0.8.6...v0.9.0
