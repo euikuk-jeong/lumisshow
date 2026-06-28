@@ -139,6 +139,8 @@ async def init_db() -> None:
     path = _db_path()
     os.makedirs(os.path.dirname(path), exist_ok=True)
     async with aiosqlite.connect(path) as db:
+        await db.execute("PRAGMA journal_mode=WAL")
+        await db.execute("PRAGMA busy_timeout=5000")
         await db.executescript(_DDL)
 
         for migration in _META_CACHE_MIGRATIONS + _ALBUM_MIGRATIONS:
@@ -159,6 +161,8 @@ async def init_db() -> None:
 
 async def get_db():
     async with aiosqlite.connect(_db_path()) as db:
+        await db.execute("PRAGMA journal_mode=WAL")
+        await db.execute("PRAGMA busy_timeout=5000")
         await db.execute("PRAGMA foreign_keys = ON")
         db.row_factory = aiosqlite.Row
         yield db
