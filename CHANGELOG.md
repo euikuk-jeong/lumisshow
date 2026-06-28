@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.4] - 2026-06-28
+
+### Fixed
+- **슬라이드쇼 툴바 좁은 화면 버튼 겹침 수정**: 화면 너비 640px 이하에서 버튼이 겹쳐 일부 제어가 불가하던 문제 수정 — 좁은 화면에서는 핵심 4개 버튼(음악 On/Off · 일시정지 · 다운로드 · 닫기)만 표시 (`slideshow.css`)
+
 ## [0.9.3] - 2026-06-28
 
 ### Fixed
@@ -366,7 +371,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v0.9.3...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v0.9.4...HEAD
+[0.9.4]: https://github.com/euikuk-jeong/lumisshow/compare/v0.9.3...v0.9.4
 [0.9.3]: https://github.com/euikuk-jeong/lumisshow/compare/v0.9.2...v0.9.3
 [0.9.2]: https://github.com/euikuk-jeong/lumisshow/compare/v0.9.1...v0.9.2
 [0.9.1]: https://github.com/euikuk-jeong/lumisshow/compare/v0.9.0...v0.9.1
