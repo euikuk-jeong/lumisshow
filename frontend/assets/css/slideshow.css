@@ -307,26 +307,18 @@
   margin-bottom: 5px;
 }
 
-/* ── 반응형 2행 툴바 (좁은 화면 ≤ 640px) ──────────────────── */
+/* ── 좁은 화면 (≤ 640px): 핵심 4개 버튼만 표시 ────────────── */
 
 @media (max-width: 640px) {
-  .ss-toolbar {
-    flex-wrap: wrap;
-    padding: 8px 10px;
-  }
-  /* 음악 그룹이 있을 때만 전체 너비 차지 → 1행 */
-  .ss-music-group:not(:empty) {
-    flex: 0 0 100%;
-  }
-  /* spacer 는 2행 레이아웃에서 불필요 */
-  .ss-toolbar-spacer {
-    display: none;
-  }
-  /* 툴바가 2행으로 높아지므로 토스트 위치 조정 */
-  .ss-music-toast,
-  .ss-loop-toast {
-    bottom: 90px;
-  }
+  #ss-prev-track,
+  #ss-next-track,
+  .ss-vol,
+  .ss-speed-group,
+  #ss-prev-btn,
+  .ss-counter,
+  #ss-next-btn,
+  #ss-info-btn,
+  #ss-fs-btn { display: none; }
 }
 
 /* ── UI auto-hide (triggered by .ss-ui-hidden on wrap) ─────── */
