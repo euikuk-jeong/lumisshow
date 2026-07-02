@@ -115,6 +115,7 @@ function renderEditForm(album, links, tzOffset, serverTheme = 'dark') {
               <label class="form-label">배경음악</label>
               <div id="music-list" class="music-list"></div>
               <button type="button" class="btn btn-ghost btn-sm" id="btn-browse-music">+ 음악 파일 선택</button>
+              <p class="music-copyright-notice">저작권을 확인한 음원만 사용하세요. 저작권 문제는 사용자 책임입니다. 저작권 무료 음악은 <a href="https://pixabay.com/music/" target="_blank" rel="noopener noreferrer">Pixabay Music</a> 등에서 구할 수 있습니다.</p>
             </div>
             <div>
               <button type="submit" class="btn btn-primary btn-sm" id="btn-save">저장</button>
