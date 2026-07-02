@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.5] - 2026-07-03
+
+### Changed
+- **배경음악 저작권 안내 문구 추가**: 앨범 편집 화면 음악 파일 선택 버튼 하단에 저작권 주의 문구와 Pixabay Music 링크 안내 추가 (`admin-album-edit.js`, `admin.css`)
+
 ## [0.9.4] - 2026-06-28
 
 ### Fixed
@@ -371,7 +376,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v0.9.4...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v0.9.5...HEAD
+[0.9.5]: https://github.com/euikuk-jeong/lumisshow/compare/v0.9.4...v0.9.5
 [0.9.4]: https://github.com/euikuk-jeong/lumisshow/compare/v0.9.3...v0.9.4
 [0.9.3]: https://github.com/euikuk-jeong/lumisshow/compare/v0.9.2...v0.9.3
 [0.9.2]: https://github.com/euikuk-jeong/lumisshow/compare/v0.9.1...v0.9.2
