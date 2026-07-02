@@ -532,6 +532,16 @@
   gap: 4px;
   margin-bottom: 8px;
 }
+.music-copyright-notice {
+  margin-top: 6px;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+.music-copyright-notice a {
+  color: var(--text-muted);
+  text-decoration: underline;
+}
 .music-item {
   display: flex;
   align-items: center;
