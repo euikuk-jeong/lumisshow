@@ -104,6 +104,41 @@ async def test_label_and_person_faces(admin_client):
     assert photos == ["2024/photo_0.jpg", "2024/photo_1.jpg"]
 
 
+async def test_person_photos_detail(admin_client):
+    """슬라이드쇼용 상세 사진 목록 — URL 구성, 무시 교정 제외, 페이지네이션."""
+    face_ids = await _seed_faces(3)
+    pid = (await admin_client.post("/api/admin/people", json={"name": "지우"})).json()["id"]
+    await admin_client.post(f"/api/admin/faces/{face_ids[0]}/label", json={"person_id": pid})
+    await _seed_match(face_ids[1], pid, 0.7)
+    await _seed_match(face_ids[2], pid, 0.6)
+    await admin_client.post(f"/api/admin/faces/{face_ids[2]}/label", json={"person_id": None})
+
+    r = await admin_client.get(f"/api/admin/people/{pid}/photos-detail")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["total"] == 2 and len(body["photos"]) == 2
+    p0 = body["photos"][0]
+    assert p0["url"] == "/api/admin/photo?path=2024/photo_0.jpg"
+    assert p0["thumb_small_url"] == "/api/admin/thumb?path=2024/photo_0.jpg&size=small"
+    assert p0["thumb_medium_url"] == "/api/admin/thumb?path=2024/photo_0.jpg&size=medium"
+    assert p0["filename"] == "photo_0.jpg"
+
+    # 페이지네이션: page=2&size=1 → 두 번째 사진만
+    r = await admin_client.get(f"/api/admin/people/{pid}/photos-detail?page=2&size=1")
+    body = r.json()
+    assert body["total"] == 2 and body["page"] == 2
+    assert [p["filename"] for p in body["photos"]] == ["photo_1.jpg"]
+
+    # 없는 인물 404
+    r = await admin_client.get("/api/admin/people/999/photos-detail")
+    assert r.status_code == 404
+
+
+async def test_person_photos_detail_auth_required(client):
+    r = await client.get("/api/admin/people/1/photos-detail")
+    assert r.status_code in (401, 403)
+
+
 async def test_label_validation(admin_client):
     r = await admin_client.post("/api/admin/faces/999/label", json={"person_id": None})
     assert r.status_code == 404  # 없는 얼굴

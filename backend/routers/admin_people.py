@@ -6,13 +6,21 @@
 
 import os
 from typing import Optional
+from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import FileResponse
 
 from backend.models.ai_database import faces_dir, get_ai_db
-from backend.models.schemas import FaceLabelSet, JobCreate, PersonCreate
-from backend.routers.admin_browse import _admin_image_auth
+from backend.models.database import get_db
+from backend.models.schemas import (
+    FaceLabelSet,
+    JobCreate,
+    PersonCreate,
+    SharePhotoItem,
+    SharePhotosResponse,
+)
+from backend.routers.admin_browse import _admin_image_auth, load_photo_meta
 from backend.services.auth import get_current_admin
 
 router = APIRouter(prefix="/api/admin", tags=["admin-people"])
@@ -145,6 +153,64 @@ async def list_person_photos(
     ) as cur:
         rows = await cur.fetchall()
     return {"photos": [r["photo_path"] for r in rows]}
+
+
+@router.get("/people/{person_id}/photos-detail", response_model=SharePhotosResponse)
+async def list_person_photos_detail(
+    person_id: int,
+    page: int = Query(default=1, ge=1),
+    size: int = Query(default=0, ge=0),
+    _: str = Depends(get_current_admin),
+    db=Depends(get_ai_db),
+    app_db=Depends(get_db),
+):
+    """인물 사진 상세 목록 (EXIF·URL 포함, 페이지네이션) — Admin 슬라이드쇼/전체 사진용."""
+    await _person_or_404(person_id, db)
+    async with db.execute(
+        """
+        SELECT DISTINCT f.photo_path FROM faces f
+        LEFT JOIN face_labels fl ON fl.face_id = f.id
+        LEFT JOIN face_matches fm ON fm.face_id = f.id
+        WHERE (fl.person_id = ?)
+           OR (fl.face_id IS NULL AND fm.person_id = ?)
+        ORDER BY f.photo_path
+        """,
+        (person_id, person_id),
+    ) as cur:
+        rows = await cur.fetchall()
+
+    paths = [r["photo_path"] for r in rows]
+    total = len(paths)
+    offset = (page - 1) * size if size > 0 else 0
+    if size > 0:
+        paths = paths[offset: offset + size]
+
+    meta_map = await load_photo_meta(paths, app_db)
+    photos = []
+    for i, p in enumerate(paths):
+        meta = meta_map.get(p, {})
+        photos.append(SharePhotoItem(
+            id=offset + i,
+            url=f"/api/admin/photo?path={quote(p)}",
+            thumb_small_url=f"/api/admin/thumb?path={quote(p)}&size=small",
+            thumb_medium_url=f"/api/admin/thumb?path={quote(p)}&size=medium",
+            filename=os.path.basename(p),
+            taken_at=meta.get("taken_at"),
+            width=meta.get("width"),
+            height=meta.get("height"),
+            make=meta.get("make"),
+            camera=meta.get("camera"),
+            software=meta.get("software"),
+            shutter=meta.get("shutter"),
+            aperture=meta.get("aperture"),
+            iso=meta.get("iso"),
+            focal_length=meta.get("focal_length"),
+            shoot_mode=meta.get("shoot_mode"),
+            flash=meta.get("flash"),
+            metering=meta.get("metering"),
+            exposure_mode=meta.get("exposure_mode"),
+        ))
+    return SharePhotosResponse(photos=photos, total=total, page=page)
 
 
 @router.get("/faces/unassigned")
