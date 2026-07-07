@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-07-07
+
+Phase 2 — AI 얼굴 인식 스마트 앨범. NAS 로컬 AI(InsightFace)로 사진 속 인물을
+자동 분류하고, 인물별 사진으로 앨범을 만드는 기능이 추가되었다.
+
+### Added
+- **AI 얼굴 인식 워커 (`lumisshow-ai` 컨테이너 신설)**: PHOTO_ROOT 증분 스캔 →
+  InsightFace buffalo_l(SCRFD 검출 + ArcFace 512차원 임베딩) → 등록 인물 cosine 매칭 →
+  `ai.db` 기록. 사진 1장=1커밋으로 중단 후 재개 가능 (`ai_worker/`)
+  - 데몬 모드: 매일 `AI_SCAN_HOUR`(기본 02:00, Asia/Seoul) 자동 증분 스캔 + Admin 수동
+    트리거(jobs 큐) 폴링, 비정상 종료 잡 자동 복구
+  - 검증 정확도: 정답 셋 44명/1,235라벨 기준 threshold 0.45에서 precision 99.9% / recall 97.9%
+  - 모델 가중치(non-commercial)는 이미지에 미포함 — 첫 실행 시 `$DATA_DIR/models/`로 자동 다운로드
+- **Admin '인물(People)' 화면**: 인물 목록(AI 분석 상태·스캔/재매칭 트리거), 인물 상세
+  (추정 얼굴 맞음/아님 교정 — 교정할수록 정확도 향상), 미분류 얼굴 다중 선택 지정/무시
+- **인물 앨범 생성 도우미**: 인물 상세에서 해당 인물 사진 전체를 기존 앨범으로 생성
+  (공유 링크·슬라이드쇼·ZIP 등 기존 기능 그대로 사용)
+- **People API** (`/api/admin/people`, `/api/admin/faces/*`, `/api/admin/ai/*`):
+  인물 CRUD, 얼굴 라벨 교정, 크롭 서빙, AI 상태 조회/잡 트리거 (`admin_people.py`)
+- **라벨링 도구**: 유사 얼굴 클러스터링 HTML 시트(`label_sheet.py`), CSV 라벨
+  import/export(`label_helper.py`), threshold별 precision/recall 평가(`eval.py`)
+- **CI 빌드 검증**: 개발 브랜치 push 시 두 Docker 이미지 빌드 확인 (`docker-build-check.yml`)
+
+### Changed
+- **릴리즈 파이프라인**: 태그 push 시 `lumisshow`와 `lumisshow-ai` 이미지를 함께 GHCR에
+  빌드·배포 (`release.yml`)
+- **docker-compose**: `lumisshow-ai` 서비스 추가 (`mem_limit 2g`, 사진 볼륨 읽기 전용 공유)
+
 ## [0.9.5] - 2026-07-03
 
 ### Changed
@@ -376,7 +404,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v0.9.5...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/euikuk-jeong/lumisshow/compare/v0.9.5...v1.0.0
 [0.9.5]: https://github.com/euikuk-jeong/lumisshow/compare/v0.9.4...v0.9.5
 [0.9.4]: https://github.com/euikuk-jeong/lumisshow/compare/v0.9.3...v0.9.4
 [0.9.3]: https://github.com/euikuk-jeong/lumisshow/compare/v0.9.2...v0.9.3
