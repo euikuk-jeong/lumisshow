@@ -8,6 +8,7 @@
 
 import argparse
 import logging
+import random
 import time
 
 from ai_worker import config, db, matcher, scanner
@@ -16,13 +17,17 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(mess
 log = logging.getLogger("ai_worker")
 
 
-def run_scan() -> None:
+def run_scan(limit: int | None = None) -> None:
     from ai_worker.pipeline import FacePipeline, analyze_and_store
 
     conn = db.connect()
     root = config.photo_root()
     pending = scanner.pending_photos(conn, root)
     log.info("스캔 완료: 분석 대상 %d장 (root=%s)", len(pending), root)
+    if limit is not None and len(pending) > limit:
+        # 샘플링 검증용: 전체에서 균등 랜덤 추출 (시드 고정 → 재실행 시 이어서 진행 가능)
+        pending = random.Random(42).sample(pending, limit)
+        log.info("--limit %d: 랜덤 샘플 %d장만 처리", limit, len(pending))
     if not pending:
         return
 
@@ -57,9 +62,11 @@ def run_rematch() -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(prog="ai_worker")
     parser.add_argument("command", choices=["scan", "rematch"])
+    parser.add_argument("--limit", type=int, default=None,
+                        help="최대 처리 장수 (전체에서 균등 랜덤 샘플)")
     args = parser.parse_args()
     if args.command == "scan":
-        run_scan()
+        run_scan(args.limit)
     else:
         run_rematch()
 
