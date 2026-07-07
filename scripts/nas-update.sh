@@ -28,6 +28,7 @@
 set -euo pipefail
 
 IMAGE="ghcr.io/euikuk-jeong/lumisshow"
+AI_IMAGE="ghcr.io/euikuk-jeong/lumisshow-ai"
 COMPOSE_FILE="/volume1/docker/project/upload/lumisshow/docker-compose.yml"
 CONTAINER_NAME="lumisshow"
 
@@ -55,8 +56,8 @@ docker compose -f "$COMPOSE_FILE" up -d
 echo ""
 echo "[4/4] 구버전 이미지 정리..."
 
-# :latest 외 버전 태그 이미지 삭제 (ghcr.io 에서 pull된 0.x.x 태그 등)
-OLD_IMAGES=$(docker images "$IMAGE" --format "{{.Tag}}\t{{.ID}}" | grep -v "^latest" | awk '{print $2}')
+# :latest 외 버전 태그 이미지 삭제 (ghcr.io 에서 pull된 0.x.x 태그 등, 워커 이미지 포함)
+OLD_IMAGES=$(docker images "$IMAGE" --format "{{.Tag}}\t{{.ID}}" | grep -v "^latest" | awk '{print $2}'; docker images "$AI_IMAGE" --format "{{.Tag}}\t{{.ID}}" | grep -v "^latest" | awk '{print $2}')
 if [ -n "$OLD_IMAGES" ]; then
   echo "$OLD_IMAGES" | xargs docker rmi -f 2>/dev/null && echo "  버전 태그 이미지 삭제 완료" || echo "  일부 이미지 삭제 실패 (사용 중일 수 있음, 무시)"
 else
