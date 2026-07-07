@@ -15,3 +15,18 @@ services:
       - DATA_DIR=/data
       - BASE_URL=${BASE_URL:-http://localhost:8080}
       - APP_PORT=${APP_PORT:-8080}
+
+  lumisshow-ai:
+    image: ghcr.io/euikuk-jeong/lumisshow-ai:latest
+    container_name: lumisshow-ai
+    restart: unless-stopped
+    mem_limit: 2g                            # 분석 중 메모리 스파이크가 NAS 전체에 번지지 않도록 제한
+    volumes:
+      - /volume1/photo:/mnt/photos:ro        # lumisshow와 동일 마운트 (읽기 전용)
+      - /volume1/docker/lumisshow:/data      # ai.db, faces/, models/ 공유
+    environment:
+      - PHOTO_ROOT=/mnt/photos
+      - DATA_DIR=/data
+      - TZ=${TZ:-Asia/Seoul}                 # AI_SCAN_HOUR가 이 TZ 기준으로 동작
+      - AI_SCAN_HOUR=${AI_SCAN_HOUR:-2}
+      - AI_MATCH_THRESHOLD=${AI_MATCH_THRESHOLD:-0.45}

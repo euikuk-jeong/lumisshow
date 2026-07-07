@@ -33,12 +33,13 @@ python -m ai_worker.tools.label_helper export labels.csv
 ## 파일 구조
 
 ```
-config.py    # 환경변수 (AI_MATCH_THRESHOLD, AI_DET_SIZE, AI_MIN_DET_SCORE)
+config.py    # 환경변수 (AI_MATCH_THRESHOLD, AI_DET_SIZE, AI_SCAN_HOUR...)
+daemon.py    # 데몬 모드: 야간 자동 스캔 + jobs 큐 폴링, stale 잡 복구
 db.py        # ai.db 스키마/연결 (sqlite3 동기, WAL)
 scanner.py   # PHOTO_ROOT 증분 스캔 (path+mtime, @eaDir 제외)
 pipeline.py  # InsightFace lazy 로드, 사진 1장 분석→기록 (1장=1커밋, resumable)
 matcher.py   # cosine 매칭 (numpy brute-force), 임베딩 BLOB 변환
-main.py      # CLI: scan | rematch
+main.py      # CLI: scan(--limit) | rematch | daemon
 tools/       # label_helper.py (CSV 라벨링), eval.py (precision/recall)
 ```
 
@@ -72,6 +73,7 @@ buffalo_l 사전학습 가중치는 **non-commercial** — 본 프로젝트는 �
 - [x] M1 뼈대: 스캔→검출→임베딩→매칭 파이프라인 + 라벨링/평가 도구
 - [x] M1 검증: 샘플 1,000장·정답 셋 44명/1,235라벨 — **threshold 0.45에서 precision 99.9%/recall 97.9%**
       (타인 음성 샘플은 미측정 → 운영 교정 로그로 보완 예정)
-- [ ] M2: Dockerfile.ai, 야간 스케줄(02:00), jobs 큐 폴링 데몬, NAS 초기 인덱싱
+- [x] M2 구현: daemon 모드(야간 스케줄+jobs 폴링), Dockerfile.ai, compose 서비스, release.yml 워커 이미지
+- [ ] M2 배포: NAS 컨테이너 기동 + 초기 전체 인덱싱 (5만 장, 야간 배치 며칠)
 - [ ] M3: backend `admin_people.py` + Admin 'People' UI (등록/교정/필터/앨범 생성)
 - [ ] M4: 실사용 튜닝 (교정 로그 지표, 시간 기반 후처리)

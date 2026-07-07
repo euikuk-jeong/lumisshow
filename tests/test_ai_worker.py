@@ -143,6 +143,54 @@ def test_embedding_blob_roundtrip():
     assert np.array_equal(matcher.blob_to_embedding(matcher.embedding_to_blob(vec)), vec)
 
 
+# ── daemon ────────────────────────────────────────────────────────────
+
+
+def test_next_scan_time_today_and_tomorrow():
+    from datetime import datetime
+
+    from ai_worker.daemon import next_scan_time
+
+    before = datetime(2026, 7, 7, 1, 30)
+    assert next_scan_time(before, 2) == datetime(2026, 7, 7, 2, 0)
+    after = datetime(2026, 7, 7, 2, 0)  # 정각 이후는 다음 날
+    assert next_scan_time(after, 2) == datetime(2026, 7, 8, 2, 0)
+
+
+def test_claim_and_finish_job_lifecycle(conn):
+    from ai_worker.daemon import claim_next_job, finish_job
+
+    assert claim_next_job(conn) is None  # 빈 큐
+    conn.execute("INSERT INTO jobs (type) VALUES ('scan')")
+    conn.execute("INSERT INTO jobs (type) VALUES ('rematch')")
+    conn.commit()
+
+    job_id, job_type = claim_next_job(conn)  # 오래된 잡 우선
+    assert job_type == "scan"
+    assert conn.execute(
+        "SELECT status FROM jobs WHERE id=?", (job_id,)
+    ).fetchone()[0] == "running"
+
+    finish_job(conn, job_id, "done")
+    row = conn.execute(
+        "SELECT status, finished_at FROM jobs WHERE id=?", (job_id,)
+    ).fetchone()
+    assert row["status"] == "done" and row["finished_at"] is not None
+
+    assert claim_next_job(conn)[1] == "rematch"  # 다음 잡
+
+
+def test_reset_stale_jobs(conn):
+    from ai_worker.daemon import reset_stale_jobs
+
+    conn.execute("INSERT INTO jobs (type, status) VALUES ('scan', 'running')")
+    conn.execute("INSERT INTO jobs (type, status) VALUES ('scan', 'done')")
+    conn.commit()
+    assert reset_stale_jobs(conn) == 1
+    statuses = [r[0] for r in conn.execute("SELECT status FROM jobs ORDER BY id")]
+    assert statuses == ["pending", "done"]
+
+
 # ── label_sheet ───────────────────────────────────────────────────────
 
 

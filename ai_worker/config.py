@@ -33,3 +33,19 @@ def det_size() -> int:
 def min_det_score() -> float:
     """이 값 미만의 검출 신뢰도 얼굴은 저장하지 않음 (배경 오검출 컷)."""
     return float(os.getenv("AI_MIN_DET_SCORE", "0.5"))
+
+
+def model_root() -> str:
+    """InsightFace 모델 가중치 저장 경로. DATA_DIR 볼륨에 두어 컨테이너
+    재시작 시 재다운로드를 방지한다 (라이선스상 이미지에 포함하지 않음)."""
+    return os.getenv("AI_MODEL_ROOT", os.path.join(data_dir(), "models"))
+
+
+def scan_hour() -> int:
+    """데몬 모드 야간 자동 스캔 시각 (0~23시, 로컬 TZ 기준)."""
+    return int(os.getenv("AI_SCAN_HOUR", "2"))
+
+
+def poll_interval() -> int:
+    """데몬 모드 jobs 큐 폴링 간격 (초)."""
+    return int(os.getenv("AI_POLL_INTERVAL", "30"))

@@ -1,0 +1,35 @@
+# lumisshow-ai: 얼굴 인식 배치 워커 (Phase 2)
+# 주의: buffalo_l 모델 가중치는 non-commercial 라이선스이므로 이미지에 포함하지 않는다.
+#       첫 스캔 시 $DATA_DIR/models/ 로 자동 다운로드된다 (볼륨에 영속).
+
+# insightface는 C++ 확장 컴파일이 필요 → 빌더 스테이지에서 wheel 생성
+FROM python:3.12-slim AS builder
+
+RUN apt-get update && apt-get install -y --no-install-recommends g++ \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY ai_worker/requirements.txt .
+RUN pip wheel --no-cache-dir -r requirements.txt -w /wheels
+
+# ── 런타임 스테이지 ──────────────────────────────────────────────────
+FROM python:3.12-slim
+
+# opencv-headless(libglib), onnxruntime(libgomp), 02:00 스케줄용 tzdata
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libglib2.0-0 \
+    libgomp1 \
+    tzdata \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+COPY --from=builder /wheels /wheels
+RUN pip install --no-cache-dir /wheels/* && rm -rf /wheels
+
+COPY ai_worker/ ./ai_worker/
+
+ARG APP_VERSION=dev
+ENV APP_VERSION=${APP_VERSION}
+ENV PYTHONUNBUFFERED=1
+
+CMD ["python", "-m", "ai_worker.main", "daemon"]

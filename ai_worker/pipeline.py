@@ -33,6 +33,7 @@ class FacePipeline:
 
         self.app = FaceAnalysis(
             name="buffalo_l",
+            root=config.model_root(),
             allowed_modules=["detection", "recognition"],
             providers=["CPUExecutionProvider"],
         )

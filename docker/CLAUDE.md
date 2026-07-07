@@ -12,6 +12,9 @@ Docker 빌드·배포 상세 컨텍스트. 루트 → [`/CLAUDE.md`](../CLAUDE.m
 # 이미지 빌드 (개발용 로컬 빌드)
 docker build -f docker/Dockerfile -t ghcr.io/euikuk-jeong/lumisshow:latest .
 
+# AI 워커 이미지 빌드 (Phase 2)
+docker build -f docker/Dockerfile.ai -t ghcr.io/euikuk-jeong/lumisshow-ai:latest .
+
 # 로컬 컨테이너 실행 (.env 파일 필요)
 docker compose -f docker/docker-compose.yml up -d
 
@@ -39,6 +42,23 @@ docker compose -f docker/docker-compose.yml restart
 | `DATA_DIR` | DB/썸네일/음악 저장 경로 | `/data` |
 | `BASE_URL` | 공유 링크 URL 생성용 베이스 | `http://192.168.1.100:8080` |
 | `APP_PORT` | 서버 포트 (기본 8080) | `8080` |
+
+### AI 워커 (lumisshow-ai) 전용
+
+| 변수 | 설명 | 기본값 |
+|------|------|--------|
+| `TZ` | 야간 스캔 시각의 기준 타임존 | `Asia/Seoul` (compose) |
+| `AI_SCAN_HOUR` | 야간 자동 스캔 시각 (0~23) | `2` |
+| `AI_MATCH_THRESHOLD` | 얼굴 매칭 cosine 임계값 (eval로 튜닝된 값) | `0.45` |
+| `AI_DET_SIZE` | SCRFD 검출 입력 크기 (RAM 부족 시 480으로 축소) | `640` |
+| `AI_POLL_INTERVAL` | jobs 큐 폴링 간격(초) | `30` |
+| `AI_MODEL_ROOT` | InsightFace 가중치 저장 경로 | `$DATA_DIR/models` |
+
+- 모델 가중치(buffalo_l, 약 300MB)는 non-commercial 라이선스라 이미지에 포함하지 않으며,
+  첫 스캔 시 `$DATA_DIR/models/`로 자동 다운로드된다 (볼륨 영속 → 재시작 시 재다운로드 없음).
+- `mem_limit: 2g`로 분석 중 메모리 스파이크가 DSM/웹앱에 번지지 않게 제한한다.
+- 릴리즈 태그 push 시 `lumisshow`와 `lumisshow-ai` 이미지가 함께 빌드·배포된다 (release.yml).
+- 개발 브랜치에 ai_worker/backend/docker 변경 push 시 빌드 검증만 수행 (docker-build-check.yml).
 
 `ADMIN_PASSWORD`와 `ADMIN_PASSWORD_HASH` 중 하나는 반드시 설정해야 한다. bcrypt 해시 생성:
 ```bash
