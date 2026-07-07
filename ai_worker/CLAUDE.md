@@ -70,7 +70,8 @@ buffalo_l 사전학습 가중치는 **non-commercial** — 본 프로젝트는 �
 ## Phase 2 마일스톤 현황
 
 - [x] M1 뼈대: 스캔→검출→임베딩→매칭 파이프라인 + 라벨링/평가 도구
-- [ ] M1 검증: PC에서 샘플 인덱싱, 정답 셋 300~500장, recall 90%+/precision 95%+
+- [x] M1 검증: 샘플 1,000장·정답 셋 44명/1,235라벨 — **threshold 0.45에서 precision 99.9%/recall 97.9%**
+      (타인 음성 샘플은 미측정 → 운영 교정 로그로 보완 예정)
 - [ ] M2: Dockerfile.ai, 야간 스케줄(02:00), jobs 큐 폴링 데몬, NAS 초기 인덱싱
 - [ ] M3: backend `admin_people.py` + Admin 'People' UI (등록/교정/필터/앨범 생성)
 - [ ] M4: 실사용 튜닝 (교정 로그 지표, 시간 기반 후처리)
