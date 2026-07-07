@@ -143,6 +143,22 @@ def test_embedding_blob_roundtrip():
     assert np.array_equal(matcher.blob_to_embedding(matcher.embedding_to_blob(vec)), vec)
 
 
+# ── label_sheet ───────────────────────────────────────────────────────
+
+
+def test_greedy_cluster_groups_similar_vectors():
+    from ai_worker.tools.label_sheet import greedy_cluster
+
+    embs = matcher._normalize(np.stack([
+        _unit_vec(0),
+        _unit_vec(0) * 0.9 + _unit_vec(5) * 0.1,  # 0번과 유사
+        _unit_vec(1),
+        _unit_vec(0) * 0.95 + _unit_vec(6) * 0.05,  # 0번과 유사
+    ]))
+    clusters = greedy_cluster(embs, threshold=0.5)
+    assert sorted(clusters, key=min) == [[0, 1, 3], [2]]
+
+
 # ── label_helper ──────────────────────────────────────────────────────
 
 
