@@ -21,9 +21,13 @@ python -m ai_worker.main scan      # 증분 스캔 → 분석 → 매칭 (1회)
 python -m ai_worker.main rematch   # 등록 셋 변경 후 전체 재매칭
 
 # 라벨링/평가 (M1 정답 셋)
-python -m ai_worker.tools.label_helper export labels.csv
+python -m ai_worker.tools.label_sheet             # $DATA_DIR/label_sheet.html 생성
+#   → 브라우저에서 클러스터별 이름 입력 → labels.csv 다운로드
 python -m ai_worker.tools.label_helper import labels.csv
 python -m ai_worker.tools.eval --enroll 10
+
+# CSV 직접 라벨링 (시트 없이)
+python -m ai_worker.tools.label_helper export labels.csv
 ```
 
 ## 파일 구조
