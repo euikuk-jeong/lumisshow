@@ -13,7 +13,7 @@
 pip install -r backend/requirements.txt
 
 # 개발 의존성 설치 (테스트용)
-pip install pytest pytest-asyncio httpx
+pip install pytest pytest-asyncio httpx numpy
 
 # 환경변수 설정 — bash
 export ADMIN_PASSWORD=dev_password
