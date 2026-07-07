@@ -25,6 +25,8 @@ assets/js/
     admin-albums.js               # 앨범 목록
     admin-album-edit.js           # 앨범 편집 (사진·음악·공유링크)
     admin-browse.js               # 사진 탐색기 (폴더 트리, 다중 선택)
+    admin-people.js               # Phase 2: 인물 목록·미분류 얼굴 지정·AI 잡 트리거
+    admin-person-detail.js        # Phase 2: 인물 상세 (추정 얼굴 교정, 인물 앨범 생성)
     album-view.js                 # 공유 링크 뷰어 메인
     share-auth.js                 # 공유 링크 패스워드 입력
     slideshow.js                  # 슬라이드쇼 엔진

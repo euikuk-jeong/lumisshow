@@ -221,3 +221,15 @@ class SharePhotosResponse(BaseModel):
     photos: list[SharePhotoItem]
     total: int
     page: int = 1
+
+
+# ── People (Phase 2 AI) ───────────────────────────────────────────────────────
+
+class PersonCreate(BaseModel):
+    name: str
+
+class FaceLabelSet(BaseModel):
+    person_id: Optional[int] = None   # None = 등록 인물 아님(무시)
+
+class JobCreate(BaseModel):
+    type: str                          # scan | rematch

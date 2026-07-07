@@ -75,5 +75,6 @@ buffalo_l 사전학습 가중치는 **non-commercial** — 본 프로젝트는 �
       (타인 음성 샘플은 미측정 → 운영 교정 로그로 보완 예정)
 - [x] M2 구현: daemon 모드(야간 스케줄+jobs 폴링), Dockerfile.ai, compose 서비스, release.yml 워커 이미지
 - [ ] M2 배포: NAS 컨테이너 기동 + 초기 전체 인덱싱 (5만 장, 야간 배치 며칠)
-- [ ] M3: backend `admin_people.py` + Admin 'People' UI (등록/교정/필터/앨범 생성)
+- [x] M3: backend `admin_people.py`(인물 CRUD·라벨 교정·크롭 서빙·잡 트리거) +
+      Admin 'People' UI(목록/상세 교정/미분류 지정/인물 앨범 생성)
 - [ ] M4: 실사용 튜닝 (교정 로그 지표, 시간 기반 후처리)
