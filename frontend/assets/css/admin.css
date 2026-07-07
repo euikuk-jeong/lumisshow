@@ -868,3 +868,72 @@
   background: rgba(0, 0, 0, 0.28);
   border-radius: 50%;
 }
+
+/* ── People (Phase 2 AI) ────────────────────────────────── */
+.section-title { font-size: 15px; font-weight: 600; margin: 8px 0 12px; }
+.text-muted { color: var(--muted); font-weight: 400; font-size: 13px; }
+
+.people-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 14px;
+}
+.person-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  cursor: pointer;
+  transition: transform 0.12s, border-color 0.12s;
+}
+.person-card:hover { transform: translateY(-2px); border-color: var(--primary); }
+.person-cover {
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 40px;
+  background: var(--elevated);
+  overflow: hidden;
+}
+.person-cover img { width: 100%; height: 100%; object-fit: cover; }
+.person-info { padding: 8px 10px; }
+.person-name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.person-meta { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+.face-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
+  gap: 10px;
+}
+.face-card {
+  position: relative;
+  aspect-ratio: 1;
+  border-radius: var(--radius);
+  overflow: hidden;
+  border: 2px solid var(--border);
+  cursor: pointer;
+  background: var(--elevated);
+}
+.face-card img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.face-card.selected { border-color: var(--primary); box-shadow: 0 0 0 2px var(--primary-glow); }
+.face-card.selected::after {
+  content: '✓';
+  position: absolute; top: 4px; right: 6px;
+  color: var(--primary); font-weight: 700; font-size: 16px;
+  text-shadow: 0 0 4px rgba(0,0,0,0.8);
+}
+.face-score {
+  position: absolute; top: 4px; left: 4px;
+  background: rgba(0,0,0,0.6); color: #fff;
+  font-size: 11px; padding: 1px 5px; border-radius: 8px;
+}
+.face-actions {
+  position: absolute; bottom: 0; left: 0; right: 0;
+  display: flex; justify-content: center; gap: 4px;
+  padding: 4px;
+  background: linear-gradient(transparent, rgba(0,0,0,0.65));
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+.face-card:hover .face-actions { opacity: 1; }

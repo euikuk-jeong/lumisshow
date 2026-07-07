@@ -13,7 +13,7 @@
 pip install -r backend/requirements.txt
 
 # 개발 의존성 설치 (테스트용)
-pip install pytest pytest-asyncio httpx
+pip install pytest pytest-asyncio httpx numpy
 
 # 환경변수 설정 — bash
 export ADMIN_PASSWORD=dev_password
@@ -54,10 +54,12 @@ routers/
   admin_browse.py    # GET /api/admin/browse|search|music
   admin_albums.py    # CRUD /api/admin/albums/*
   admin_links.py     # CRUD /api/admin/albums/{id}/links
+  admin_people.py    # Phase 2: 인물 CRUD, 얼굴 라벨/교정, 크롭 서빙, AI 잡 트리거
   share.py           # GET|POST /api/share/{token}/*
   media.py           # /thumb/, /media/, /music/{token}?index=N 서빙
 models/
   database.py        # SQLite 연결, 테이블 생성
+  ai_database.py     # ai.db 연결 (Phase 2) — 스키마는 ai_worker/db.py와 동기 유지 필수
   schemas.py         # Pydantic 요청/응답 모델 + parse_music_paths()
 services/
   thumbnail.py       # Pillow 썸네일 생성, EXIF 전체 메타 추출

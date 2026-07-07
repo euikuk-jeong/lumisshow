@@ -1,0 +1,34 @@
+name: Docker Build Check
+
+# 릴리즈 전에 Dockerfile 빌드 실패를 미리 잡기 위한 검증 (push 없음)
+on:
+  push:
+    branches-ignore:
+      - main
+    paths:
+      - 'ai_worker/**'
+      - 'backend/**'
+      - 'docker/**'
+      - '.github/workflows/docker-build-check.yml'
+  workflow_dispatch:
+
+jobs:
+  build-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build app image (no push)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile
+          push: false
+
+      - name: Build ai worker image (no push)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile.ai
+          push: false

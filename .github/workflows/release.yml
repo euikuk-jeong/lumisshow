@@ -45,6 +45,27 @@ jobs:
           build-args: |
             APP_VERSION=${{ github.ref_name }}
 
+      - name: Extract metadata (ai worker)
+        id: meta_ai
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/euikuk-jeong/lumisshow-ai
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest
+
+      - name: Build and push (ai worker)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile.ai
+          push: true
+          tags: ${{ steps.meta_ai.outputs.tags }}
+          labels: ${{ steps.meta_ai.outputs.labels }}
+          build-args: |
+            APP_VERSION=${{ github.ref_name }}
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
