@@ -129,6 +129,15 @@ async def test_person_photos_detail(admin_client):
     assert body["total"] == 2 and body["page"] == 2
     assert [p["filename"] for p in body["photos"]] == ["photo_1.jpg"]
 
+    # size=0은 비허용 (전체 EXIF 일괄 읽기 방지)
+    r = await admin_client.get(f"/api/admin/people/{pid}/photos-detail?size=0")
+    assert r.status_code == 422
+
+    # 범위 밖 페이지는 빈 목록 (total은 유지)
+    r = await admin_client.get(f"/api/admin/people/{pid}/photos-detail?page=9&size=1")
+    body = r.json()
+    assert body["total"] == 2 and body["photos"] == []
+
     # 없는 인물 404
     r = await admin_client.get("/api/admin/people/999/photos-detail")
     assert r.status_code == 404

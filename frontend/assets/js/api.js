@@ -1,5 +1,10 @@
 import { getToken, clearToken } from './auth.js';
 
+// Admin 401: request()가 이미 /admin/login으로 이동시킨 뒤 던지는 에러
+export class AdminAuthError extends Error {
+  constructor(msg) { super(msg); this.name = 'AdminAuthError'; }
+}
+
 async function request(method, path, body) {
   const token = getToken();
   const headers = {};
@@ -16,7 +21,7 @@ async function request(method, path, body) {
   if (res.status === 401) {
     clearToken();
     if (location.pathname !== '/admin/login') window.navigate('/admin/login');
-    throw new Error('인증이 만료되었습니다.');
+    throw new AdminAuthError('인증이 만료되었습니다.');
   }
 
   if (!res.ok) {

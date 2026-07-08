@@ -1,4 +1,4 @@
-import { api, shareApi, ShareAuthError } from '../api.js';
+import { api, shareApi, AdminAuthError, ShareAuthError } from '../api.js';
 import { esc } from '../utils.js';
 import { EFFECTS, DEFAULT_SETTINGS, loadSlideshowSettings, saveSlideshowSettings } from '../slideshow-config.js';
 
@@ -59,8 +59,8 @@ export function renderPersonSlideshow(personId) {
       };
     },
     loadPhotos: (page, size) => api.get(`/api/admin/people/${personId}/photos-detail?page=${page}&size=${size}`),
-    musicUrl: null,
-    onLoadError: () => false,
+    // 401이면 api.js가 이미 /admin/login으로 이동시킴 — 화면을 덮어쓰지 않는다
+    onLoadError: (e) => e instanceof AdminAuthError,
   });
 }
 
@@ -80,14 +80,15 @@ async function runSlideshow(src) {
       src.loadPhotos(1, PAGE_SIZE),
     ]);
   } catch (e) {
-    if (src.onLoadError(e)) return;
+    if (src.onLoadError?.(e)) return;
     app.innerHTML = `<div style="padding:40px;color:var(--error)">${esc(e.message)}</div>`;
     return;
   }
 
   const totalPhotos = firstPage.total;
   if (!totalPhotos) {
-    app.innerHTML = '<div style="padding:40px;text-align:center;color:var(--muted)">사진이 없습니다.</div>';
+    app.innerHTML = `<div style="padding:40px;text-align:center;color:var(--muted)">사진이 없습니다.<br><br>
+      <a href="${src.closePath}" class="btn btn-ghost" data-link>← 돌아가기</a></div>`;
     return;
   }
 
@@ -116,21 +117,28 @@ async function runSlideshow(src) {
       data.photos.forEach((photo, i) => { photos[offset + i] = photo; });
     } catch (_) {}
   }
+  if (!photos[startIdx]) {
+    app.innerHTML = `<div style="padding:40px;text-align:center;color:var(--error)">사진을 불러오지 못했습니다.<br><br>
+      <a href="${src.closePath}" class="btn btn-ghost" data-link>← 돌아가기</a></div>`;
+    return;
+  }
 
   const displayOrder = buildOrder(totalPhotos, cfg.order, startIdx);
 
-  // 나머지 페이지 백그라운드 로드
+  // 나머지 페이지 백그라운드 로드 — 실패한 페이지는 건너뛰고 계속 (구멍은 advance()가 스킵)
   let bgLoadAborted = false;
+  let bgLoadDone = false;
   (async () => {
     const totalPages = Math.ceil(totalPhotos / PAGE_SIZE);
     for (let p = 2; p <= totalPages; p++) {
-      if (bgLoadAborted) break;
+      if (bgLoadAborted) return;
       try {
         const data = await src.loadPhotos(p, PAGE_SIZE);
         const offset = (p - 1) * PAGE_SIZE;
         data.photos.forEach((photo, i) => { photos[offset + i] = photo; });
-      } catch (_) { break; }
+      } catch (_) {}
     }
+    bgLoadDone = true;
   })();
 
   // ── Mutable state ────────────────────────────────────────────
@@ -347,11 +355,20 @@ async function runSlideshow(src) {
     if (!cfg.loop && ((dir < 0 && pos === 0) || (dir > 0 && pos === totalPhotos - 1))) return;
     clearTimeout(timer);
 
-    const nextPos = ((pos + dir) % totalPhotos + totalPhotos) % totalPhotos;
+    let nextPos = ((pos + dir) % totalPhotos + totalPhotos) % totalPhotos;
     const wrapped = cfg.loop && dir > 0 && pos === totalPhotos - 1 && nextPos === 0;
     const incoming = activeSlot === 'a' ? 'b' : 'a';
 
-    const nextPhoto = photoAt(nextPos);
+    let nextPhoto = photoAt(nextPos);
+    if (!nextPhoto && bgLoadDone) {
+      // 페이지 로드 실패로 남은 영구 구멍 — 같은 방향의 다음 로드된 사진까지 건너뜀
+      for (let hop = 1; hop < totalPhotos && !nextPhoto; hop++) {
+        if (!cfg.loop && (dir > 0 ? nextPos === totalPhotos - 1 : nextPos === 0)) return;
+        nextPos = ((nextPos + dir) % totalPhotos + totalPhotos) % totalPhotos;
+        nextPhoto = photoAt(nextPos);
+      }
+      if (!nextPhoto) return;
+    }
     if (!nextPhoto) {
       // 아직 백그라운드 로드 중 — 200ms 후 재시도
       timer = setTimeout(() => advance(dir), 200);

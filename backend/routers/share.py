@@ -11,8 +11,8 @@ from backend.models.database import get_db
 from backend.models.schemas import (
     ShareAlbumResponse,
     ShareAuthRequest,
-    SharePhotoItem,
     SharePhotosResponse,
+    build_share_photo_item,
     parse_music_paths,
 )
 from backend.routers.admin_settings import get_settings
@@ -258,30 +258,17 @@ async def get_photos(
     # photo_meta_cache에서 IN 쿼리로 일괄 조회 (미스는 EXIF 읽어 캐시)
     cached = await load_photo_meta([r["file_path"] for r in rows], db)
 
-    photos = []
-    for r in rows:
-        meta = cached.get(r["file_path"], {})
-        photos.append(SharePhotoItem(
+    photos = [
+        build_share_photo_item(
             id=r["id"],
+            file_path=r["file_path"],
             url=f"/media/{quote(r['file_path'])}",
             thumb_small_url=f"/thumb/{quote(r['file_path'])}?size=small",
             thumb_medium_url=f"/thumb/{quote(r['file_path'])}?size=medium",
-            filename=os.path.basename(r["file_path"]),
-            taken_at=meta.get("taken_at"),
-            width=meta.get("width"),
-            height=meta.get("height"),
-            make=meta.get("make"),
-            camera=meta.get("camera"),
-            software=meta.get("software"),
-            shutter=meta.get("shutter"),
-            aperture=meta.get("aperture"),
-            iso=meta.get("iso"),
-            focal_length=meta.get("focal_length"),
-            shoot_mode=meta.get("shoot_mode"),
-            flash=meta.get("flash"),
-            metering=meta.get("metering"),
-            exposure_mode=meta.get("exposure_mode"),
-        ))
+            meta=cached.get(r["file_path"], {}),
+        )
+        for r in rows
+    ]
     return SharePhotosResponse(photos=photos, total=total, page=page)
 
 

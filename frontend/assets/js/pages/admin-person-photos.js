@@ -5,13 +5,16 @@ import { openLightbox } from '../lightbox.js';
 
 // 인물 전체 사진 (/admin/people/{id}/photos) — 확정·추정 얼굴이 포함된 사진 그리드
 export async function renderAdminPersonPhotos(personId) {
-  const people = await api.get('/api/admin/people');
+  const [people, photosRes] = await Promise.all([
+    api.get('/api/admin/people'),
+    api.get(`/api/admin/people/${personId}/photos`).catch(() => null),
+  ]);
   const person = people.find(p => p.id === Number(personId));
-  if (!person) {
+  if (!person || !photosRes) {
     window.navigate('/admin/people', true);
     return;
   }
-  const { photos } = await api.get(`/api/admin/people/${personId}/photos`);
+  const { photos } = photosRes;
 
   renderAdminShell(`
     <div class="page-header">

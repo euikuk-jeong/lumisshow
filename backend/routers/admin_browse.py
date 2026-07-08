@@ -213,36 +213,7 @@ async def _enrich_photos(
         return []
 
     rel_map = {fp: os.path.relpath(fp, root).replace("\\", "/") for fp, _, _ in basic_items}
-    all_rels = list(rel_map.values())
-
-    meta_by_rel: dict[str, dict] = {}
-
-    # 청크 단위 IN 쿼리로 캐시 일괄 조회
-    for i in range(0, len(all_rels), _CACHE_CHUNK):
-        chunk = all_rels[i:i + _CACHE_CHUNK]
-        placeholders = ",".join("?" * len(chunk))
-        async with db.execute(
-            f"SELECT * FROM photo_meta_cache WHERE cache_version >= ? AND file_path IN ({placeholders})",
-            [_PHOTO_META_CACHE_VERSION] + chunk,
-        ) as cur:
-            for row in await cur.fetchall():
-                meta_by_rel[row["file_path"]] = _row_to_meta(row)
-
-    uncached = [(rel, fp) for fp, _, _ in basic_items
-                if (rel := rel_map[fp]) not in meta_by_rel]
-
-    if uncached:
-        metas = await asyncio.gather(*[
-            asyncio.to_thread(get_image_meta, fp) for _, fp in uncached
-        ])
-        for (rel, _), meta in zip(uncached, metas):
-            meta_by_rel[rel] = meta
-        # 읽기 성공(width not None)한 경우만 캐시 저장 — 실패 결과는 저장 안 해 다음 요청에 재시도
-        inserts = [_meta_to_row(rel, meta) for (rel, _), meta in zip(uncached, metas)
-                   if meta.get("width") is not None]
-        if inserts:
-            await db.executemany(_CACHE_INSERT_SQL, inserts)
-        await db.commit()
+    meta_by_rel = await load_photo_meta(list(rel_map.values()), db)
 
     items = []
     for full_path, name, size in basic_items:

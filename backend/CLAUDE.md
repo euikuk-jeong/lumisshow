@@ -111,7 +111,7 @@ services/
 
 설계 불변식:
 - `_CACHE_INSERT_SQL`에서 `cache_version`은 `?` 플레이스홀더로, `_meta_to_row()`가 마지막 원소로 `_PHOTO_META_CACHE_VERSION`을 넘긴다.
-- SELECT 쿼리는 `cache_version >= ?`를 사용하며 `_PHOTO_META_CACHE_VERSION`을 파라미터로 전달한다 (`admin_browse.py`, `share.py` 모두).
+- SELECT 쿼리는 `cache_version >= ?`를 사용하며 `_PHOTO_META_CACHE_VERSION`을 파라미터로 전달한다 — 단일 경로: `admin_browse.py`의 `load_photo_meta()` (`share.py`·`admin_people.py`·`_enrich_photos`는 이를 호출).
 - EXIF 읽기 실패(`width is None`)는 캐시에 저장하지 않아 NAS 재접근 시 자동 재시도된다.
 
 ### ZIP 다운로드
