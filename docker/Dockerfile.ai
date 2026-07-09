@@ -9,18 +9,19 @@ RUN apt-get update && apt-get install -y --no-install-recommends g++ \
     && rm -rf /var/lib/apt/lists/*
 
 COPY ai_worker/requirements.txt .
-RUN pip wheel --no-cache-dir -r requirements.txt -w /wheels
+# insightface가 의존하는 full opencv-python은 opencv-python-headless와 같은 cv2를
+# 중복 제공하므로 wheel에서 제거한다 (런타임 설치는 --no-deps라 없어도 됨)
+RUN pip wheel --no-cache-dir -r requirements.txt -w /wheels \
+    && rm -f /wheels/opencv_python-*.whl
 
 # ── 런타임 스테이지 ──────────────────────────────────────────────────
 FROM python:3.12-slim
 
-# opencv(libglib, libgl, libxcb), onnxruntime(libgomp), 02:00 스케줄용 tzdata
+# opencv(libglib, libxcb), onnxruntime(libgomp), 02:00 스케줄용 tzdata
 # libxcb1: opencv-python-headless 4.13.0.90+ 가 headless인데도 libxcb.so.1을 요구함
 #          (https://github.com/opencv/opencv-python/issues/1183)
-# libgl1:  insightface가 full opencv-python을 직접 의존 → cv2가 libGL.so.1 요구
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libglib2.0-0 \
-    libgl1 \
     libgomp1 \
     libxcb1 \
     tzdata \
@@ -28,8 +29,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-COPY --from=builder /wheels /wheels
-RUN pip install --no-cache-dir /wheels/* && rm -rf /wheels
+# bind mount 설치: COPY --from=builder 방식과 달리 wheel이 이미지 레이어로 남지 않음
+# --no-deps: pip wheel이 전체 의존성 트리를 이미 /wheels에 만들어 둠
+#            (opencv-python 부재는 의도된 것 — cv2는 headless가 제공)
+RUN --mount=type=bind,from=builder,source=/wheels,target=/wheels \
+    pip install --no-cache-dir --no-deps /wheels/*
 
 COPY ai_worker/ ./ai_worker/
 
