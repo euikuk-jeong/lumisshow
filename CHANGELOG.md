@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.3] - 2026-07-10
+
+### Changed
+- **AI 워커 이미지 크기 최적화** (`docker/Dockerfile.ai`): 압축 기준 약 586MB → 대폭 절감
+  - wheel 설치를 `COPY --from=builder` 대신 `RUN --mount=type=bind`로 교체 —
+    설치 후 삭제해도 이미지에 남던 237.9MB wheels 레이어 제거
+  - insightface가 의존하는 full `opencv-python` wheel 제거 — `opencv-python-headless`와
+    동일한 cv2 중복 설치 해소 (`--no-deps` 설치, 의존성 트리는 pip wheel이 수집)
+  - full opencv 제거로 불필요해진 `libgl1` 런타임 패키지 제거
+
+### Added
+- **CI AI 이미지 smoke test** (`docker-build-check.yml`): 빌드된 워커 이미지에서
+  `import cv2, insightface`를 실제 실행해 검증 — v1.0.2 cv2 ImportError처럼
+  배포 후에야 드러나는 런타임 오류를 빌드 단계에서 차단
+
 ## [1.0.2] - 2026-07-09
 
 ### Fixed
@@ -431,7 +446,8 @@ Phase 2 — AI 얼굴 인식 스마트 앨범. NAS 로컬 AI(InsightFace)로 사
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v1.0.2...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v1.0.3...HEAD
+[1.0.3]: https://github.com/euikuk-jeong/lumisshow/compare/v1.0.2...v1.0.3
 [1.0.2]: https://github.com/euikuk-jeong/lumisshow/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/euikuk-jeong/lumisshow/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/euikuk-jeong/lumisshow/compare/v0.9.5...v1.0.0
