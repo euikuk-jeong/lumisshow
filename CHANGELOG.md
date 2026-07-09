@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.2] - 2026-07-09
+
+### Fixed
+- **AI 워커 컨테이너 cv2 ImportError 수정**: NAS 첫 스캔 잡이 `libxcb.so.1`/`libGL.so.1`
+  누락으로 실패하던 문제 — 런타임 이미지에 `libxcb1`, `libgl1` 추가 (`docker/Dockerfile.ai`)
+  - `libxcb1`: opencv-python-headless 4.13.0.90+ 의 headless regression
+    ([opencv-python#1183](https://github.com/opencv/opencv-python/issues/1183))
+  - `libgl1`: insightface가 full `opencv-python`을 직접 의존해 cv2가 libGL 요구
+
+### Changed
+- **nas-update.sh**: `compose down` 실패 시 fallback 강제 중지 대상에 `lumisshow-ai` 포함
+
 ## [1.0.1] - 2026-07-09
 
 ### Added
@@ -419,7 +431,8 @@ Phase 2 — AI 얼굴 인식 스마트 앨범. NAS 로컬 AI(InsightFace)로 사
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v1.0.1...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v1.0.2...HEAD
+[1.0.2]: https://github.com/euikuk-jeong/lumisshow/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/euikuk-jeong/lumisshow/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/euikuk-jeong/lumisshow/compare/v0.9.5...v1.0.0
 [0.9.5]: https://github.com/euikuk-jeong/lumisshow/compare/v0.9.4...v0.9.5
