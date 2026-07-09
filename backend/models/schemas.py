@@ -1,4 +1,5 @@
 import json
+import os
 from datetime import datetime
 from typing import Optional
 from pydantic import BaseModel
@@ -221,6 +222,28 @@ class SharePhotosResponse(BaseModel):
     photos: list[SharePhotoItem]
     total: int
     page: int = 1
+
+
+_EXIF_META_FIELDS = (
+    "taken_at", "width", "height", "make", "camera", "software",
+    "shutter", "aperture", "iso", "focal_length", "shoot_mode",
+    "flash", "metering", "exposure_mode",
+)
+
+
+def build_share_photo_item(
+    id: int, file_path: str, url: str,
+    thumb_small_url: str, thumb_medium_url: str, meta: dict,
+) -> SharePhotoItem:
+    """EXIF meta dict → SharePhotoItem. share.py·admin_people.py 공용 빌더."""
+    return SharePhotoItem(
+        id=id,
+        url=url,
+        thumb_small_url=thumb_small_url,
+        thumb_medium_url=thumb_medium_url,
+        filename=os.path.basename(file_path),
+        **{k: meta.get(k) for k in _EXIF_META_FIELDS},
+    )
 
 
 # ── People (Phase 2 AI) ───────────────────────────────────────────────────────

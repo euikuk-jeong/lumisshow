@@ -6,13 +6,21 @@
 
 import os
 from typing import Optional
+from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import FileResponse
 
 from backend.models.ai_database import faces_dir, get_ai_db
-from backend.models.schemas import FaceLabelSet, JobCreate, PersonCreate
-from backend.routers.admin_browse import _admin_image_auth
+from backend.models.database import get_db
+from backend.models.schemas import (
+    FaceLabelSet,
+    JobCreate,
+    PersonCreate,
+    SharePhotosResponse,
+    build_share_photo_item,
+)
+from backend.routers.admin_browse import _admin_image_auth, load_photo_meta
 from backend.services.auth import get_current_admin
 
 router = APIRouter(prefix="/api/admin", tags=["admin-people"])
@@ -24,6 +32,28 @@ async def _person_or_404(person_id: int, db) -> None:
     async with db.execute("SELECT id FROM persons WHERE id = ?", (person_id,)) as cur:
         if await cur.fetchone() is None:
             raise HTTPException(status_code=404, detail="Person not found")
+
+
+# 인물이 등장하는 사진 판정: 라벨이 있으면 라벨 우선, 없으면 자동 매칭
+_PERSON_PHOTOS_FROM = """
+    FROM faces f
+    LEFT JOIN face_labels fl ON fl.face_id = f.id
+    LEFT JOIN face_matches fm ON fm.face_id = f.id
+    WHERE (fl.person_id = ?)
+       OR (fl.face_id IS NULL AND fm.person_id = ?)
+"""
+
+
+async def _person_photo_paths(
+    person_id: int, db, limit: Optional[int] = None, offset: int = 0
+) -> list[str]:
+    sql = f"SELECT DISTINCT f.photo_path {_PERSON_PHOTOS_FROM} ORDER BY f.photo_path"
+    params: list = [person_id, person_id]
+    if limit is not None:
+        sql += " LIMIT ? OFFSET ?"
+        params += [limit, offset]
+    async with db.execute(sql, params) as cur:
+        return [r["photo_path"] for r in await cur.fetchall()]
 
 
 # ── 인물 CRUD ─────────────────────────────────────────────────────────
@@ -132,19 +162,42 @@ async def list_person_photos(
 ):
     """인물이 등장하는 사진 경로 목록 (라벨 우선 + 매칭). 앨범 생성용."""
     await _person_or_404(person_id, db)
+    return {"photos": await _person_photo_paths(person_id, db)}
+
+
+@router.get("/people/{person_id}/photos-detail", response_model=SharePhotosResponse)
+async def list_person_photos_detail(
+    person_id: int,
+    page: int = Query(default=1, ge=1),
+    size: int = Query(default=50, ge=1, le=500),
+    _: str = Depends(get_current_admin),
+    db=Depends(get_ai_db),
+    app_db=Depends(get_db),
+):
+    """인물 사진 상세 목록 (EXIF·URL 포함, 페이지네이션) — Admin 슬라이드쇼/전체 사진용."""
+    await _person_or_404(person_id, db)
     async with db.execute(
-        """
-        SELECT DISTINCT f.photo_path FROM faces f
-        LEFT JOIN face_labels fl ON fl.face_id = f.id
-        LEFT JOIN face_matches fm ON fm.face_id = f.id
-        WHERE (fl.person_id = ?)
-           OR (fl.face_id IS NULL AND fm.person_id = ?)
-        ORDER BY f.photo_path
-        """,
+        f"SELECT COUNT(DISTINCT f.photo_path) AS total {_PERSON_PHOTOS_FROM}",
         (person_id, person_id),
     ) as cur:
-        rows = await cur.fetchall()
-    return {"photos": [r["photo_path"] for r in rows]}
+        total = (await cur.fetchone())["total"]
+
+    offset = (page - 1) * size
+    paths = await _person_photo_paths(person_id, db, limit=size, offset=offset)
+
+    meta_map = await load_photo_meta(paths, app_db)
+    photos = [
+        build_share_photo_item(
+            id=offset + i,
+            file_path=p,
+            url=f"/api/admin/photo?path={quote(p)}",
+            thumb_small_url=f"/api/admin/thumb?path={quote(p)}&size=small",
+            thumb_medium_url=f"/api/admin/thumb?path={quote(p)}&size=medium",
+            meta=meta_map.get(p, {}),
+        )
+        for i, p in enumerate(paths)
+    ]
+    return SharePhotosResponse(photos=photos, total=total, page=page)
 
 
 @router.get("/faces/unassigned")

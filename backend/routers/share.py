@@ -7,27 +7,22 @@ from urllib.parse import quote
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from fastapi.responses import FileResponse, StreamingResponse
 
-from backend.models.database import _PHOTO_META_CACHE_VERSION, get_db
+from backend.models.database import get_db
 from backend.models.schemas import (
     ShareAlbumResponse,
     ShareAuthRequest,
-    SharePhotoItem,
     SharePhotosResponse,
+    build_share_photo_item,
     parse_music_paths,
 )
 from backend.routers.admin_settings import get_settings
-from backend.routers.admin_browse import (
-    _CACHE_CHUNK,
-    _CACHE_INSERT_SQL,
-    _meta_to_row,
-    _row_to_meta,
-)
+from backend.routers.admin_browse import load_photo_meta
 from backend.services.auth import (
     create_share_session_token,
     verify_password,
     verify_share_session_cookie,
 )
-from backend.services.thumbnail import generate_thumbnail, get_image_meta
+from backend.services.thumbnail import generate_thumbnail
 from backend.services.zip_stream import zip_generator
 
 router = APIRouter(prefix="/api/share", tags=["share"])
@@ -260,62 +255,20 @@ async def get_photos(
     else:
         rows = all_rows
 
-    photo_root = os.path.realpath(os.getenv("PHOTO_ROOT", "./testdata/photos"))
+    # photo_meta_cache에서 IN 쿼리로 일괄 조회 (미스는 EXIF 읽어 캐시)
+    cached = await load_photo_meta([r["file_path"] for r in rows], db)
 
-    def _abs(p: str) -> str:
-        return p if os.path.isabs(p) else os.path.join(photo_root, p)
-
-    # photo_meta_cache에서 IN 쿼리로 일괄 조회
-    rels = [r["file_path"] for r in rows]
-    cached: dict[str, dict] = {}
-    for i in range(0, len(rels), _CACHE_CHUNK):
-        chunk = rels[i:i + _CACHE_CHUNK]
-        placeholders = ",".join("?" * len(chunk))
-        async with db.execute(
-            f"SELECT * FROM photo_meta_cache WHERE cache_version >= ? AND file_path IN ({placeholders})",
-            [_PHOTO_META_CACHE_VERSION] + chunk,
-        ) as cur:
-            for row in await cur.fetchall():
-                cached[row["file_path"]] = _row_to_meta(row)
-
-    uncached_rows = [r for r in rows if r["file_path"] not in cached]
-    if uncached_rows:
-        metas = await asyncio.gather(*[
-            asyncio.to_thread(get_image_meta, _abs(r["file_path"])) for r in uncached_rows
-        ])
-        for r, meta in zip(uncached_rows, metas):
-            cached[r["file_path"]] = meta
-        # 읽기 성공(width not None)한 경우만 캐시 저장 — 실패 결과는 저장 안 해 다음 요청에 재시도
-        inserts = [_meta_to_row(r["file_path"], meta) for r, meta in zip(uncached_rows, metas)
-                   if meta.get("width") is not None]
-        if inserts:
-            await db.executemany(_CACHE_INSERT_SQL, inserts)
-        await db.commit()
-
-    photos = []
-    for r in rows:
-        meta = cached.get(r["file_path"], {})
-        photos.append(SharePhotoItem(
+    photos = [
+        build_share_photo_item(
             id=r["id"],
+            file_path=r["file_path"],
             url=f"/media/{quote(r['file_path'])}",
             thumb_small_url=f"/thumb/{quote(r['file_path'])}?size=small",
             thumb_medium_url=f"/thumb/{quote(r['file_path'])}?size=medium",
-            filename=os.path.basename(r["file_path"]),
-            taken_at=meta.get("taken_at"),
-            width=meta.get("width"),
-            height=meta.get("height"),
-            make=meta.get("make"),
-            camera=meta.get("camera"),
-            software=meta.get("software"),
-            shutter=meta.get("shutter"),
-            aperture=meta.get("aperture"),
-            iso=meta.get("iso"),
-            focal_length=meta.get("focal_length"),
-            shoot_mode=meta.get("shoot_mode"),
-            flash=meta.get("flash"),
-            metering=meta.get("metering"),
-            exposure_mode=meta.get("exposure_mode"),
-        ))
+            meta=cached.get(r["file_path"], {}),
+        )
+        for r in rows
+    ]
     return SharePhotosResponse(photos=photos, total=total, page=page)
 
 

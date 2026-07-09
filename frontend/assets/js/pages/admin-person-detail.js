@@ -20,6 +20,8 @@ export async function renderAdminPersonDetail(personId) {
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <a href="/admin/people" class="btn btn-ghost" data-link>← 인물 목록</a>
+        <a href="/admin/people/${personId}/photos" class="btn btn-ghost" data-link>전체 사진</a>
+        <a href="/admin/people/${personId}/slideshow" class="btn btn-ghost" data-link>▶ 슬라이드쇼</a>
         <button class="btn btn-primary" id="btn-make-album">이 인물로 앨범 만들기</button>
         <button class="btn btn-ghost" id="btn-delete" style="color:var(--error)">삭제</button>
       </div>

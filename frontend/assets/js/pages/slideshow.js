@@ -1,4 +1,4 @@
-import { shareApi, ShareAuthError } from '../api.js';
+import { api, shareApi, AdminAuthError, ShareAuthError } from '../api.js';
 import { esc } from '../utils.js';
 import { EFFECTS, DEFAULT_SETTINGS, loadSlideshowSettings, saveSlideshowSettings } from '../slideshow-config.js';
 
@@ -20,7 +20,51 @@ function buildOrder(total, order, startIdx) {
   return [...seq.slice(startIdx), ...seq.slice(0, startIdx)];
 }
 
-export async function renderSlideshow(token) {
+// 공유 링크 슬라이드쇼
+export function renderSlideshow(token) {
+  return runSlideshow({
+    settingsKey: token,
+    closePath: `/s/${token}/view`,
+    loadAlbum: () => shareApi.get(`/api/share/${token}/album`),
+    loadPhotos: (page, size) => shareApi.get(`/api/share/${token}/photos?page=${page}&size=${size}`),
+    musicUrl: (i) => `/music/${token}?index=${i}`,
+    onLoadError: (e) => {
+      if (e instanceof ShareAuthError || /404|not found/i.test(e.message)) {
+        window.navigate(`/s/${token}`, true);
+        return true;
+      }
+      return false;
+    },
+  });
+}
+
+// Admin 인물 슬라이드쇼 — 별도 앨범 없이 인물 사진으로 재생 (음악 없음)
+export function renderPersonSlideshow(personId) {
+  return runSlideshow({
+    settingsKey: `person_${personId}`,
+    closePath: `/admin/people/${personId}/photos`,
+    loadAlbum: async () => {
+      const s = await api.get('/api/admin/settings');
+      return {
+        music_count: 0,
+        music_names: [],
+        slideshow_defaults: {
+          interval: s.slideshow_interval,
+          order: s.slideshow_order,
+          effect: s.slideshow_effect,
+          music: false,
+          volume: s.slideshow_volume,
+          loop: s.slideshow_loop,
+        },
+      };
+    },
+    loadPhotos: (page, size) => api.get(`/api/admin/people/${personId}/photos-detail?page=${page}&size=${size}`),
+    // 401이면 api.js가 이미 /admin/login으로 이동시킴 — 화면을 덮어쓰지 않는다
+    onLoadError: (e) => e instanceof AdminAuthError,
+  });
+}
+
+async function runSlideshow(src) {
   const app = document.getElementById('app');
   app.innerHTML = '<div class="loading" style="height:100vh"></div>';
 
@@ -32,21 +76,19 @@ export async function renderSlideshow(token) {
   let album, firstPage;
   try {
     [album, firstPage] = await Promise.all([
-      shareApi.get(`/api/share/${token}/album`),
-      shareApi.get(`/api/share/${token}/photos?size=${PAGE_SIZE}`),
+      src.loadAlbum(),
+      src.loadPhotos(1, PAGE_SIZE),
     ]);
   } catch (e) {
-    if (e instanceof ShareAuthError || /404|not found/i.test(e.message)) {
-      window.navigate(`/s/${token}`, true);
-      return;
-    }
+    if (src.onLoadError?.(e)) return;
     app.innerHTML = `<div style="padding:40px;color:var(--error)">${esc(e.message)}</div>`;
     return;
   }
 
   const totalPhotos = firstPage.total;
   if (!totalPhotos) {
-    app.innerHTML = '<div style="padding:40px;text-align:center;color:var(--muted)">사진이 없습니다.</div>';
+    app.innerHTML = `<div style="padding:40px;text-align:center;color:var(--muted)">사진이 없습니다.<br><br>
+      <a href="${src.closePath}" class="btn btn-ghost" data-link>← 돌아가기</a></div>`;
     return;
   }
 
@@ -54,7 +96,7 @@ export async function renderSlideshow(token) {
   const photos = new Array(totalPhotos);
   firstPage.photos.forEach((p, i) => { photos[i] = p; });
 
-  const cfg = loadSlideshowSettings(album.slideshow_defaults || {}, token);
+  const cfg = loadSlideshowSettings(album.slideshow_defaults || {}, src.settingsKey);
   const rawI = parseInt(new URLSearchParams(location.search).get('i') ?? '', 10);
   const urlIdx = isNaN(rawI) ? null : Math.max(0, Math.min(totalPhotos - 1, rawI));
   const startIdx = urlIdx ?? 0;
@@ -70,26 +112,33 @@ export async function renderSlideshow(token) {
   if (!photos[startIdx]) {
     const pageNum = Math.floor(startIdx / PAGE_SIZE) + 1;
     try {
-      const data = await shareApi.get(`/api/share/${token}/photos?page=${pageNum}&size=${PAGE_SIZE}`);
+      const data = await src.loadPhotos(pageNum, PAGE_SIZE);
       const offset = (pageNum - 1) * PAGE_SIZE;
       data.photos.forEach((photo, i) => { photos[offset + i] = photo; });
     } catch (_) {}
   }
+  if (!photos[startIdx]) {
+    app.innerHTML = `<div style="padding:40px;text-align:center;color:var(--error)">사진을 불러오지 못했습니다.<br><br>
+      <a href="${src.closePath}" class="btn btn-ghost" data-link>← 돌아가기</a></div>`;
+    return;
+  }
 
   const displayOrder = buildOrder(totalPhotos, cfg.order, startIdx);
 
-  // 나머지 페이지 백그라운드 로드
+  // 나머지 페이지 백그라운드 로드 — 실패한 페이지는 건너뛰고 계속 (구멍은 advance()가 스킵)
   let bgLoadAborted = false;
+  let bgLoadDone = false;
   (async () => {
     const totalPages = Math.ceil(totalPhotos / PAGE_SIZE);
     for (let p = 2; p <= totalPages; p++) {
-      if (bgLoadAborted) break;
+      if (bgLoadAborted) return;
       try {
-        const data = await shareApi.get(`/api/share/${token}/photos?page=${p}&size=${PAGE_SIZE}`);
+        const data = await src.loadPhotos(p, PAGE_SIZE);
         const offset = (p - 1) * PAGE_SIZE;
         data.photos.forEach((photo, i) => { photos[offset + i] = photo; });
-      } catch (_) { break; }
+      } catch (_) {}
     }
+    bgLoadDone = true;
   })();
 
   // ── Mutable state ────────────────────────────────────────────
@@ -109,14 +158,14 @@ export async function renderSlideshow(token) {
   let musicTrackIdx = 0;
 
   if (musicCount > 0) {
-    audio = new Audio(`/music/${token}?index=0`);
+    audio = new Audio(src.musicUrl(0));
     audio.volume = cfg.volume / 100;
     if (musicCount === 1) {
       audio.loop = true;
     } else {
       audio.addEventListener('ended', () => {
         musicTrackIdx = (musicTrackIdx + 1) % musicCount;
-        audio.src = `/music/${token}?index=${musicTrackIdx}`;
+        audio.src = src.musicUrl(musicTrackIdx);
         if (musicOn) audio.play().catch(() => {});
       });
     }
@@ -125,7 +174,7 @@ export async function renderSlideshow(token) {
   function loadTrack(idx) {
     if (!audio) return;
     musicTrackIdx = ((idx % musicCount) + musicCount) % musicCount;
-    audio.src = `/music/${token}?index=${musicTrackIdx}`;
+    audio.src = src.musicUrl(musicTrackIdx);
     if (musicOn) {
       audio.play().catch(() => {});
       showMusicToast();
@@ -306,11 +355,20 @@ export async function renderSlideshow(token) {
     if (!cfg.loop && ((dir < 0 && pos === 0) || (dir > 0 && pos === totalPhotos - 1))) return;
     clearTimeout(timer);
 
-    const nextPos = ((pos + dir) % totalPhotos + totalPhotos) % totalPhotos;
+    let nextPos = ((pos + dir) % totalPhotos + totalPhotos) % totalPhotos;
     const wrapped = cfg.loop && dir > 0 && pos === totalPhotos - 1 && nextPos === 0;
     const incoming = activeSlot === 'a' ? 'b' : 'a';
 
-    const nextPhoto = photoAt(nextPos);
+    let nextPhoto = photoAt(nextPos);
+    if (!nextPhoto && bgLoadDone) {
+      // 페이지 로드 실패로 남은 영구 구멍 — 같은 방향의 다음 로드된 사진까지 건너뜀
+      for (let hop = 1; hop < totalPhotos && !nextPhoto; hop++) {
+        if (!cfg.loop && (dir > 0 ? nextPos === totalPhotos - 1 : nextPos === 0)) return;
+        nextPos = ((nextPos + dir) % totalPhotos + totalPhotos) % totalPhotos;
+        nextPhoto = photoAt(nextPos);
+      }
+      if (!nextPhoto) return;
+    }
     if (!nextPhoto) {
       // 아직 백그라운드 로드 중 — 200ms 후 재시도
       timer = setTimeout(() => advance(dir), 200);
@@ -442,7 +500,7 @@ export async function renderSlideshow(token) {
       Math.abs(s - cfg.interval) < Math.abs(SPEED_STEPS[best] - cfg.interval) ? i : best, 0);
     cfg.interval = SPEED_STEPS[Math.max(0, Math.min(SPEED_STEPS.length - 1, idx + delta))];
     document.getElementById('ss-speed-label').textContent = cfg.interval + 's';
-    saveSlideshowSettings(token, cfg);
+    saveSlideshowSettings(src.settingsKey, cfg);
     clearTimeout(timer);
     scheduleNext();
   }
@@ -457,7 +515,7 @@ export async function renderSlideshow(token) {
   function closeSlideshow() {
     if (document.fullscreenElement) document.exitFullscreen();
     cleanup();
-    window.navigate(`/s/${token}/view`, true);
+    window.navigate(src.closePath, true);
   }
   document.getElementById('ss-close-btn').addEventListener('click', closeSlideshow);
 

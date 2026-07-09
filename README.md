@@ -4,6 +4,8 @@ Synology NAS용 Docker 기반 사진 앨범 & 슬라이드쇼 웹 앱.
 
 단일 컨테이너로 FastAPI(백엔드) + Vanilla JS(프론트엔드)를 서빙하며, NAS 사진 폴더를 읽기 전용으로 마운트해 앨범을 구성하고 공유 링크로 배포합니다.
 
+v1.0.0(Phase 2)부터는 별도 AI 워커 컨테이너(`lumisshow-ai`)가 NAS 로컬에서 얼굴 인식을 수행해, 사진 속 인물을 자동 분류하고 인물별 앨범·슬라이드쇼를 만들 수 있습니다. (외부 API 미사용 — 모든 분석은 NAS 안에서만 이루어집니다.)
+
 ---
 
 ## 프로젝트명 유래
@@ -35,6 +37,13 @@ Synology NAS용 Docker 기반 사진 앨범 & 슬라이드쇼 웹 앱.
 - **사진 정보 패널** — EXIF 전체 표시 (셔터·조리개·ISO·초점거리·플래시 등), 재생 중 음악 정보 함께 표시
 - **이미지 프리로드** — N+1, N+2 이미지 미리 로드, 메모리 자동 해제
 
+### AI 얼굴 인식 (Phase 2, v1.0.0+)
+- **AI 워커 (`lumisshow-ai` 컨테이너)** — InsightFace(SCRFD 검출 + ArcFace 임베딩)로 사진 속 얼굴을 검출·매칭. 매일 야간 자동 증분 스캔 + Admin 수동 트리거, 중단 후 재개 가능
+- **인물(People) 관리** — 인물 등록, AI 추정 얼굴 교정(맞음/아님), 미분류 얼굴 다중 선택 지정/무시 — 교정할수록 정확도 향상
+- **인물 앨범 생성 도우미** — 인물 사진 전체를 앨범으로 생성 (공유 링크·슬라이드쇼·ZIP 등 기존 기능 그대로 사용)
+- **인물 슬라이드쇼 · 전체 사진 보기** — 앨범 생성 없이 인물 상세에서 해당 인물 사진을 바로 슬라이드쇼 재생·그리드 탐색
+- **로컬 처리** — 외부 API 없이 NAS 안에서만 분석. 모델 가중치(non-commercial)는 이미지에 미포함, 첫 실행 시 자동 다운로드
+
 ---
 
 ## 스크린샷 구성 (화면 설명)
@@ -45,6 +54,9 @@ Synology NAS용 Docker 기반 사진 앨범 & 슬라이드쇼 웹 앱.
 | 앨범 목록 | `/admin` | 앨범 카드 그리드 |
 | 앨범 편집 | `/admin/albums/:id` | 사진·음악·공유링크 관리 |
 | 사진 탐색 | `/admin/browse` | 폴더 트리 + 다중 선택 |
+| 인물 목록 | `/admin/people` | 인물 카드 + AI 분석 상태·스캔 트리거 |
+| 인물 상세 | `/admin/people/:id` | 얼굴 교정, 미분류 지정, 앨범 생성 |
+| 인물 전체 사진 | `/admin/people/:id/photos` | 인물 사진 그리드 + 슬라이드쇼 |
 | 공유 뷰어 | `/s/:token` | 패스워드 입력 → 앨범 |
 | 슬라이드쇼 | `/s/:token/slideshow` | 전체화면 슬라이드쇼 |
 
@@ -58,6 +70,7 @@ Synology NAS용 Docker 기반 사진 앨범 & 슬라이드쇼 웹 앱.
 
 ```bash
 docker pull ghcr.io/euikuk-jeong/lumisshow:latest
+docker pull ghcr.io/euikuk-jeong/lumisshow-ai:latest   # AI 얼굴 인식 사용 시
 ```
 
 **직접 빌드 (개발/커스터마이즈):**
@@ -116,6 +129,9 @@ docker compose -f docker/docker-compose.yml up -d
 | `DATA_DIR` | ✓ | DB·썸네일·음악 저장 경로 (컨테이너 내부) |
 | `BASE_URL` | | 공유 링크 URL 생성 베이스 주소 |
 | `APP_PORT` | | 서버 포트 (기본 `8080`) |
+| `TZ` | | AI 워커 야간 스캔 시각 기준 타임존 (기본 `Asia/Seoul`) |
+| `AI_SCAN_HOUR` | | AI 워커 야간 자동 스캔 시각 0~23 (기본 `2`) |
+| `AI_MATCH_THRESHOLD` | | 얼굴 매칭 cosine 임계값 (기본 `0.45`) |
 
 `ADMIN_PASSWORD` 또는 `ADMIN_PASSWORD_HASH` 중 하나는 반드시 설정해야 합니다.
 
@@ -138,9 +154,11 @@ docker compose -f docker/docker-compose.yml up -d
 ```
 $DATA_DIR/
 ├── db/
-│   └── app.db          # SQLite — 앨범, 사진, 공유링크
+│   ├── app.db          # SQLite — 앨범, 사진, 공유링크
+│   └── ai.db           # SQLite — 얼굴 인식 결과, 인물, 라벨 (AI 워커)
 ├── thumbnails/          # on-demand 생성 썸네일 캐시
-└── music/              # 배경음악 파일
+├── music/              # 배경음악 파일
+└── models/             # InsightFace 모델 가중치 (첫 실행 시 자동 다운로드)
 ```
 
 ---
@@ -166,6 +184,7 @@ EOF
 3. `docker/docker-compose.yml`로 스택 실행:
    - `/volume1/photo` → `/mnt/photos` (읽기 전용)
    - `/volume1/docker/lumisshow` → `/data`
+   - `lumisshow-ai` 서비스 포함 (`mem_limit 2g`, 사진 볼륨 읽기 전용 공유) — AI 기능을 사용하지 않으면 해당 서비스를 제거해도 됩니다
 
 4. DSM 리버스 프록시로 HTTPS 적용 (선택)
 
@@ -189,8 +208,9 @@ docker compose -f /path/to/docker-compose.yml up -d
 |------|------|
 | Backend | Python 3.12, FastAPI, aiosqlite (SQLite), Pillow |
 | Frontend | Vanilla JS (ES Modules), 빌드 도구 없음 |
+| AI Worker | InsightFace buffalo_l (SCRFD 검출 + ArcFace 512-d 임베딩), ONNX Runtime, numpy cosine 매칭 |
 | Auth | JWT (python-jose), bcrypt, httpOnly 세션 쿠키 |
-| Container | Docker, single-container (FastAPI가 정적파일 서빙) |
+| Container | Docker — 앱 컨테이너(FastAPI가 정적파일 서빙) + AI 워커 컨테이너(선택) |
 
 ---
 
