@@ -31,6 +31,7 @@ IMAGE="ghcr.io/euikuk-jeong/lumisshow"
 AI_IMAGE="ghcr.io/euikuk-jeong/lumisshow-ai"
 COMPOSE_FILE="/volume1/docker/project/upload/lumisshow/docker-compose.yml"
 CONTAINER_NAME="lumisshow"
+AI_CONTAINER_NAME="lumisshow-ai"
 
 echo "=============================="
 echo " LumisShow 배포 시작"
@@ -45,7 +46,9 @@ docker compose -f "$COMPOSE_FILE" pull
 echo ""
 echo "[2/4] 컨테이너 중지..."
 docker compose -f "$COMPOSE_FILE" down 2>/dev/null \
-  || { echo "  compose down 실패 → docker stop으로 강제 중지"; docker stop "$CONTAINER_NAME" 2>/dev/null || true; docker rm "$CONTAINER_NAME" 2>/dev/null || true; }
+  || { echo "  compose down 실패 → docker stop으로 강제 중지"; \
+       docker stop "$CONTAINER_NAME" 2>/dev/null || true; docker rm "$CONTAINER_NAME" 2>/dev/null || true; \
+       docker stop "$AI_CONTAINER_NAME" 2>/dev/null || true; docker rm "$AI_CONTAINER_NAME" 2>/dev/null || true; }
 
 # 3. 컨테이너 시작
 echo ""
