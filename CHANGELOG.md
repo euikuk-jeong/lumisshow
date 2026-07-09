@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-07-09
+
+### Added
+- **Admin 인물 슬라이드쇼**: 인물 상세 화면에서 해당 인물 사진 전체를 앨범 생성 없이
+  바로 슬라이드쇼로 재생 (`slideshow.js`, `admin-person-detail.js`)
+- **인물 전체 사진 보기**: 인물별 사진을 페이지네이션 그리드로 조회하는 화면 추가
+  (`admin-person-photos.js`, `/api/admin/people/{id}/photos-detail`)
+
+### Changed
+- **nas-update.sh**: 구버전 이미지 정리 대상에 `lumisshow-ai` 이미지 포함
+- **README**: Phase 2 AI 얼굴 인식 내용 추가
+
+### Fixed
+- 코드 리뷰 반영 — 인물 슬라이드쇼 안정화 및 서버/클라이언트 중복 로직 제거
+
 ## [1.0.0] - 2026-07-07
 
 Phase 2 — AI 얼굴 인식 스마트 앨범. NAS 로컬 AI(InsightFace)로 사진 속 인물을
@@ -404,7 +419,8 @@ Phase 2 — AI 얼굴 인식 스마트 앨범. NAS 로컬 AI(InsightFace)로 사
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v1.0.1...HEAD
+[1.0.1]: https://github.com/euikuk-jeong/lumisshow/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/euikuk-jeong/lumisshow/compare/v0.9.5...v1.0.0
 [0.9.5]: https://github.com/euikuk-jeong/lumisshow/compare/v0.9.4...v0.9.5
 [0.9.4]: https://github.com/euikuk-jeong/lumisshow/compare/v0.9.3...v0.9.4
