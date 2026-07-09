@@ -14,10 +14,15 @@ RUN pip wheel --no-cache-dir -r requirements.txt -w /wheels
 # ── 런타임 스테이지 ──────────────────────────────────────────────────
 FROM python:3.12-slim
 
-# opencv-headless(libglib), onnxruntime(libgomp), 02:00 스케줄용 tzdata
+# opencv(libglib, libgl, libxcb), onnxruntime(libgomp), 02:00 스케줄용 tzdata
+# libxcb1: opencv-python-headless 4.13.0.90+ 가 headless인데도 libxcb.so.1을 요구함
+#          (https://github.com/opencv/opencv-python/issues/1183)
+# libgl1:  insightface가 full opencv-python을 직접 의존 → cv2가 libGL.so.1 요구
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libglib2.0-0 \
+    libgl1 \
     libgomp1 \
+    libxcb1 \
     tzdata \
     && rm -rf /var/lib/apt/lists/*
 
