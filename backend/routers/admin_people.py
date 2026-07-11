@@ -14,6 +14,8 @@ from fastapi.responses import FileResponse
 from backend.models.ai_database import faces_dir, get_ai_db
 from backend.models.database import get_db
 from backend.models.schemas import (
+    BatchFaceLabel,
+    ConfirmByScore,
     FaceLabelSet,
     JobCreate,
     PersonCreate,
@@ -200,6 +202,29 @@ async def list_person_photos_detail(
     return SharePhotosResponse(photos=photos, total=total, page=page)
 
 
+@router.post("/people/{person_id}/confirm-matched")
+async def confirm_matched_by_score(
+    person_id: int, body: ConfirmByScore,
+    _: str = Depends(get_current_admin), db=Depends(get_ai_db),
+):
+    """이 인물의 추정 얼굴 중 score >= min_score 전체를 확정 처리 (페이지네이션 무관)."""
+    await _person_or_404(person_id, db)
+    async with db.execute(
+        """SELECT face_id FROM face_matches
+           WHERE person_id = ? AND score >= ?
+             AND face_id NOT IN (SELECT face_id FROM face_labels)""",
+        (person_id, body.min_score),
+    ) as cur:
+        face_ids = [r["face_id"] for r in await cur.fetchall()]
+    if face_ids:
+        await db.executemany(
+            "INSERT INTO face_labels (face_id, person_id) VALUES (?, ?)",
+            [(fid, person_id) for fid in face_ids],
+        )
+        await db.commit()
+    return {"count": len(face_ids)}
+
+
 @router.get("/faces/unassigned")
 async def list_unassigned_faces(
     limit: int = Query(default=100, ge=1, le=500),
@@ -242,6 +267,33 @@ async def set_face_label(
     )
     await db.commit()
     return {"face_id": face_id, "person_id": body.person_id}
+
+
+@router.post("/faces/batch-label")
+async def batch_label_faces(
+    body: BatchFaceLabel, _: str = Depends(get_current_admin), db=Depends(get_ai_db)
+):
+    """여러 얼굴을 한 번에 확정/무시 처리 (추정 얼굴 일괄 확정 UI용)."""
+    if not body.face_ids:
+        raise HTTPException(status_code=400, detail="face_ids가 비어 있습니다")
+    if body.person_id is not None:
+        await _person_or_404(body.person_id, db)
+    ids = list(dict.fromkeys(body.face_ids))  # 중복 제거, 순서 유지
+    placeholders = ",".join("?" * len(ids))
+    async with db.execute(
+        f"SELECT COUNT(*) AS n FROM faces WHERE id IN ({placeholders})", ids
+    ) as cur:
+        found = (await cur.fetchone())["n"]
+    if found != len(ids):
+        raise HTTPException(status_code=404, detail="존재하지 않는 얼굴이 포함되어 있습니다")
+    await db.executemany(
+        """INSERT INTO face_labels (face_id, person_id) VALUES (?, ?)
+           ON CONFLICT(face_id) DO UPDATE SET
+             person_id=excluded.person_id, labeled_at=CURRENT_TIMESTAMP""",
+        [(fid, body.person_id) for fid in ids],
+    )
+    await db.commit()
+    return {"count": len(ids)}
 
 
 @router.delete("/faces/{face_id}/label", status_code=204)

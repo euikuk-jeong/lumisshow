@@ -2,7 +2,7 @@ import json
 import os
 from datetime import datetime
 from typing import Optional
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 def parse_music_paths(raw: str | None) -> list[str]:
@@ -254,6 +254,13 @@ class PersonCreate(BaseModel):
 
 class FaceLabelSet(BaseModel):
     person_id: Optional[int] = None   # None = 등록 인물 아님(무시)
+
+class BatchFaceLabel(BaseModel):
+    face_ids: list[int]
+    person_id: Optional[int] = None
+
+class ConfirmByScore(BaseModel):
+    min_score: float = Field(ge=0.0, le=1.0)
 
 class JobCreate(BaseModel):
     type: str                          # scan | rematch
