@@ -122,6 +122,32 @@ async def test_label_and_person_faces(admin_client):
     assert photos == ["2024/photo_0.jpg", "2024/photo_1.jpg"]
 
 
+async def test_person_faces_max_score_and_offset(admin_client):
+    """max_score — 임계값 미리보기용 필터, offset/limit — 더보기 페이지네이션."""
+    face_ids = await _seed_faces(3)
+    pid = (await admin_client.post("/api/admin/people", json={"name": "지우"})).json()["id"]
+    await _seed_match(face_ids[0], pid, 0.9)
+    await _seed_match(face_ids[1], pid, 0.7)
+    await _seed_match(face_ids[2], pid, 0.5)
+
+    r = await admin_client.get(f"/api/admin/people/{pid}/faces?source=matched&max_score=0.7")
+    assert r.status_code == 200
+    faces = r.json()["faces"]
+    assert [f["face_id"] for f in faces] == [face_ids[1], face_ids[2]]
+
+    # 경계값 포함 여부: max_score와 정확히 같은 점수도 포함(<=)
+    r = await admin_client.get(f"/api/admin/people/{pid}/faces?source=matched&max_score=0.9")
+    faces = r.json()["faces"]
+    assert [f["face_id"] for f in faces] == [face_ids[0], face_ids[1], face_ids[2]]
+
+    r = await admin_client.get(f"/api/admin/people/{pid}/faces?source=matched&limit=1&offset=1")
+    faces = r.json()["faces"]
+    assert [f["face_id"] for f in faces] == [face_ids[1]]
+
+    r = await admin_client.get(f"/api/admin/people/{pid}/faces?source=matched&max_score=1.5")
+    assert r.status_code == 422
+
+
 async def test_person_photos_detail(admin_client):
     """슬라이드쇼용 상세 사진 목록 — URL 구성, 무시 교정 제외, 페이지네이션."""
     face_ids = await _seed_faces(3)
