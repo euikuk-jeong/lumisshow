@@ -3,6 +3,7 @@
 import os
 
 import aiosqlite
+import numpy as np
 import pytest_asyncio
 
 
@@ -16,6 +17,23 @@ async def _seed_faces(count: int = 3) -> list[int]:
             cur = await db.execute(
                 "INSERT INTO faces (photo_path, bbox, det_score, embedding) VALUES (?, ?, ?, ?)",
                 (f"2024/photo_{i}.jpg", "[0,0,10,10]", 0.9, b"\x00" * 8),
+            )
+            ids.append(cur.lastrowid)
+        await db.commit()
+    return ids
+
+
+async def _seed_faces_with_embeddings(vectors: list[list[float]]) -> list[int]:
+    """임베딩 값을 직접 지정해 ai.db에 얼굴 삽입 (유사도 검색 테스트용)."""
+    from backend.models.ai_database import _ai_db_path
+
+    ids = []
+    async with aiosqlite.connect(_ai_db_path()) as db:
+        for i, vec in enumerate(vectors):
+            cur = await db.execute(
+                "INSERT INTO faces (photo_path, bbox, det_score, embedding) VALUES (?, ?, ?, ?)",
+                (f"2024/photo_{i}.jpg", "[0,0,10,10]", 0.9,
+                 np.asarray(vec, dtype=np.float32).tobytes()),
             )
             ids.append(cur.lastrowid)
         await db.commit()
@@ -159,6 +177,32 @@ async def test_label_validation(admin_client):
     assert r.status_code == 404  # 없는 인물
 
 
+async def test_similar_faces(admin_client):
+    ids = await _seed_faces_with_embeddings([
+        [1.0, 0.0, 0.0],   # 기준
+        [0.9, 0.1, 0.0],   # 기준과 가까움
+        [0.0, 1.0, 0.0],   # 기준과 직교(안 비슷함)
+    ])
+
+    r = await admin_client.get(f"/api/admin/faces/{ids[0]}/similar")
+    assert r.status_code == 200
+    faces = r.json()["faces"]
+    # 기준 얼굴 자신(유사도 1.0)이 최상단, 그다음 가까운 순
+    assert [f["face_id"] for f in faces] == [ids[0], ids[1], ids[2]]
+    assert faces[0]["score"] == 1.0
+    assert faces[1]["score"] > faces[2]["score"]
+
+    # 없는 얼굴 404
+    r = await admin_client.get("/api/admin/faces/999/similar")
+    assert r.status_code == 404
+
+    # 이미 라벨된 얼굴은 결과에서 제외 (기준 얼굴 자신은 라벨 여부와 무관하게 포함)
+    pid = (await admin_client.post("/api/admin/people", json={"name": "지우"})).json()["id"]
+    await admin_client.post(f"/api/admin/faces/{ids[1]}/label", json={"person_id": pid})
+    r = await admin_client.get(f"/api/admin/faces/{ids[0]}/similar")
+    assert [f["face_id"] for f in r.json()["faces"]] == [ids[0], ids[2]]
+
+
 async def test_unassigned_faces(admin_client):
     face_ids = await _seed_faces(2)
     pid = (await admin_client.post("/api/admin/people", json={"name": "지우"})).json()["id"]
@@ -167,6 +211,75 @@ async def test_unassigned_faces(admin_client):
     r = await admin_client.get("/api/admin/faces/unassigned")
     faces = r.json()["faces"]
     assert [f["face_id"] for f in faces] == [face_ids[1]]
+
+
+async def test_batch_label_faces(admin_client):
+    face_ids = await _seed_faces(3)
+    pid = (await admin_client.post("/api/admin/people", json={"name": "지우"})).json()["id"]
+
+    r = await admin_client.post(
+        "/api/admin/faces/batch-label",
+        json={"face_ids": face_ids[:2], "person_id": pid},
+    )
+    assert r.status_code == 200 and r.json() == {"count": 2}
+
+    faces = (await admin_client.get(f"/api/admin/people/{pid}/faces?source=labeled")).json()["faces"]
+    assert {f["face_id"] for f in faces} == {face_ids[0], face_ids[1]}
+
+    # 빈 목록 400
+    r = await admin_client.post("/api/admin/faces/batch-label", json={"face_ids": []})
+    assert r.status_code == 400
+
+    # 없는 인물 404
+    r = await admin_client.post(
+        "/api/admin/faces/batch-label", json={"face_ids": [face_ids[2]], "person_id": 999}
+    )
+    assert r.status_code == 404
+
+    # 없는 얼굴 포함 시 404 (전체 롤백 — 존재하는 얼굴도 라벨 안 됨)
+    r = await admin_client.post(
+        "/api/admin/faces/batch-label", json={"face_ids": [face_ids[2], 999], "person_id": pid}
+    )
+    assert r.status_code == 404
+    faces = (await admin_client.get(f"/api/admin/people/{pid}/faces?source=labeled")).json()["faces"]
+    assert face_ids[2] not in {f["face_id"] for f in faces}
+
+
+async def test_confirm_matched_by_score(admin_client):
+    face_ids = await _seed_faces(3)
+    pid = (await admin_client.post("/api/admin/people", json={"name": "지우"})).json()["id"]
+    await _seed_match(face_ids[0], pid, 0.8)
+    await _seed_match(face_ids[1], pid, 0.6)
+    await _seed_match(face_ids[2], pid, 0.5)
+
+    r = await admin_client.post(
+        f"/api/admin/people/{pid}/confirm-matched", json={"min_score": 0.7}
+    )
+    assert r.status_code == 200 and r.json() == {"count": 1}
+
+    faces = (await admin_client.get(f"/api/admin/people/{pid}/faces?source=labeled")).json()["faces"]
+    assert [f["face_id"] for f in faces] == [face_ids[0]]
+
+    matched = (await admin_client.get(f"/api/admin/people/{pid}/faces?source=matched")).json()["faces"]
+    assert {f["face_id"] for f in matched} == {face_ids[1], face_ids[2]}
+
+    # 이미 확정된 얼굴은 재확정 대상에서 자동 제외 (count 0)
+    r = await admin_client.post(
+        f"/api/admin/people/{pid}/confirm-matched", json={"min_score": 0.7}
+    )
+    assert r.json() == {"count": 0}
+
+    # 없는 인물 404
+    r = await admin_client.post(
+        "/api/admin/people/999/confirm-matched", json={"min_score": 0.5}
+    )
+    assert r.status_code == 404
+
+    # 범위 밖 min_score 422
+    r = await admin_client.post(
+        f"/api/admin/people/{pid}/confirm-matched", json={"min_score": 1.5}
+    )
+    assert r.status_code == 422
 
 
 async def test_delete_label_undo(admin_client):

@@ -100,14 +100,21 @@ function personCard(p) {
 
 const PAGE_SIZE = 100;
 let _selected = new Set();
+let _mode = 'default';       // 'default' | 'similar'
+let _similarSeed = null;     // { faceId, photoPath } — 'similar' 모드에서 기준 얼굴
+let _offset = 0;
 
 export async function renderUnassignedFaces() {
   _selected = new Set();
+  _mode = 'default';
+  _similarSeed = null;
+  _offset = 0;
+
   renderAdminShell(`
     <div class="page-header">
       <div>
         <h1 class="page-title">미분류 얼굴</h1>
-        <p class="page-subtitle">얼굴을 클릭해 선택한 뒤 인물을 지정하거나 무시 처리합니다</p>
+        <p class="page-subtitle">얼굴을 클릭해 선택한 뒤 인물을 지정하거나 무시 처리합니다. 카드에 🔍를 누르면 비슷한 얼굴순으로 다시 정렬됩니다</p>
       </div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         <select id="assign-person" class="form-input" style="width:auto"></select>
@@ -115,37 +122,88 @@ export async function renderUnassignedFaces() {
         <button class="btn btn-ghost" id="btn-ignore" disabled>선택 무시</button>
       </div>
     </div>
+    <div id="similar-banner" style="display:none;margin-bottom:10px"></div>
     <div id="faces-content"><div class="loading"></div></div>
     <div style="margin-top:16px;text-align:center">
       <button class="btn btn-ghost" id="btn-more" style="display:none">더 보기</button>
     </div>
   `, '/admin/people');
 
+  await loadPeopleOptions();
+
+  document.getElementById('btn-assign').addEventListener('click', handleAssignClick);
+  document.getElementById('btn-ignore').addEventListener('click', () => labelSelected(null));
+
+  document.getElementById('btn-more').addEventListener('click', () => { _offset += PAGE_SIZE; loadFaces(); });
+  await loadFaces();
+}
+
+async function loadPeopleOptions(selectPersonId) {
   const select = document.getElementById('assign-person');
   try {
     const people = await api.get('/api/admin/people');
-    select.innerHTML = people.length
-      ? people.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('')
-      : '<option value="">인물 없음 — 먼저 인물을 만드세요</option>';
+    select.innerHTML = [
+      `<option value="__new__">+ 새 인물 생성</option>`,
+      ...people.map(p => `<option value="${p.id}">${esc(p.name)} (${p.labeled_count}/${p.matched_count})</option>`),
+    ].join('');
+    if (selectPersonId != null) select.value = String(selectPersonId);
   } catch (e) { alert(e.message); }
-
-  document.getElementById('btn-assign').addEventListener('click', () => {
-    const pid = Number(select.value);
-    if (pid) labelSelected(pid);
-  });
-  document.getElementById('btn-ignore').addEventListener('click', () => labelSelected(null));
-
-  let offset = 0;
-  const moreBtn = document.getElementById('btn-more');
-  moreBtn.addEventListener('click', () => { offset += PAGE_SIZE; loadFaces(offset); });
-  await loadFaces(0);
 }
 
-async function loadFaces(offset) {
+async function handleAssignClick() {
+  const select = document.getElementById('assign-person');
+  if (select.value === '__new__') {
+    const name = prompt('생성할 인물 이름을 입력하세요');
+    if (!name?.trim()) return;
+    let person;
+    try {
+      person = await api.post('/api/admin/people', { name: name.trim() });
+    } catch (e) { alert(e.message); return; }
+    await loadPeopleOptions(person.id);
+    await labelSelected(person.id);
+    return;
+  }
+  const pid = Number(select.value);
+  if (pid) await labelSelected(pid);
+}
+
+function enterSimilarMode(faceId, photoPath) {
+  _mode = 'similar';
+  _similarSeed = { faceId, photoPath };
+  _selected.clear();
+  renderSimilarBanner();
+  loadFaces();
+}
+
+function enterDefaultMode() {
+  _mode = 'default';
+  _similarSeed = null;
+  _offset = 0;
+  _selected.clear();
+  renderSimilarBanner();
+  loadFaces();
+}
+
+function renderSimilarBanner() {
+  const el = document.getElementById('similar-banner');
+  if (_mode !== 'similar') { el.style.display = 'none'; el.innerHTML = ''; return; }
+  el.style.display = '';
+  el.innerHTML = `
+    <div class="alert" style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+      <span>선택한 얼굴과 비슷한 순서로 정렬 중 — <span class="text-muted">${esc(_similarSeed.photoPath)}</span></span>
+      <button class="btn btn-ghost btn-sm" id="btn-exit-similar">기본 목록으로</button>
+    </div>`;
+  document.getElementById('btn-exit-similar').addEventListener('click', enterDefaultMode);
+}
+
+async function loadFaces() {
   const el = document.getElementById('faces-content');
   try {
-    const { faces } = await api.get(`/api/admin/faces/unassigned?limit=${PAGE_SIZE}&offset=${offset}`);
-    if (offset === 0) {
+    const { faces } = _mode === 'similar'
+      ? await api.get(`/api/admin/faces/${_similarSeed.faceId}/similar?limit=200`)
+      : await api.get(`/api/admin/faces/unassigned?limit=${PAGE_SIZE}&offset=${_offset}`);
+
+    if (_mode === 'similar' || _offset === 0) {
       el.innerHTML = faces.length
         ? `<div class="face-grid" id="face-grid"></div>`
         : `<div class="empty-state"><h3>미분류 얼굴이 없습니다</h3>
@@ -156,25 +214,36 @@ async function loadFaces(offset) {
       grid.insertAdjacentHTML('beforeend', faces.map(faceCard).join(''));
       grid.querySelectorAll('.face-card:not([data-bound])').forEach(card => {
         card.dataset.bound = '1';
-        card.addEventListener('click', () => {
-          const id = Number(card.dataset.face);
+        const id = Number(card.dataset.face);
+        card.addEventListener('click', (e) => {
+          if (e.target.closest('[data-act="similar"]')) return;
           if (_selected.has(id)) { _selected.delete(id); card.classList.remove('selected'); }
           else                   { _selected.add(id);    card.classList.add('selected');    }
           updateToolbar();
         });
+        card.querySelector('[data-act="similar"]').addEventListener('click', (e) => {
+          e.stopPropagation();
+          enterSimilarMode(id, card.dataset.photo);
+        });
       });
     }
     document.getElementById('btn-more').style.display =
-      faces.length === PAGE_SIZE ? '' : 'none';
+      (_mode === 'default' && faces.length === PAGE_SIZE) ? '' : 'none';
   } catch (e) {
     el.innerHTML = `<div class="alert alert-error">${esc(e.message)}</div>`;
   }
 }
 
 function faceCard(f) {
+  const score = f.score != null
+    ? `<span class="face-score">${Math.round(f.score * 100)}%</span>` : '';
   return `
-    <div class="face-card" data-face="${f.face_id}" title="${esc(f.photo_path)}">
+    <div class="face-card" data-face="${f.face_id}" data-photo="${esc(f.photo_path)}" title="${esc(f.photo_path)}">
       <img src="/api/admin/faces/${f.face_id}/crop" alt="" loading="lazy">
+      ${score}
+      <div class="face-actions">
+        <button class="btn btn-sm btn-ghost" data-act="similar" title="비슷한 얼굴 찾기">🔍</button>
+      </div>
     </div>`;
 }
 
@@ -188,11 +257,10 @@ function updateToolbar() {
 
 async function labelSelected(personId) {
   const ids = [..._selected];
+  if (!ids.length) return;
   try {
-    for (const id of ids) {
-      await api.post(`/api/admin/faces/${id}/label`, { person_id: personId });
-      document.querySelector(`.face-card[data-face="${id}"]`)?.remove();
-    }
+    await api.post('/api/admin/faces/batch-label', { face_ids: ids, person_id: personId });
+    ids.forEach(id => document.querySelector(`.face-card[data-face="${id}"]`)?.remove());
     _selected.clear();
     updateToolbar();
   } catch (e) { alert(e.message); }

@@ -8,12 +8,15 @@ import os
 from typing import Optional
 from urllib.parse import quote
 
+import numpy as np
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import FileResponse
 
 from backend.models.ai_database import faces_dir, get_ai_db
 from backend.models.database import get_db
 from backend.models.schemas import (
+    BatchFaceLabel,
+    ConfirmByScore,
     FaceLabelSet,
     JobCreate,
     PersonCreate,
@@ -200,6 +203,29 @@ async def list_person_photos_detail(
     return SharePhotosResponse(photos=photos, total=total, page=page)
 
 
+@router.post("/people/{person_id}/confirm-matched")
+async def confirm_matched_by_score(
+    person_id: int, body: ConfirmByScore,
+    _: str = Depends(get_current_admin), db=Depends(get_ai_db),
+):
+    """이 인물의 추정 얼굴 중 score >= min_score 전체를 확정 처리 (페이지네이션 무관)."""
+    await _person_or_404(person_id, db)
+    async with db.execute(
+        """SELECT face_id FROM face_matches
+           WHERE person_id = ? AND score >= ?
+             AND face_id NOT IN (SELECT face_id FROM face_labels)""",
+        (person_id, body.min_score),
+    ) as cur:
+        face_ids = [r["face_id"] for r in await cur.fetchall()]
+    if face_ids:
+        await db.executemany(
+            "INSERT INTO face_labels (face_id, person_id) VALUES (?, ?)",
+            [(fid, person_id) for fid in face_ids],
+        )
+        await db.commit()
+    return {"count": len(face_ids)}
+
+
 @router.get("/faces/unassigned")
 async def list_unassigned_faces(
     limit: int = Query(default=100, ge=1, le=500),
@@ -223,6 +249,51 @@ async def list_unassigned_faces(
     return {"faces": [dict(r) for r in rows]}
 
 
+@router.get("/faces/{face_id}/similar")
+async def similar_faces(
+    face_id: int,
+    limit: int = Query(default=100, ge=1, le=500),
+    _: str = Depends(get_current_admin),
+    db=Depends(get_ai_db),
+):
+    """face_id와 임베딩이 비슷한 미분류 얼굴을 유사도순으로 반환 (신규 인물 탐색용).
+    임베딩 벡터 계산 방식은 ai_worker/matcher.py와 동일 로직을 backend에 복제
+    (컨테이너가 분리되어 코드를 공유할 수 없음 — ai.db 스키마 복제와 같은 이유)."""
+    async with db.execute("SELECT embedding FROM faces WHERE id = ?", (face_id,)) as cur:
+        seed_row = await cur.fetchone()
+    if seed_row is None:
+        raise HTTPException(status_code=404, detail="Face not found")
+    seed = np.frombuffer(seed_row["embedding"], dtype=np.float32)
+    seed_norm = np.linalg.norm(seed)
+    if seed_norm == 0:
+        return {"faces": []}
+    seed = seed / seed_norm
+
+    # 기준 얼굴 자신도 결과에 포함(유사도 1.0로 최상단) — 재정렬 화면에서 그대로 선택 가능하게.
+    async with db.execute(
+        """SELECT f.id, f.photo_path, f.embedding
+           FROM faces f
+           LEFT JOIN face_labels fl ON fl.face_id = f.id
+           LEFT JOIN face_matches fm ON fm.face_id = f.id
+           WHERE (fl.face_id IS NULL AND fm.face_id IS NULL) OR f.id = ?""",
+        (face_id,),
+    ) as cur:
+        rows = await cur.fetchall()
+    if not rows:
+        return {"faces": []}
+
+    mat = np.stack([np.frombuffer(r["embedding"], dtype=np.float32) for r in rows])
+    norms = np.linalg.norm(mat, axis=1, keepdims=True)
+    norms[norms == 0] = 1.0
+    scores = (mat / norms) @ seed
+
+    order = np.argsort(-scores)[:limit]
+    return {"faces": [
+        {"face_id": rows[i]["id"], "photo_path": rows[i]["photo_path"], "score": float(scores[i])}
+        for i in order
+    ]}
+
+
 @router.post("/faces/{face_id}/label")
 async def set_face_label(
     face_id: int, body: FaceLabelSet,
@@ -242,6 +313,33 @@ async def set_face_label(
     )
     await db.commit()
     return {"face_id": face_id, "person_id": body.person_id}
+
+
+@router.post("/faces/batch-label")
+async def batch_label_faces(
+    body: BatchFaceLabel, _: str = Depends(get_current_admin), db=Depends(get_ai_db)
+):
+    """여러 얼굴을 한 번에 확정/무시 처리 (추정 얼굴 일괄 확정 UI용)."""
+    if not body.face_ids:
+        raise HTTPException(status_code=400, detail="face_ids가 비어 있습니다")
+    if body.person_id is not None:
+        await _person_or_404(body.person_id, db)
+    ids = list(dict.fromkeys(body.face_ids))  # 중복 제거, 순서 유지
+    placeholders = ",".join("?" * len(ids))
+    async with db.execute(
+        f"SELECT COUNT(*) AS n FROM faces WHERE id IN ({placeholders})", ids
+    ) as cur:
+        found = (await cur.fetchone())["n"]
+    if found != len(ids):
+        raise HTTPException(status_code=404, detail="존재하지 않는 얼굴이 포함되어 있습니다")
+    await db.executemany(
+        """INSERT INTO face_labels (face_id, person_id) VALUES (?, ?)
+           ON CONFLICT(face_id) DO UPDATE SET
+             person_id=excluded.person_id, labeled_at=CURRENT_TIMESTAMP""",
+        [(fid, body.person_id) for fid in ids],
+    )
+    await db.commit()
+    return {"count": len(ids)}
 
 
 @router.delete("/faces/{face_id}/label", status_code=204)
