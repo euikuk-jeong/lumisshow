@@ -27,7 +27,7 @@ assets/js/
     admin-browse.js               # 사진 탐색기 (폴더 트리, 다중 선택)
     admin-people.js               # Phase 2: 인물 목록·미분류 얼굴 지정·AI 잡 트리거
     admin-person-detail.js        # Phase 2: 인물 상세 (추정 얼굴 교정, 인물 앨범 생성)
-    admin-person-photos.js        # Phase 2: 인물 전체 사진 그리드 (라이트박스·슬라이드쇼 진입)
+    admin-person-photos.js        # Phase 2: 인물 전체 사진 — 확정 얼굴만, 그리드/리스트/날짜별 보기·정렬 (라이트박스·슬라이드쇼 진입)
     album-view.js                 # 공유 링크 뷰어 메인
     share-auth.js                 # 공유 링크 패스워드 입력
     slideshow.js                  # 슬라이드쇼 엔진 (데이터 소스 provider: 공유 링크 / Admin 인물)

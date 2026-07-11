@@ -47,12 +47,21 @@ _PERSON_PHOTOS_FROM = """
        OR (fl.face_id IS NULL AND fm.person_id = ?)
 """
 
+# 확정(라벨)된 얼굴만 — 추정 매칭 제외
+_PERSON_PHOTOS_LABELED_FROM = """
+    FROM faces f
+    JOIN face_labels fl ON fl.face_id = f.id
+    WHERE fl.person_id = ?
+"""
+
 
 async def _person_photo_paths(
-    person_id: int, db, limit: Optional[int] = None, offset: int = 0
+    person_id: int, db, limit: Optional[int] = None, offset: int = 0,
+    labeled_only: bool = False,
 ) -> list[str]:
-    sql = f"SELECT DISTINCT f.photo_path {_PERSON_PHOTOS_FROM} ORDER BY f.photo_path"
-    params: list = [person_id, person_id]
+    frm = _PERSON_PHOTOS_LABELED_FROM if labeled_only else _PERSON_PHOTOS_FROM
+    sql = f"SELECT DISTINCT f.photo_path {frm} ORDER BY f.photo_path"
+    params: list = [person_id] if labeled_only else [person_id, person_id]
     if limit is not None:
         sql += " LIMIT ? OFFSET ?"
         params += [limit, offset]
@@ -174,20 +183,29 @@ async def list_person_photos_detail(
     person_id: int,
     page: int = Query(default=1, ge=1),
     size: int = Query(default=50, ge=1, le=500),
+    source: str = Query(default="all", pattern="^(all|labeled)$"),
     _: str = Depends(get_current_admin),
     db=Depends(get_ai_db),
     app_db=Depends(get_db),
 ):
-    """인물 사진 상세 목록 (EXIF·URL 포함, 페이지네이션) — Admin 슬라이드쇼/전체 사진용."""
+    """인물 사진 상세 목록 (EXIF·URL 포함, 페이지네이션) — Admin 슬라이드쇼/전체 사진용.
+
+    source=labeled면 확정(라벨) 얼굴이 있는 사진만, 기본(all)은 확정+추정."""
     await _person_or_404(person_id, db)
-    async with db.execute(
-        f"SELECT COUNT(DISTINCT f.photo_path) AS total {_PERSON_PHOTOS_FROM}",
-        (person_id, person_id),
-    ) as cur:
+    labeled_only = source == "labeled"
+    if labeled_only:
+        count_sql = f"SELECT COUNT(DISTINCT f.photo_path) AS total {_PERSON_PHOTOS_LABELED_FROM}"
+        count_params: tuple = (person_id,)
+    else:
+        count_sql = f"SELECT COUNT(DISTINCT f.photo_path) AS total {_PERSON_PHOTOS_FROM}"
+        count_params = (person_id, person_id)
+    async with db.execute(count_sql, count_params) as cur:
         total = (await cur.fetchone())["total"]
 
     offset = (page - 1) * size
-    paths = await _person_photo_paths(person_id, db, limit=size, offset=offset)
+    paths = await _person_photo_paths(
+        person_id, db, limit=size, offset=offset, labeled_only=labeled_only
+    )
 
     meta_map = await load_photo_meta(paths, app_db)
     photos = [
@@ -198,6 +216,7 @@ async def list_person_photos_detail(
             thumb_small_url=f"/api/admin/thumb?path={quote(p)}&size=small",
             thumb_medium_url=f"/api/admin/thumb?path={quote(p)}&size=medium",
             meta=meta_map.get(p, {}),
+            include_file_path=True,  # Admin 전용 — 프론트 정렬·라이트박스용
         )
         for i, p in enumerate(paths)
     ]
