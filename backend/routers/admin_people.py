@@ -141,10 +141,14 @@ async def list_person_faces(
     source: str = Query(default="all", pattern="^(all|labeled|matched)$"),
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
+    max_score: Optional[float] = Query(default=None, ge=0.0, le=1.0),
     _: str = Depends(get_current_admin),
     db=Depends(get_ai_db),
 ):
-    """인물의 얼굴 목록. labeled=사람이 확정, matched=자동 매칭(미확정)."""
+    """인물의 얼굴 목록. labeled=사람이 확정, matched=자동 매칭(미확정).
+
+    max_score 지정 시 matched 얼굴을 해당 점수 이하로 필터링
+    (임계값 미리보기용 — 특정 % 부근부터 바로 보고 싶을 때)."""
     await _person_or_404(person_id, db)
     labeled_sql = """
         SELECT f.id AS face_id, f.photo_path, f.det_score,
@@ -157,12 +161,16 @@ async def list_person_faces(
         FROM face_matches fm JOIN faces f ON f.id = fm.face_id
         WHERE fm.person_id = ?
           AND fm.face_id NOT IN (SELECT face_id FROM face_labels)"""
+    matched_params = [person_id]
+    if max_score is not None:
+        matched_sql += " AND fm.score <= ?"
+        matched_params.append(max_score)
     if source == "labeled":
         sql, params = labeled_sql, [person_id]
     elif source == "matched":
-        sql, params = matched_sql, [person_id]
+        sql, params = matched_sql, matched_params
     else:
-        sql, params = f"{labeled_sql} UNION ALL {matched_sql}", [person_id, person_id]
+        sql, params = f"{labeled_sql} UNION ALL {matched_sql}", [person_id, *matched_params]
     sql += " ORDER BY source, score DESC LIMIT ? OFFSET ?"
     async with db.execute(sql, (*params, limit, offset)) as cur:
         rows = await cur.fetchall()

@@ -79,8 +79,14 @@ async function loadPeople() {
       return;
     }
     el.innerHTML = `
-      <input type="search" id="people-search" class="form-input" placeholder="🔍 인물 이름 검색"
-             style="max-width:260px;margin-bottom:14px">
+      <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-bottom:14px">
+        <input type="search" id="people-search" class="form-input" placeholder="🔍 인물 이름 검색"
+               style="max-width:260px">
+        <label style="display:flex;align-items:center;gap:6px;font-size:14px;white-space:nowrap">
+          <input type="checkbox" id="people-filter-matched">
+          추정 있는 인물만 보기
+        </label>
+      </div>
       <div id="people-grid-wrap"></div>`;
 
     const wrap = document.getElementById('people-grid-wrap');
@@ -94,12 +100,18 @@ async function loadPeople() {
         card.addEventListener('click', () => window.navigate(`/admin/people/${card.dataset.id}`));
       });
     }
+    function applyFilters() {
+      const q = document.getElementById('people-search').value.trim().toLowerCase();
+      const matchedOnly = document.getElementById('people-filter-matched').checked;
+      let list = people;
+      if (q) list = list.filter(p => p.name.toLowerCase().includes(q));
+      if (matchedOnly) list = list.filter(p => p.matched_count > 0);
+      renderGrid(list);
+    }
     renderGrid(people);
 
-    document.getElementById('people-search').addEventListener('input', e => {
-      const q = e.target.value.trim().toLowerCase();
-      renderGrid(q ? people.filter(p => p.name.toLowerCase().includes(q)) : people);
-    });
+    document.getElementById('people-search').addEventListener('input', applyFilters);
+    document.getElementById('people-filter-matched').addEventListener('change', applyFilters);
   } catch (e) {
     el.innerHTML = `<div class="alert alert-error">${esc(e.message)}</div>`;
   }
@@ -141,7 +153,7 @@ export async function renderUnassignedFaces() {
       </div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         <span class="text-muted" id="sel-count" style="min-width:64px;text-align:right;font-size:13px">0개 선택</span>
-        <select id="assign-person" class="form-input" style="width:auto"></select>
+        <select id="assign-person" class="form-input" style="width:auto;max-width:200px"></select>
         <button class="btn btn-primary" id="btn-assign" disabled>선택 지정</button>
         <button class="btn btn-ghost" id="btn-ignore" disabled>선택 무시</button>
       </div>
