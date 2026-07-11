@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-07-11
+
+### Added
+- **인물 전체 사진 보기 모드·정렬**: 그리드/리스트/날짜별(📅) 보기 토글과
+  파일명/촬영일 × 오름/내림차순 정렬 추가 — 앨범 편집 화면과 동일한 UX
+  (`admin-person-photos.js`)
+- **인물 목록 이름 검색**: 인물 목록 상단 검색창에서 이름 부분 일치로 즉시 필터
+  (`admin-people.js`)
+
+### Changed
+- **인물 전체 사진은 확정 얼굴만 표시**: 확정+추정을 모두 보여주던 것을 확정(라벨)
+  얼굴이 포함된 사진만 표시하도록 변경 — `photos-detail`에 `source=all|labeled`
+  파라미터 추가, Admin 응답에만 `file_path` 포함(공유 링크에는 미노출)
+  (`admin_people.py`, `schemas.py`)
+
+### Fixed
+- **미분류 얼굴 툴바 줄바꿈 버그**: 얼굴 선택 시 버튼 텍스트에 "(N)"이 붙으며 폭이
+  변해 '선택 무시' 버튼이 다음 줄로 밀리던 문제 — 버튼 텍스트 고정, 선택 개수는
+  고정 폭 라벨로 분리 (`admin-people.js`)
+
 ## [1.3.0] - 2026-07-11
 
 ### Added
@@ -487,7 +507,8 @@ Phase 2 — AI 얼굴 인식 스마트 앨범. NAS 로컬 AI(InsightFace)로 사
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v1.3.0...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v1.4.0...HEAD
+[1.4.0]: https://github.com/euikuk-jeong/lumisshow/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/euikuk-jeong/lumisshow/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/euikuk-jeong/lumisshow/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/euikuk-jeong/lumisshow/compare/v1.0.3...v1.1.0
