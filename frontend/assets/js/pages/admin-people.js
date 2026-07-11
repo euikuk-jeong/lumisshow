@@ -78,9 +78,27 @@ async function loadPeople() {
         </div>`;
       return;
     }
-    el.innerHTML = `<div class="people-grid">${people.map(personCard).join('')}</div>`;
-    el.querySelectorAll('.person-card').forEach((card, i) => {
-      card.addEventListener('click', () => window.navigate(`/admin/people/${people[i].id}`));
+    el.innerHTML = `
+      <input type="search" id="people-search" class="form-input" placeholder="🔍 인물 이름 검색"
+             style="max-width:260px;margin-bottom:14px">
+      <div id="people-grid-wrap"></div>`;
+
+    const wrap = document.getElementById('people-grid-wrap');
+    function renderGrid(list) {
+      if (!list.length) {
+        wrap.innerHTML = '<p class="text-muted">검색 결과가 없습니다.</p>';
+        return;
+      }
+      wrap.innerHTML = `<div class="people-grid">${list.map(personCard).join('')}</div>`;
+      wrap.querySelectorAll('.person-card').forEach(card => {
+        card.addEventListener('click', () => window.navigate(`/admin/people/${card.dataset.id}`));
+      });
+    }
+    renderGrid(people);
+
+    document.getElementById('people-search').addEventListener('input', e => {
+      const q = e.target.value.trim().toLowerCase();
+      renderGrid(q ? people.filter(p => p.name.toLowerCase().includes(q)) : people);
     });
   } catch (e) {
     el.innerHTML = `<div class="alert alert-error">${esc(e.message)}</div>`;
@@ -92,7 +110,7 @@ function personCard(p) {
     ? `<img src="/api/admin/faces/${p.cover_face_id}/crop" alt="" loading="lazy">`
     : '👤';
   return `
-    <div class="person-card">
+    <div class="person-card" data-id="${p.id}">
       <div class="person-cover">${cover}</div>
       <div class="person-info">
         <div class="person-name" title="${esc(p.name)}">${esc(p.name)}</div>
