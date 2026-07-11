@@ -180,6 +180,10 @@
   gap: 6px;
   cursor: pointer;
 }
+.settings-radios label:has(input:disabled) {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
 
 .settings-actions {
   display: flex;

@@ -27,6 +27,7 @@ export async function renderAdminBrowse() {
         <div class="view-toggle">
           <button id="btn-view-grid" class="btn btn-ghost btn-sm active" title="그리드 보기">⊞</button>
           <button id="btn-view-list" class="btn btn-ghost btn-sm" title="리스트 보기">☰</button>
+          <button id="btn-view-date" class="btn btn-ghost btn-sm" title="날짜별 보기">📅</button>
         </div>
       </div>
     </div>
@@ -112,6 +113,7 @@ export async function renderAdminBrowse() {
   });
   document.getElementById('btn-view-grid').addEventListener('click', () => setViewMode(state, 'grid'));
   document.getElementById('btn-view-list').addEventListener('click', () => setViewMode(state, 'list'));
+  document.getElementById('btn-view-date').addEventListener('click', () => setViewMode(state, 'date'));
 
   if (albumId) {
     document.getElementById('btn-add-selected').addEventListener('click', () => addSelected(albumId, state, backUrl));
@@ -167,7 +169,39 @@ function setViewMode(state, mode) {
   state.viewMode = mode;
   document.getElementById('btn-view-grid').classList.toggle('active', mode === 'grid');
   document.getElementById('btn-view-list').classList.toggle('active', mode === 'list');
+  document.getElementById('btn-view-date').classList.toggle('active', mode === 'date');
+
+  const sortSelect = document.getElementById('sort-select');
+  sortSelect.querySelectorAll('option[value^="name-"]').forEach(o => { o.disabled = mode === 'date'; });
+  if (mode === 'date' && state.sortBy.startsWith('name')) {
+    state.sortBy = 'date-desc';
+    sortSelect.value = 'date-desc';
+  }
+
   renderBrowseResult(state);
+}
+
+function groupByDate(photos) {
+  // 현재 정렬 순서를 그대로 유지한 채 날짜(taken_at)가 바뀌는 지점마다 구간을 나눈다.
+  const groups = [];
+  for (const p of photos) {
+    const key = p.taken_at ? p.taken_at.slice(0, 10) : '';
+    const last = groups[groups.length - 1];
+    if (last && last.key === key) {
+      last.photos.push(p);
+    } else {
+      groups.push({ key, label: key || '날짜 정보 없음', photos: [p] });
+    }
+  }
+  return groups;
+}
+
+function renderDateGroups(groups, selected) {
+  return groups.map(g => `
+    <div class="date-group">
+      <div class="date-group-header">${esc(g.label)} <span class="text-muted text-sm">(${g.photos.length}장)</span></div>
+      <div class="photo-grid">${g.photos.map(p => selectableThumb(p, selected.has(p.path))).join('')}</div>
+    </div>`).join('');
 }
 
 function renderBrowseResult(state) {
@@ -183,8 +217,10 @@ function renderBrowseResult(state) {
     : '';
 
   let photosHTML;
-  if (!sorted.length) {
+  if (!photos.length) {
     photosHTML = '<p class="text-muted text-sm">사진이 없습니다</p>';
+  } else if (state.viewMode === 'date') {
+    photosHTML = renderDateGroups(groupByDate(sorted), state.selected);
   } else if (state.viewMode === 'list') {
     photosHTML = `<div class="photo-list">${sorted.map(p => photoListItem(p, state.selected.has(p.path))).join('')}</div>`;
   } else {

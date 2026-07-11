@@ -17,6 +17,7 @@ from backend.models.schemas import (
     PhotoPathsRequest,
     parse_music_paths,
 )
+from backend.routers.admin_browse import load_photo_meta
 from backend.routers.admin_settings import get_settings
 from backend.services.auth import get_current_admin
 from backend.services.thumbnail import IMAGE_EXTENSIONS, get_image_meta
@@ -209,7 +210,13 @@ async def get_album(
     ) as cur:
         photo_rows = await cur.fetchall()
 
-    album["photos"] = [dict(r) for r in photo_rows]
+    meta_by_rel = await load_photo_meta([r["file_path"] for r in photo_rows], db)
+    photos = []
+    for r in photo_rows:
+        d = dict(r)
+        d["taken_at"] = meta_by_rel.get(r["file_path"], {}).get("taken_at")
+        photos.append(d)
+    album["photos"] = photos
     return album
 
 
