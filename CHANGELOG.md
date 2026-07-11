@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-07-11
+
+### Added
+- **사진 탐색기·앨범 편집 날짜별 보기**: 기존 그리드/리스트 보기에 이어 촬영일(EXIF) 기준으로
+  묶어 보는 날짜별 보기(📅) 추가 (`admin-browse.js`, `admin-album-edit.js`)
+  - 날짜별 보기 진입 시 파일명 정렬은 비활성화되고 촬영일 정렬로 전환
+
+### Changed
+- **앨범 상세 응답에 촬영일 포함**: `AlbumPhotoResponse`에 `taken_at` 필드 추가 —
+  앨범 편집 화면에서도 사진별 EXIF 촬영일을 사용할 수 있도록 `get_album`에서
+  `photo_meta_cache`를 enrich (`schemas.py`, `admin_albums.py`)
+
 ## [1.0.3] - 2026-07-10
 
 ### Changed
@@ -446,7 +458,8 @@ Phase 2 — AI 얼굴 인식 스마트 앨범. NAS 로컬 AI(InsightFace)로 사
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v1.0.3...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/euikuk-jeong/lumisshow/compare/v1.0.3...v1.1.0
 [1.0.3]: https://github.com/euikuk-jeong/lumisshow/compare/v1.0.2...v1.0.3
 [1.0.2]: https://github.com/euikuk-jeong/lumisshow/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/euikuk-jeong/lumisshow/compare/v1.0.0...v1.0.1
