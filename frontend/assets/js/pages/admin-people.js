@@ -140,6 +140,7 @@ export async function renderUnassignedFaces() {
         <p class="page-subtitle">얼굴을 클릭해 선택한 뒤 인물을 지정하거나 무시 처리합니다. 카드에 🔍를 누르면 비슷한 얼굴순으로 다시 정렬됩니다</p>
       </div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <span class="text-muted" id="sel-count" style="min-width:64px;text-align:right;font-size:13px">0개 선택</span>
         <select id="assign-person" class="form-input" style="width:auto"></select>
         <button class="btn btn-primary" id="btn-assign" disabled>선택 지정</button>
         <button class="btn btn-ghost" id="btn-ignore" disabled>선택 무시</button>
@@ -270,12 +271,13 @@ function faceCard(f) {
     </div>`;
 }
 
+// 버튼 텍스트는 고정 — 폭이 변하면 flex-wrap으로 버튼이 줄바꿈되는 버그 방지.
+// 선택 개수는 고정 폭 #sel-count 라벨에만 표시.
 function updateToolbar() {
   const n = _selected.size;
+  document.getElementById('sel-count').textContent = `${n}개 선택`;
   document.getElementById('btn-assign').disabled = n === 0;
   document.getElementById('btn-ignore').disabled = n === 0;
-  document.getElementById('btn-assign').textContent = n ? `선택 지정 (${n})` : '선택 지정';
-  document.getElementById('btn-ignore').textContent = n ? `선택 무시 (${n})` : '선택 무시';
 }
 
 async function labelSelected(personId) {
