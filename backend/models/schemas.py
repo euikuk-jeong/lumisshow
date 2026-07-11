@@ -83,6 +83,7 @@ class AlbumPhotoResponse(BaseModel):
     file_path: str
     sort_order: int
     added_at: datetime
+    taken_at: Optional[datetime] = None
 
 class AlbumResponse(BaseModel):
     id: int

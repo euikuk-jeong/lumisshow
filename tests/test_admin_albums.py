@@ -516,6 +516,31 @@ async def test_photo_sort_taken_at_uses_exif(dated_admin_client):
     assert names == ["old.jpg", "mid.jpg", "new.jpg"], f"EXIF 날짜 오름차순 정렬 실패: {names}"
 
 
+async def test_get_album_photos_include_taken_at(dated_admin_client):
+    """앨범 상세 조회 시 각 사진에 EXIF taken_at이 포함되어야 한다 (날짜별 보기용)."""
+    r = await dated_admin_client.post(
+        "/api/admin/albums",
+        json={"name": "WithDates", "photo_paths": ["old.jpg"]},
+    )
+    album_id = r.json()["id"]
+
+    photos = (await dated_admin_client.get(f"/api/admin/albums/{album_id}")).json()["photos"]
+    assert photos[0]["taken_at"] is not None
+    assert photos[0]["taken_at"].startswith("2022-01-15")
+
+
+async def test_get_album_photos_taken_at_none_without_exif(admin_client):
+    """EXIF 없는 사진은 taken_at이 null로 응답되어야 한다."""
+    r = await admin_client.post(
+        "/api/admin/albums",
+        json={"name": "NoExif", "photo_paths": ["nofile.jpg"]},
+    )
+    album_id = r.json()["id"]
+
+    photos = (await admin_client.get(f"/api/admin/albums/{album_id}")).json()["photos"]
+    assert photos[0]["taken_at"] is None
+
+
 async def test_photo_sort_taken_at_desc_uses_exif(dated_admin_client):
     """taken_at 내림차순 정렬이 EXIF 날짜 역순이어야 한다."""
     r = await dated_admin_client.post(

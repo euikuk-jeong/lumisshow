@@ -212,6 +212,7 @@ function renderEditForm(album, links, tzOffset, serverTheme = 'dark') {
               <div class="view-toggle">
                 <button type="button" id="btn-photo-view-grid" class="btn btn-ghost btn-sm active" title="그리드 보기">⊞</button>
                 <button type="button" id="btn-photo-view-list" class="btn btn-ghost btn-sm" title="리스트 보기">☰</button>
+                <button type="button" id="btn-photo-view-date" class="btn btn-ghost btn-sm" title="날짜별 보기">📅</button>
               </div>
               <a href="/admin/browse?album_id=${album.id}" class="btn btn-ghost btn-sm" data-link>+ 사진 추가</a>
               <button type="button" class="btn btn-danger btn-sm" id="btn-enter-remove-mode">사진 제외</button>
@@ -341,32 +342,53 @@ function renderEditForm(album, links, tzOffset, serverTheme = 'dark') {
 
   function refreshPhotoGrid() {
     const el = document.getElementById('photo-grid');
-    el.className = photoState.viewMode === 'list' ? 'photo-list' : 'photo-grid';
+    el.className = photoState.viewMode === 'list' ? 'photo-list'
+      : photoState.viewMode === 'date' ? 'photo-date-groups'
+      : 'photo-grid';
     if (photoState.removeMode) el.classList.add('remove-mode');
-    el.innerHTML = photoState.photos.length
-      ? photoState.photos.map(p =>
-          photoState.viewMode === 'list'
-            ? photoListItemEdit(p, photoState.coverPath, photoState.removeMode, photoState.removeSelected.has(p.file_path))
-            : photoThumb(p, photoState.coverPath, photoState.removeMode, photoState.removeSelected.has(p.file_path))
-        ).join('')
-      : '<p class="text-muted text-sm">사진이 없습니다</p>';
+    if (!photoState.photos.length) {
+      el.innerHTML = '<p class="text-muted text-sm">사진이 없습니다</p>';
+    } else if (photoState.viewMode === 'date') {
+      el.innerHTML = groupPhotosByDate(photoState.photos).map(g => `
+        <div class="date-group">
+          <div class="date-group-header">${esc(g.label)} <span class="text-muted text-sm">(${g.photos.length}장)</span></div>
+          <div class="photo-grid">${g.photos.map(p =>
+            photoThumb(p, photoState.coverPath, photoState.removeMode, photoState.removeSelected.has(p.file_path))
+          ).join('')}</div>
+        </div>`).join('');
+    } else {
+      el.innerHTML = photoState.photos.map(p =>
+        photoState.viewMode === 'list'
+          ? photoListItemEdit(p, photoState.coverPath, photoState.removeMode, photoState.removeSelected.has(p.file_path))
+          : photoThumb(p, photoState.coverPath, photoState.removeMode, photoState.removeSelected.has(p.file_path))
+      ).join('');
+    }
     attachImageErrorTracking();
     const countEl = document.getElementById('photo-count-label');
     if (countEl) countEl.textContent = photoState.photos.length;
   }
 
-  document.getElementById('btn-photo-view-grid').addEventListener('click', () => {
-    photoState.viewMode = 'grid';
-    document.getElementById('btn-photo-view-grid').classList.add('active');
-    document.getElementById('btn-photo-view-list').classList.remove('active');
+  function setPhotoViewMode(mode) {
+    photoState.viewMode = mode;
+    document.getElementById('btn-photo-view-grid').classList.toggle('active', mode === 'grid');
+    document.getElementById('btn-photo-view-list').classList.toggle('active', mode === 'list');
+    document.getElementById('btn-photo-view-date').classList.toggle('active', mode === 'date');
+
+    const filenameRadio = document.querySelector('input[name="ps-by"][value="filename"]');
+    if (filenameRadio) {
+      filenameRadio.disabled = mode === 'date';
+      if (mode === 'date' && filenameRadio.checked) {
+        const takenAtRadio = document.querySelector('input[name="ps-by"][value="taken_at"]');
+        if (takenAtRadio) takenAtRadio.checked = true;
+      }
+    }
+
     refreshPhotoGrid();
-  });
-  document.getElementById('btn-photo-view-list').addEventListener('click', () => {
-    photoState.viewMode = 'list';
-    document.getElementById('btn-photo-view-grid').classList.remove('active');
-    document.getElementById('btn-photo-view-list').classList.add('active');
-    refreshPhotoGrid();
-  });
+  }
+
+  document.getElementById('btn-photo-view-grid').addEventListener('click', () => setPhotoViewMode('grid'));
+  document.getElementById('btn-photo-view-list').addEventListener('click', () => setPhotoViewMode('list'));
+  document.getElementById('btn-photo-view-date').addEventListener('click', () => setPhotoViewMode('date'));
 
   bindInfoForm(album.id, () => musicPaths);
   bindViewCountReset(album.id);
@@ -939,6 +961,21 @@ function initAlbumThemePicker(currentTheme, serverTheme = 'dark') {
       el.classList.add('active');
     });
   });
+}
+
+function groupPhotosByDate(photos) {
+  // 현재 정렬 순서를 그대로 유지한 채 날짜(taken_at)가 바뀌는 지점마다 구간을 나눈다.
+  const groups = [];
+  for (const p of photos) {
+    const key = p.taken_at ? p.taken_at.slice(0, 10) : '';
+    const last = groups[groups.length - 1];
+    if (last && last.key === key) {
+      last.photos.push(p);
+    } else {
+      groups.push({ key, label: key || '날짜 정보 없음', photos: [p] });
+    }
+  }
+  return groups;
 }
 
 function photoThumb(photo, coverPath, removeMode = false, isSelected = false) {
