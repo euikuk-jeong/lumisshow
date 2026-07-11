@@ -191,6 +191,25 @@ def test_reset_stale_jobs(conn):
     assert statuses == ["pending", "done"]
 
 
+def test_scan_hour_setting_db_overrides_env(conn, monkeypatch):
+    from ai_worker.daemon import scan_hour_setting
+
+    monkeypatch.setenv("AI_SCAN_HOUR", "3")
+    assert scan_hour_setting(conn) == 3  # 미설정 → 환경변수
+
+    conn.execute("INSERT OR REPLACE INTO ai_settings (key, value) VALUES ('scan_hour', '5')")
+    conn.commit()
+    assert scan_hour_setting(conn) == 5  # DB 설정 우선
+
+    # 잘못된 값(범위 밖/비숫자)은 환경변수로 폴백
+    conn.execute("UPDATE ai_settings SET value='24' WHERE key='scan_hour'")
+    conn.commit()
+    assert scan_hour_setting(conn) == 3
+    conn.execute("UPDATE ai_settings SET value='abc' WHERE key='scan_hour'")
+    conn.commit()
+    assert scan_hour_setting(conn) == 3
+
+
 # ── label_sheet ───────────────────────────────────────────────────────
 
 

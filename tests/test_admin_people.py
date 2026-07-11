@@ -332,3 +332,35 @@ async def test_ai_status_and_jobs(admin_client):
     stats = (await admin_client.get("/api/admin/ai/status")).json()
     assert stats["recent_jobs"][0]["type"] == "scan"
     assert stats["recent_jobs"][0]["status"] == "pending"
+
+
+# ── AI 설정 (야간 스캔 시각) ──────────────────────────────────────────
+
+
+async def test_ai_settings_get_and_update(admin_client, client):
+    # 미설정 시 null
+    r = await admin_client.get("/api/admin/ai/settings")
+    assert r.status_code == 200 and r.json() == {"scan_hour": None}
+
+    # 설정 저장 → 조회 반영
+    r = await admin_client.patch("/api/admin/ai/settings", json={"scan_hour": 4})
+    assert r.status_code == 200 and r.json() == {"scan_hour": 4}
+    r = await admin_client.get("/api/admin/ai/settings")
+    assert r.json() == {"scan_hour": 4}
+
+    # 덮어쓰기
+    await admin_client.patch("/api/admin/ai/settings", json={"scan_hour": 23})
+    assert (await admin_client.get("/api/admin/ai/settings")).json() == {"scan_hour": 23}
+
+    # 범위 밖 422
+    r = await admin_client.patch("/api/admin/ai/settings", json={"scan_hour": 24})
+    assert r.status_code == 422
+    r = await admin_client.patch("/api/admin/ai/settings", json={"scan_hour": -1})
+    assert r.status_code == 422
+
+    # 인증 필요
+    del client.headers["Authorization"]
+    r = await client.get("/api/admin/ai/settings")
+    assert r.status_code in (401, 403)
+    r = await client.patch("/api/admin/ai/settings", json={"scan_hour": 3})
+    assert r.status_code in (401, 403)

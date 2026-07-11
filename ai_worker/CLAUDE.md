@@ -47,7 +47,7 @@ tools/       # label_helper.py (CSV 라벨링), eval.py (precision/recall)
 
 ### ai.db 쓰기 주체 분리 (SQLite 동시성 회피)
 - **워커가 쓰는 테이블**: `photos_analyzed`, `faces`, `face_matches` (+`jobs.status` 갱신)
-- **LumisShow가 쓰는 테이블**: `persons`, `face_labels`, `jobs`
+- **LumisShow가 쓰는 테이블**: `persons`, `face_labels`, `jobs`, `ai_settings`
 - 유효 인물 판정: `face_labels` 있으면 그 값(사람 확정), 없으면 `face_matches`
 - `face_labels.person_id = NULL`은 "등록 인물 아님(무시)" 라벨
 

@@ -1,5 +1,5 @@
 """ai.db 연결/스키마. 워커는 photos_analyzed·faces·face_matches를 쓰고
-persons·face_labels·jobs는 LumisShow가 쓴다 (jobs.status만 워커가 갱신)."""
+persons·face_labels·jobs·ai_settings는 LumisShow가 쓴다 (jobs.status만 워커가 갱신)."""
 
 import os
 import sqlite3
@@ -53,6 +53,11 @@ CREATE TABLE IF NOT EXISTS jobs (
     status       TEXT NOT NULL DEFAULT 'pending',  -- pending | running | done | error
     requested_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     finished_at  DATETIME
+);
+
+CREATE TABLE IF NOT EXISTS ai_settings (
+    key   TEXT PRIMARY KEY,                    -- 예: scan_hour
+    value TEXT NOT NULL
 );
 """
 

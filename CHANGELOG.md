@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-07-11
+
+### Added
+- **AI 야간 스캔 시각 Admin 설정**: 설정 페이지 "AI 야간 스캔" 카드에서 자동 증분 스캔
+  시각(00~23시)을 변경 — ai.db `ai_settings` 테이블 신설(LumisShow 쓰기·워커 읽기),
+  워커 daemon이 매 폴링 루프에서 반영하므로 컨테이너 재생성 불필요
+  (`GET/PATCH /api/admin/ai/settings`, 미설정 시 기존 `AI_SCAN_HOUR` 환경변수 폴백)
+
+### Fixed
+- **AI 상태줄 실행 중 잡 표시 누락**: running/pending 잡을 하나만 표시하던 것을
+  전체 나열(running 우선)로 수정 — scan 실행 중에 rematch 대기가 더 최근이면
+  실행 중인 scan이 안 보이던 문제 (`admin-people.js`)
+
 ## [1.2.0] - 2026-07-11
 
 ### Added
@@ -474,7 +487,8 @@ Phase 2 — AI 얼굴 인식 스마트 앨범. NAS 로컬 AI(InsightFace)로 사
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v1.2.0...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v1.3.0...HEAD
+[1.3.0]: https://github.com/euikuk-jeong/lumisshow/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/euikuk-jeong/lumisshow/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/euikuk-jeong/lumisshow/compare/v1.0.3...v1.1.0
 [1.0.3]: https://github.com/euikuk-jeong/lumisshow/compare/v1.0.2...v1.0.3

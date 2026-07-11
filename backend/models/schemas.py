@@ -264,3 +264,6 @@ class ConfirmByScore(BaseModel):
 
 class JobCreate(BaseModel):
     type: str                          # scan | rematch
+
+class AiSettingsUpdate(BaseModel):
+    scan_hour: int = Field(ge=0, le=23)  # 야간 자동 스캔 시각 (로컬 TZ)

@@ -1,6 +1,6 @@
 """ai.db (Phase 2 얼굴 인식) 연결.
 
-쓰기 주체 분리 규칙 — LumisShow는 persons·face_labels·jobs만 쓴다.
+쓰기 주체 분리 규칙 — LumisShow는 persons·face_labels·jobs·ai_settings만 쓴다.
 photos_analyzed·faces·face_matches는 AI 워커(ai_worker/) 전용 쓰기 테이블.
 
 !! 스키마는 ai_worker/db.py의 _DDL과 동일하게 유지할 것 (컨테이너가 분리되어
@@ -56,6 +56,11 @@ CREATE TABLE IF NOT EXISTS jobs (
     status       TEXT NOT NULL DEFAULT 'pending',
     requested_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     finished_at  DATETIME
+);
+
+CREATE TABLE IF NOT EXISTS ai_settings (
+    key   TEXT PRIMARY KEY,
+    value TEXT NOT NULL
 );
 """
 
