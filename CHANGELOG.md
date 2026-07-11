@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-07-12
+
+### Added
+- **추정 얼굴 점수(%) 임계값 미리보기**: 인물 상세 화면에서 "N% 이하부터 보기"를
+  입력하면 해당 점수 이하 추정 얼굴부터 바로 확인 가능 — 자동 확정 임계값을
+  정하기 전 후보를 검토하는 용도. 이후 "더 보기"로 200장씩 이어서 로드
+  (`GET /people/{id}/faces?max_score=`, `admin-person-detail.js`)
+- **확정 얼굴 페이지네이션**: 확정 얼굴 목록도 "더 보기"로 200장씩 이어서 로드
+  (기존 200장 고정 표시 → 5,000장 이상인 인물도 전체 열람 가능)
+- **추정 얼굴 선택 무시**: 인물 상세 화면 추정 얼굴 선택 영역에 "선택 무시" 버튼
+  추가 — 선택한 얼굴을 일괄로 '등록 인물 아님' 처리
+- **인물 목록 필터**: "추정 있는 인물만 보기" 체크박스 추가 (이름 검색과 동시 적용)
+
+### Fixed
+- **미분류 얼굴 툴바 줄바꿈 버그(재발)**: 인물 선택 `<select>` 폭이 이름 길이에
+  따라 늘어나며 '선택 무시' 버튼이 다음 줄로 밀리던 문제 — `.page-header`에
+  `flex-wrap` 허용, select에 `max-width` 지정 (`admin.css`, `admin-people.js`)
+
 ## [1.4.0] - 2026-07-11
 
 ### Added
@@ -507,7 +525,8 @@ Phase 2 — AI 얼굴 인식 스마트 앨범. NAS 로컬 AI(InsightFace)로 사
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v1.4.0...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v1.5.0...HEAD
+[1.5.0]: https://github.com/euikuk-jeong/lumisshow/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/euikuk-jeong/lumisshow/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/euikuk-jeong/lumisshow/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/euikuk-jeong/lumisshow/compare/v1.1.0...v1.2.0
