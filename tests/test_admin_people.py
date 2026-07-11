@@ -161,6 +161,31 @@ async def test_person_photos_detail(admin_client):
     assert r.status_code == 404
 
 
+async def test_person_photos_detail_source_labeled(admin_client):
+    """source=labeled — 확정(라벨) 얼굴 사진만, 추정 매칭 제외. file_path 포함."""
+    face_ids = await _seed_faces(3)
+    pid = (await admin_client.post("/api/admin/people", json={"name": "지우"})).json()["id"]
+    await admin_client.post(f"/api/admin/faces/{face_ids[0]}/label", json={"person_id": pid})
+    await _seed_match(face_ids[1], pid, 0.7)   # 추정 매칭 — labeled에서 제외
+    await _seed_match(face_ids[2], pid, 0.6)
+    await admin_client.post(f"/api/admin/faces/{face_ids[2]}/label", json={"person_id": None})
+
+    r = await admin_client.get(f"/api/admin/people/{pid}/photos-detail?source=labeled")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["total"] == 1
+    assert [p["filename"] for p in body["photos"]] == ["photo_0.jpg"]
+    assert body["photos"][0]["file_path"] == "2024/photo_0.jpg"
+
+    # 기본(all)은 확정+추정 모두
+    r = await admin_client.get(f"/api/admin/people/{pid}/photos-detail")
+    assert r.json()["total"] == 2
+
+    # 잘못된 source 422
+    r = await admin_client.get(f"/api/admin/people/{pid}/photos-detail?source=bogus")
+    assert r.status_code == 422
+
+
 async def test_person_photos_detail_auth_required(client):
     r = await client.get("/api/admin/people/1/photos-detail")
     assert r.status_code in (401, 403)
