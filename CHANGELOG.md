@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-07-11
+
+### Added
+- **인물 추정 얼굴 일괄 확정**: 기본 전체 선택 → 틀린 것만 클릭 해제 → 한 번에 확정하는 방식으로 변경,
+  지정 점수 이상 전체를 서버에서 바로 확정하는 "자동 확정" 버튼 추가
+  (`POST /api/admin/faces/batch-label`, `POST /api/admin/people/{id}/confirm-matched`)
+- **미분류 얼굴 유사도 검색**: 얼굴 카드의 🔍 클릭 시 그 얼굴과 임베딩 코사인 유사도가 높은 순으로
+  미분류 목록을 재정렬 — 신규 인물의 첫 얼굴들을 검출 신뢰도순 대량 목록에서 찾던 어려움 해소
+  (`GET /api/admin/faces/{id}/similar`)
+- **미분류 얼굴 화면에서 신규 인물 즉시 생성**: 인물 선택 드롭다운 최상단 "+ 새 인물 생성"에서
+  이름 입력 후 바로 선택한 얼굴 지정까지 이어짐. 드롭다운에 인물별 확정/추정 수도 함께 표시
+
+### Changed
+- **미분류 얼굴 지정/무시 일괄 처리**: 선택한 얼굴 수만큼 반복하던 개별 API 호출을
+  batch-label 한 번 호출로 교체 — 대량 선택 시 응답 속도 개선
+
 ## [1.1.0] - 2026-07-11
 
 ### Added
@@ -458,7 +474,8 @@ Phase 2 — AI 얼굴 인식 스마트 앨범. NAS 로컬 AI(InsightFace)로 사
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/euikuk-jeong/lumisshow/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/euikuk-jeong/lumisshow/compare/v1.0.3...v1.1.0
 [1.0.3]: https://github.com/euikuk-jeong/lumisshow/compare/v1.0.2...v1.0.3
 [1.0.2]: https://github.com/euikuk-jeong/lumisshow/compare/v1.0.1...v1.0.2
