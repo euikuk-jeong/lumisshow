@@ -51,11 +51,16 @@ async function loadAiStatus() {
   if (!el) return;
   try {
     const s = await api.get('/api/admin/ai/status');
-    const running = s.recent_jobs.find(j => j.status === 'running' || j.status === 'pending');
+    const active = s.recent_jobs
+      .filter(j => j.status === 'running' || j.status === 'pending')
+      .sort((a, b) => (a.status === b.status ? 0 : a.status === 'running' ? -1 : 1));
+    const activeText = active
+      .map(j => `${j.type} 작업 ${j.status === 'running' ? '실행 중' : '대기 중'}`)
+      .join(', ');
     el.textContent =
       `분석 사진 ${s.photos.toLocaleString()}장 · 얼굴 ${s.faces.toLocaleString()}개 · 라벨 ${s.labels.toLocaleString()}개`
       + (s.errors ? ` · 오류 ${s.errors}장` : '')
-      + (running ? ` · ${running.type} 작업 ${running.status === 'running' ? '실행 중' : '대기 중'}` : '');
+      + (activeText ? ` · ${activeText}` : '');
   } catch {
     el.textContent = 'AI 분석 데이터가 아직 없습니다 (워커 첫 스캔 전)';
   }

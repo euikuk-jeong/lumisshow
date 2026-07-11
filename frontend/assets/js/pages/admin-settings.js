@@ -136,6 +136,28 @@ function renderSettingsForm(settings) {
         </div>
       </div>
 
+      <!-- AI 야간 스캔 -->
+      <div class="settings-section card" id="ai-scan-section" style="display:none">
+        <div class="settings-section-header">
+          <p class="section-title">AI 야간 스캔</p>
+          <p class="text-muted text-sm">얼굴 인식 워커의 자동 증분 스캔 시각 · 변경은 워커 폴링 주기(기본 30초) 내 반영</p>
+        </div>
+        <div class="settings-group">
+          <div class="settings-item">
+            <label class="settings-label">스캔 시각</label>
+            <select id="s-ai-scan-hour" class="form-input settings-select">
+              <option value="">미설정 (환경변수 AI_SCAN_HOUR, 기본 02시)</option>
+              ${Array.from({ length: 24 }, (_, h) =>
+                `<option value="${h}">${String(h).padStart(2, '0')}:00</option>`).join('')}
+            </select>
+          </div>
+        </div>
+        <div class="settings-actions">
+          <button class="btn btn-primary btn-sm" id="btn-save-ai-scan">저장</button>
+          <span id="ai-scan-ok" class="text-success text-sm" style="display:none">저장됨 ✓</span>
+        </div>
+      </div>
+
       <!-- 슬라이드쇼 기본값 -->
       <div class="settings-section card">
         <div class="settings-section-header">
@@ -199,6 +221,35 @@ function renderSettingsForm(settings) {
   initThemePicker();
   initTimezoneSelect(settings.timezone_label);
   bindSaveHandlers();
+  initAiScanSection();
+}
+
+/* ── AI 야간 스캔 시각 ──────────────────────────────────── */
+async function initAiScanSection() {
+  const section = document.getElementById('ai-scan-section');
+  let current;
+  try {
+    current = await api.get('/api/admin/ai/settings');
+  } catch {
+    return; // ai.db 미구성 등 — 섹션 숨김 유지
+  }
+  const select = document.getElementById('s-ai-scan-hour');
+  if (current.scan_hour != null) select.value = String(current.scan_hour);
+  section.style.display = '';
+
+  document.getElementById('btn-save-ai-scan').addEventListener('click', async () => {
+    const btn = document.getElementById('btn-save-ai-scan');
+    if (select.value === '') { alert('스캔 시각을 선택하세요'); return; }
+    btn.disabled = true;
+    try {
+      await api.patch('/api/admin/ai/settings', { scan_hour: parseInt(select.value, 10) });
+      showOk('ai-scan-ok');
+    } catch (e) {
+      alert(e.message);
+    } finally {
+      btn.disabled = false;
+    }
+  });
 }
 
 /* ── Theme Picker ───────────────────────────────────────── */

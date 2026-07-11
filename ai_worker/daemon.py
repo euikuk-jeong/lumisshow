@@ -1,6 +1,7 @@
 """데몬 모드 (M2): 야간 자동 스캔 + jobs 큐 폴링.
 
-- 매일 AI_SCAN_HOUR(기본 02:00, 로컬 TZ)에 증분 스캔 자동 실행
+- 매일 스캔 시각(ai_settings.scan_hour 우선, 없으면 AI_SCAN_HOUR, 기본 02:00,
+  로컬 TZ)에 증분 스캔 자동 실행 — Admin 설정 변경은 다음 폴링 루프에 반영
 - LumisShow Admin이 jobs 테이블에 넣은 수동 트리거(scan/rematch)를
   AI_POLL_INTERVAL(기본 30초) 간격으로 폴링·소비 (status만 워커가 갱신)
 """
@@ -21,6 +22,21 @@ def next_scan_time(now: datetime, hour: int) -> datetime:
     if nxt <= now:
         nxt += timedelta(days=1)
     return nxt
+
+
+def scan_hour_setting(conn: sqlite3.Connection) -> int:
+    """ai_settings의 scan_hour(Admin 설정)가 있으면 우선, 없으면 환경변수."""
+    row = conn.execute(
+        "SELECT value FROM ai_settings WHERE key = 'scan_hour'"
+    ).fetchone()
+    if row is not None:
+        try:
+            hour = int(row["value"])
+            if 0 <= hour <= 23:
+                return hour
+        except ValueError:
+            pass
+    return config.scan_hour()
 
 
 def reset_stale_jobs(conn: sqlite3.Connection) -> int:
@@ -58,10 +74,17 @@ def run_daemon() -> None:
     if stale:
         log.info("비정상 종료된 running 잡 %d개를 pending으로 복구", stale)
 
-    nxt = next_scan_time(datetime.now(), config.scan_hour())
+    hour = scan_hour_setting(conn)
+    nxt = next_scan_time(datetime.now(), hour)
     log.info("데몬 시작: 다음 자동 스캔 %s, 폴링 %d초", nxt, config.poll_interval())
 
     while True:
+        new_hour = scan_hour_setting(conn)
+        if new_hour != hour:
+            hour = new_hour
+            nxt = next_scan_time(datetime.now(), hour)
+            log.info("스캔 시각 변경 감지: %d시 → 다음 자동 스캔 %s", hour, nxt)
+
         job = claim_next_job(conn)
         if job is not None:
             job_id, job_type = job
@@ -85,7 +108,7 @@ def run_daemon() -> None:
                 run_scan()
             except Exception:
                 log.exception("자동 스캔 실패 — 다음 주기에 재시도")
-            nxt = next_scan_time(datetime.now(), config.scan_hour())
+            nxt = next_scan_time(datetime.now(), hour)
             log.info("다음 자동 스캔: %s", nxt)
             continue
 

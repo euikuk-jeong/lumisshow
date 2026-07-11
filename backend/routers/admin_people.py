@@ -1,6 +1,6 @@
 """Phase 2 인물(People) 관리 API — ai.db 기반.
 
-쓰기 대상: persons, face_labels, jobs (그 외 테이블은 AI 워커가 씀).
+쓰기 대상: persons, face_labels, jobs, ai_settings (그 외 테이블은 AI 워커가 씀).
 유효 인물 판정: face_labels가 있으면 그 값이 우선, 없으면 face_matches.
 """
 
@@ -15,6 +15,7 @@ from fastapi.responses import FileResponse
 from backend.models.ai_database import faces_dir, get_ai_db
 from backend.models.database import get_db
 from backend.models.schemas import (
+    AiSettingsUpdate,
     BatchFaceLabel,
     ConfirmByScore,
     FaceLabelSet,
@@ -397,3 +398,25 @@ async def create_job(
     cur = await db.execute("INSERT INTO jobs (type) VALUES (?)", (body.type,))
     await db.commit()
     return {"id": cur.lastrowid, "type": body.type, "duplicated": False}
+
+
+@router.get("/ai/settings")
+async def get_ai_settings(_: str = Depends(get_current_admin), db=Depends(get_ai_db)):
+    """scan_hour: Admin이 설정한 야간 스캔 시각. null이면 워커 환경변수(AI_SCAN_HOUR) 사용."""
+    async with db.execute(
+        "SELECT value FROM ai_settings WHERE key = 'scan_hour'"
+    ) as cur:
+        row = await cur.fetchone()
+    return {"scan_hour": int(row["value"]) if row else None}
+
+
+@router.patch("/ai/settings")
+async def update_ai_settings(
+    body: AiSettingsUpdate, _: str = Depends(get_current_admin), db=Depends(get_ai_db)
+):
+    await db.execute(
+        "INSERT OR REPLACE INTO ai_settings (key, value) VALUES ('scan_hour', ?)",
+        (str(body.scan_hour),),
+    )
+    await db.commit()
+    return {"scan_hour": body.scan_hour}
