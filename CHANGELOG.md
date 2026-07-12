@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-07-12
+
+### Added
+- **라이트박스 확대/이동**: 마우스 휠(커서 위치 기준 줌, 1~6배), 확대 상태 드래그 이동,
+  더블클릭 2.5× 확대/복귀 토글 — 사진 이동 시 줌 자동 리셋. 앨범 편집·탐색기·인물 사진 등
+  라이트박스 전체 화면에 공통 적용 (`lightbox.js`, `admin.css`)
+- **확정 얼굴 전체 화면 보기**: 인물 상세 화면 확정 얼굴 카드 클릭 시 원본 사진을
+  라이트박스로 표시 (`admin-person-detail.js`)
+- **추정 얼굴 다른 인물로 지정**: 인물 상세 추정 얼굴 툴바에 인물 선택 + "다른 인물로 지정"
+  버튼 추가 — 선택한 얼굴을 다른 인물의 확정 라벨로 일괄 이동 (`batch-label` 재사용)
+- **무시된 얼굴 목록·복구**: '등록 인물 아님'으로 무시 처리한 얼굴을 모아 보는 화면 신설
+  (`/admin/people/ignored`, 최근 무시 순) — 실수로 무시한 얼굴을 선택해 무시 해제(미분류 복귀)
+  하거나 인물로 재지정 가능 (`GET /api/admin/faces/ignored`, `admin-people.js`)
+
 ## [1.5.0] - 2026-07-12
 
 ### Added
@@ -525,7 +539,8 @@ Phase 2 — AI 얼굴 인식 스마트 앨범. NAS 로컬 AI(InsightFace)로 사
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v1.5.0...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v1.6.0...HEAD
+[1.6.0]: https://github.com/euikuk-jeong/lumisshow/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/euikuk-jeong/lumisshow/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/euikuk-jeong/lumisshow/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/euikuk-jeong/lumisshow/compare/v1.2.0...v1.3.0
