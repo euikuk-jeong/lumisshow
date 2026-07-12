@@ -49,6 +49,7 @@ export async function renderAdminPersonDetail(personId) {
       <button class="btn btn-ghost btn-sm" id="btn-ignore-selected" disabled>선택 무시</button>
       <select id="reassign-person" class="form-input" style="width:auto;max-width:180px">
         ${people.filter(p => p.id !== Number(personId))
+          .sort((a, b) => a.name.localeCompare(b.name, 'ko'))
           .map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('')}
       </select>
       <button class="btn btn-ghost btn-sm" id="btn-reassign-selected" disabled>다른 인물로 지정</button>
