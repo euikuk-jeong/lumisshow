@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.2] - 2026-07-12
+
+### Fixed
+- **인물 지정 select 가나다순 정렬**: 미분류 얼굴·무시된 얼굴의 인물 지정 select와
+  인물 상세 "다른 인물로 지정" select가 확정+추정 많은 순으로 표시되어 이름 찾기
+  어려웠던 문제 — 이름 가나다순으로 정렬 (`admin-people.js`, `admin-person-detail.js`).
+  인물 목록 그리드는 기존 정렬(확정 많은 순) 유지
+
 ## [1.6.1] - 2026-07-12
 
 ### Fixed
@@ -549,7 +557,8 @@ Phase 2 — AI 얼굴 인식 스마트 앨범. NAS 로컬 AI(InsightFace)로 사
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v1.6.1...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v1.6.2...HEAD
+[1.6.2]: https://github.com/euikuk-jeong/lumisshow/compare/v1.6.1...v1.6.2
 [1.6.1]: https://github.com/euikuk-jeong/lumisshow/compare/v1.6.0...v1.6.1
 [1.6.0]: https://github.com/euikuk-jeong/lumisshow/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/euikuk-jeong/lumisshow/compare/v1.4.0...v1.5.0
