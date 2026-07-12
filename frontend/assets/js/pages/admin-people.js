@@ -13,6 +13,7 @@ export async function renderAdminPeople() {
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <a href="/admin/people/unassigned" class="btn btn-ghost" data-link>미분류 얼굴</a>
+        <a href="/admin/people/ignored" class="btn btn-ghost" data-link>무시된 얼굴</a>
         <button class="btn btn-ghost" id="btn-scan">지금 스캔</button>
         <button class="btn btn-ghost" id="btn-rematch">재매칭</button>
         <button class="btn btn-primary" id="btn-new-person">+ 새 인물</button>
@@ -285,11 +286,13 @@ function faceCard(f) {
 
 // 버튼 텍스트는 고정 — 폭이 변하면 flex-wrap으로 버튼이 줄바꿈되는 버그 방지.
 // 선택 개수는 고정 폭 #sel-count 라벨에만 표시.
+// 미분류(btn-ignore)·무시 목록(btn-unignore) 두 페이지가 공용.
 function updateToolbar() {
   const n = _selected.size;
   document.getElementById('sel-count').textContent = `${n}개 선택`;
   document.getElementById('btn-assign').disabled = n === 0;
-  document.getElementById('btn-ignore').disabled = n === 0;
+  const secondary = document.getElementById('btn-ignore') || document.getElementById('btn-unignore');
+  if (secondary) secondary.disabled = n === 0;
 }
 
 async function labelSelected(personId) {
@@ -297,6 +300,88 @@ async function labelSelected(personId) {
   if (!ids.length) return;
   try {
     await api.post('/api/admin/faces/batch-label', { face_ids: ids, person_id: personId });
+    ids.forEach(id => document.querySelector(`.face-card[data-face="${id}"]`)?.remove());
+    _selected.clear();
+    updateToolbar();
+  } catch (e) { alert(e.message); }
+}
+
+// ── 무시된 얼굴 (/admin/people/ignored) — 무시 해제·인물 재지정 ───────
+
+export async function renderIgnoredFaces() {
+  _selected = new Set();
+  _offset = 0;
+
+  renderAdminShell(`
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">무시된 얼굴</h1>
+        <p class="page-subtitle">'등록 인물 아님'으로 무시 처리된 얼굴 목록 (최근 무시 순). 선택 후 무시를 해제하거나 인물로 지정해 복구합니다</p>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <span class="text-muted" id="sel-count" style="min-width:64px;text-align:right;font-size:13px">0개 선택</span>
+        <select id="assign-person" class="form-input" style="width:auto;max-width:200px"></select>
+        <button class="btn btn-primary" id="btn-assign" disabled>선택 지정</button>
+        <button class="btn btn-ghost" id="btn-unignore" disabled>무시 해제</button>
+        <a href="/admin/people" class="btn btn-ghost" data-link>← 인물 목록</a>
+      </div>
+    </div>
+    <div id="faces-content"><div class="loading"></div></div>
+    <div style="margin-top:16px;text-align:center">
+      <button class="btn btn-ghost" id="btn-more" style="display:none">더 보기</button>
+    </div>
+  `, '/admin/people');
+
+  await loadPeopleOptions();
+
+  document.getElementById('btn-assign').addEventListener('click', handleAssignClick);
+  document.getElementById('btn-unignore').addEventListener('click', unignoreSelected);
+  document.getElementById('btn-more').addEventListener('click', () => { _offset += PAGE_SIZE; loadIgnoredFaces(); });
+  await loadIgnoredFaces();
+}
+
+async function loadIgnoredFaces() {
+  const el = document.getElementById('faces-content');
+  try {
+    const { faces } = await api.get(`/api/admin/faces/ignored?limit=${PAGE_SIZE}&offset=${_offset}`);
+    if (_offset === 0) {
+      el.innerHTML = faces.length
+        ? `<div class="face-grid" id="face-grid"></div>`
+        : `<div class="empty-state"><h3>무시된 얼굴이 없습니다</h3>
+           <p>미분류 얼굴이나 인물 상세에서 '무시' 처리한 얼굴이 여기 표시됩니다</p></div>`;
+    }
+    const grid = document.getElementById('face-grid');
+    if (grid) {
+      grid.insertAdjacentHTML('beforeend', faces.map(ignoredFaceCard).join(''));
+      grid.querySelectorAll('.face-card:not([data-bound])').forEach(card => {
+        card.dataset.bound = '1';
+        const id = Number(card.dataset.face);
+        card.addEventListener('click', () => {
+          if (_selected.has(id)) { _selected.delete(id); card.classList.remove('selected'); }
+          else                   { _selected.add(id);    card.classList.add('selected');    }
+          updateToolbar();
+        });
+      });
+    }
+    document.getElementById('btn-more').style.display = faces.length === PAGE_SIZE ? '' : 'none';
+  } catch (e) {
+    el.innerHTML = `<div class="alert alert-error">${esc(e.message)}</div>`;
+  }
+}
+
+function ignoredFaceCard(f) {
+  return `
+    <div class="face-card" data-face="${f.face_id}" title="${esc(f.photo_path)}">
+      <img src="/api/admin/faces/${f.face_id}/crop" alt="" loading="lazy">
+    </div>`;
+}
+
+async function unignoreSelected() {
+  const ids = [..._selected];
+  if (!ids.length) return;
+  if (!confirm(`선택한 ${ids.length}개 얼굴의 무시를 해제할까요?\n(미분류 얼굴로 돌아가며, 다음 재매칭 때 추정 대상이 됩니다)`)) return;
+  try {
+    await Promise.all(ids.map(id => api.delete(`/api/admin/faces/${id}/label`)));
     ids.forEach(id => document.querySelector(`.face-card[data-face="${id}"]`)?.remove());
     _selected.clear();
     updateToolbar();

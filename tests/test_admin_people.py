@@ -264,6 +264,48 @@ async def test_unassigned_faces(admin_client):
     assert [f["face_id"] for f in faces] == [face_ids[1]]
 
 
+async def test_ignored_faces(admin_client, client):
+    face_ids = await _seed_faces(3)
+    pid = (await admin_client.post("/api/admin/people", json={"name": "지우"})).json()["id"]
+
+    # face0·face1 무시, face2는 인물 라벨
+    r = await admin_client.post(
+        "/api/admin/faces/batch-label", json={"face_ids": face_ids[:2], "person_id": None}
+    )
+    assert r.status_code == 200
+    await admin_client.post(f"/api/admin/faces/{face_ids[2]}/label", json={"person_id": pid})
+
+    r = await admin_client.get("/api/admin/faces/ignored")
+    assert r.status_code == 200
+    faces = r.json()["faces"]
+    assert {f["face_id"] for f in faces} == {face_ids[0], face_ids[1]}
+    assert all(f["labeled_at"] is not None for f in faces)
+
+    # 페이지네이션
+    r = await admin_client.get("/api/admin/faces/ignored?limit=1&offset=1")
+    assert len(r.json()["faces"]) == 1
+
+    # 무시 해제(라벨 삭제) 후 목록에서 빠짐 + 미분류로 복귀
+    r = await admin_client.delete(f"/api/admin/faces/{face_ids[0]}/label")
+    assert r.status_code == 204
+    faces = (await admin_client.get("/api/admin/faces/ignored")).json()["faces"]
+    assert [f["face_id"] for f in faces] == [face_ids[1]]
+    unassigned = (await admin_client.get("/api/admin/faces/unassigned")).json()["faces"]
+    assert face_ids[0] in {f["face_id"] for f in unassigned}
+
+    # 무시된 얼굴을 인물로 재지정하면 목록에서 빠짐
+    r = await admin_client.post(
+        "/api/admin/faces/batch-label", json={"face_ids": [face_ids[1]], "person_id": pid}
+    )
+    assert r.status_code == 200
+    assert (await admin_client.get("/api/admin/faces/ignored")).json()["faces"] == []
+
+    # 인증 필요
+    del client.headers["Authorization"]
+    r = await client.get("/api/admin/faces/ignored")
+    assert r.status_code in (401, 403)
+
+
 async def test_batch_label_faces(admin_client):
     face_ids = await _seed_faces(3)
     pid = (await admin_client.post("/api/admin/people", json={"name": "지우"})).json()["id"]

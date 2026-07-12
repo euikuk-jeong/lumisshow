@@ -277,6 +277,27 @@ async def list_unassigned_faces(
     return {"faces": [dict(r) for r in rows]}
 
 
+@router.get("/faces/ignored")
+async def list_ignored_faces(
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+    _: str = Depends(get_current_admin),
+    db=Depends(get_ai_db),
+):
+    """'등록 인물 아님'으로 무시 처리된 얼굴 (person_id IS NULL 라벨). 최근 무시 순."""
+    async with db.execute(
+        """
+        SELECT f.id AS face_id, f.photo_path, f.det_score, fl.labeled_at
+        FROM face_labels fl JOIN faces f ON f.id = fl.face_id
+        WHERE fl.person_id IS NULL
+        ORDER BY fl.labeled_at DESC, f.id DESC LIMIT ? OFFSET ?
+        """,
+        (limit, offset),
+    ) as cur:
+        rows = await cur.fetchall()
+    return {"faces": [dict(r) for r in rows]}
+
+
 @router.get("/faces/{face_id}/similar")
 async def similar_faces(
     face_id: int,
