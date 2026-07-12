@@ -77,15 +77,18 @@ def rematch_all(conn: sqlite3.Connection, threshold: float) -> int:
            WHERE fl.face_id IS NULL"""
     ).fetchall()
 
-    conn.execute("DELETE FROM face_matches")
-    count = 0
+    # 매칭 계산은 트랜잭션 밖에서 — 수만 얼굴 계산 동안 쓰기 락을 잡으면
+    # LumisShow의 face_labels 쓰기가 busy_timeout 초과로 실패한다.
+    matches = []
     for row in rows:
         result = match_one(blob_to_embedding(row["embedding"]), enrollment, threshold)
         if result is not None:
-            conn.execute(
-                "INSERT INTO face_matches (face_id, person_id, score) VALUES (?, ?, ?)",
-                (row["id"], result[0], result[1]),
-            )
-            count += 1
+            matches.append((row["id"], result[0], result[1]))
+
+    conn.execute("DELETE FROM face_matches")
+    conn.executemany(
+        "INSERT INTO face_matches (face_id, person_id, score) VALUES (?, ?, ?)",
+        matches,
+    )
     conn.commit()
-    return count
+    return len(matches)
