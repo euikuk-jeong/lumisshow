@@ -38,6 +38,61 @@ export function openLightbox(paths, startIdx, options = {}) {
 
   const imgEl     = overlay.querySelector('.lightbox-img');
   const captionEl = overlay.querySelector('.lightbox-caption');
+
+  // ── 확대/이동 (wheel 줌, 드래그 팬, 더블클릭 토글) ──
+  let scale = 1, tx = 0, ty = 0;
+
+  function applyTransform() {
+    imgEl.style.transform = scale === 1 ? '' : `translate(${tx}px, ${ty}px) scale(${scale})`;
+    imgEl.style.cursor = scale > 1 ? 'grab' : '';
+  }
+
+  function resetZoom() {
+    scale = 1; tx = 0; ty = 0;
+    applyTransform();
+  }
+
+  // 커서 위치 고정 줌: transform-origin이 중앙이므로 중앙→커서 벡터가 k배 되는 만큼 보정
+  function zoomAt(clientX, clientY, newScale) {
+    const k = newScale / scale;
+    const rect = imgEl.getBoundingClientRect();
+    const dx = clientX - (rect.left + rect.width / 2);
+    const dy = clientY - (rect.top + rect.height / 2);
+    tx += dx * (1 - k);
+    ty += dy * (1 - k);
+    scale = newScale;
+    if (scale === 1) { tx = 0; ty = 0; }
+    applyTransform();
+  }
+
+  imgEl.addEventListener('wheel', e => {
+    e.preventDefault();
+    const next = Math.min(6, Math.max(1, scale * (e.deltaY < 0 ? 1.2 : 1 / 1.2)));
+    zoomAt(e.clientX, e.clientY, next);
+  }, { passive: false });
+
+  imgEl.addEventListener('dblclick', e => {
+    if (scale > 1) resetZoom();
+    else zoomAt(e.clientX, e.clientY, 2.5);
+  });
+
+  let dragging = null;
+  imgEl.addEventListener('pointerdown', e => {
+    if (scale === 1) return;
+    e.preventDefault();
+    dragging = { x: e.clientX, y: e.clientY };
+    imgEl.setPointerCapture(e.pointerId);
+    imgEl.style.cursor = 'grabbing';
+  });
+  imgEl.addEventListener('pointermove', e => {
+    if (!dragging) return;
+    tx += e.clientX - dragging.x;
+    ty += e.clientY - dragging.y;
+    dragging = { x: e.clientX, y: e.clientY };
+    applyTransform();
+  });
+  imgEl.addEventListener('pointerup', () => { dragging = null; applyTransform(); });
+  imgEl.addEventListener('pointercancel', () => { dragging = null; applyTransform(); });
   const prevBtn   = overlay.querySelector('.lightbox-prev');
   const nextBtn   = overlay.querySelector('.lightbox-next');
   const coverBtn  = overlay.querySelector('#lb-btn-cover');
@@ -55,6 +110,7 @@ export function openLightbox(paths, startIdx, options = {}) {
 
   function show(i) {
     idx = i;
+    resetZoom();
     imgEl.style.opacity = '0.4';
     imgEl.onload = () => { imgEl.style.opacity = '1'; };
     imgEl.src = `/api/admin/photo?path=${encodeURIComponent(localPaths[i])}`;

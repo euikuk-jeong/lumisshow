@@ -1,6 +1,7 @@
 import { api } from '../api.js';
 import { renderAdminShell } from '../layout.js';
 import { esc } from '../utils.js';
+import { openLightbox } from '../lightbox.js';
 
 const MATCHED_PAGE_SIZE = 200;
 const LABELED_PAGE_SIZE = 200;
@@ -8,12 +9,14 @@ let _matchedSelected = new Set();
 let _matchedOffset = 0;
 let _matchedMaxScore = null;   // 0~1 또는 null(전체) — % 임계값 미리보기용
 let _labeledOffset = 0;
+let _labeledFaces = [];        // 로드된 확정 얼굴 누적 — 라이트박스 인덱스용
 
 export async function renderAdminPersonDetail(personId) {
   _matchedSelected = new Set();
   _matchedOffset = 0;
   _matchedMaxScore = null;
   _labeledOffset = 0;
+  _labeledFaces = [];
   const people = await api.get('/api/admin/people');
   const person = people.find(p => p.id === Number(personId));
   if (!person) {
@@ -44,6 +47,11 @@ export async function renderAdminPersonDetail(personId) {
       <button class="btn btn-ghost btn-sm" id="btn-select-none">전체 해제</button>
       <button class="btn btn-primary btn-sm" id="btn-confirm-selected" disabled>선택 확정</button>
       <button class="btn btn-ghost btn-sm" id="btn-ignore-selected" disabled>선택 무시</button>
+      <select id="reassign-person" class="form-input" style="width:auto;max-width:180px">
+        ${people.filter(p => p.id !== Number(personId))
+          .map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('')}
+      </select>
+      <button class="btn btn-ghost btn-sm" id="btn-reassign-selected" disabled>다른 인물로 지정</button>
       <span style="flex:1"></span>
       <input type="number" id="confirm-threshold" class="form-input" style="width:64px" min="0" max="100" value="70">
       <span class="text-muted" style="font-size:13px">% 이상</span>
@@ -71,6 +79,7 @@ export async function renderAdminPersonDetail(personId) {
   document.getElementById('btn-select-none').addEventListener('click', () => setAllMatchedSelected(false));
   document.getElementById('btn-confirm-selected').addEventListener('click', () => confirmSelected(personId));
   document.getElementById('btn-ignore-selected').addEventListener('click', () => ignoreSelected(personId));
+  document.getElementById('btn-reassign-selected').addEventListener('click', () => reassignSelected(personId));
   document.getElementById('btn-confirm-threshold').addEventListener('click', () => confirmByThreshold(personId));
   document.getElementById('btn-jump-score').addEventListener('click', () => jumpToScore(personId));
   document.getElementById('btn-matched-more').addEventListener('click', () => {
@@ -214,6 +223,9 @@ function updateMatchedToolbar() {
   const ignoreBtn = document.getElementById('btn-ignore-selected');
   ignoreBtn.disabled = n === 0;
   ignoreBtn.textContent = n ? `선택 무시 (${n})` : '선택 무시';
+  const reassignBtn = document.getElementById('btn-reassign-selected');
+  reassignBtn.disabled = n === 0 || !document.getElementById('reassign-person').options.length;
+  reassignBtn.textContent = n ? `다른 인물로 지정 (${n})` : '다른 인물로 지정';
 }
 
 async function confirmSelected(personId) {
@@ -231,6 +243,20 @@ async function ignoreSelected(personId) {
   if (!confirm(`선택한 ${ids.length}개 얼굴을 '등록 인물 아님'으로 무시 처리할까요?`)) return;
   try {
     await api.post('/api/admin/faces/batch-label', { face_ids: ids, person_id: null });
+    renderAdminPersonDetail(personId);
+  } catch (e) { alert(e.message); }
+}
+
+async function reassignSelected(personId) {
+  const ids = [..._matchedSelected];
+  if (!ids.length) return;
+  const select = document.getElementById('reassign-person');
+  const targetId = Number(select.value);
+  if (!targetId) return;
+  const targetName = select.options[select.selectedIndex].textContent;
+  if (!confirm(`선택한 ${ids.length}개 얼굴을 '${targetName}' 인물로 확정 지정할까요?`)) return;
+  try {
+    await api.post('/api/admin/faces/batch-label', { face_ids: ids, person_id: targetId });
     renderAdminPersonDetail(personId);
   } catch (e) { alert(e.message); }
 }
@@ -255,6 +281,7 @@ async function loadLabeledFaces(personId, { append = false } = {}) {
       `/api/admin/people/${personId}/faces?source=labeled&limit=${LABELED_PAGE_SIZE}&offset=${_labeledOffset}`
     );
     if (!append) {
+      _labeledFaces = [];
       if (!faces.length) {
         el.innerHTML = '<p class="text-muted">확정된 얼굴이 없습니다. 미분류 얼굴에서 지정하세요.</p>';
         moreBtn.style.display = 'none';
@@ -264,10 +291,14 @@ async function loadLabeledFaces(personId, { append = false } = {}) {
     }
     const grid = document.getElementById('labeled-grid');
     if (grid) {
-      grid.insertAdjacentHTML('beforeend', faces.map(labeledFaceCard).join(''));
+      grid.insertAdjacentHTML('beforeend', faces.map((f, i) => labeledFaceCard(f, _labeledFaces.length + i)).join(''));
+      _labeledFaces.push(...faces);
       grid.querySelectorAll('.face-card:not([data-bound])').forEach(card => {
         card.dataset.bound = '1';
         const faceId = Number(card.dataset.face);
+        card.addEventListener('click', () => {
+          openLightbox(_labeledFaces.map(f => f.photo_path), Number(card.dataset.idx));
+        });
         card.querySelector('[data-act="undo"]').addEventListener('click', async (e) => {
           e.stopPropagation();
           try { await api.delete(`/api/admin/faces/${faceId}/label`); } catch (err) { alert(err.message); return; }
@@ -281,9 +312,9 @@ async function loadLabeledFaces(personId, { append = false } = {}) {
   }
 }
 
-function labeledFaceCard(f) {
+function labeledFaceCard(f, idx) {
   return `
-    <div class="face-card" data-face="${f.face_id}" title="${esc(f.photo_path)}">
+    <div class="face-card" data-face="${f.face_id}" data-idx="${idx}" title="${esc(f.photo_path)}">
       <img src="/api/admin/faces/${f.face_id}/crop" alt="" loading="lazy">
       <div class="face-actions">
         <button class="btn btn-sm btn-ghost" data-act="undo" title="확정 해제">↩</button>
