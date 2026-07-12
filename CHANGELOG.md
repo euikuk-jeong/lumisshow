@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.1] - 2026-07-12
+
+### Fixed
+- **재매칭 중 얼굴 확정 500 오류**: `rematch_all`이 `DELETE`부터 `commit`까지 단일
+  쓰기 트랜잭션 안에서 수만 얼굴 매칭 계산을 수행해 쓰기 락을 수 분간 유지 —
+  그 동안 추정 얼굴 일괄 확정(`batch-label`) 등 face_labels 쓰기가
+  `database is locked`로 실패하던 문제. 매칭 계산을 트랜잭션 밖으로 이동해
+  락 유지 시간을 1초 미만으로 단축 (`ai_worker/matcher.py`)
+- **ai.db busy_timeout 상향**: backend 연결 5초 → 15초 (`ai_database.py`)
+
 ## [1.6.0] - 2026-07-12
 
 ### Added
@@ -539,7 +549,8 @@ Phase 2 — AI 얼굴 인식 스마트 앨범. NAS 로컬 AI(InsightFace)로 사
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v1.6.0...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v1.6.1...HEAD
+[1.6.1]: https://github.com/euikuk-jeong/lumisshow/compare/v1.6.0...v1.6.1
 [1.6.0]: https://github.com/euikuk-jeong/lumisshow/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/euikuk-jeong/lumisshow/compare/v1.4.0...v1.5.0
 [1.4.0]: https://github.com/euikuk-jeong/lumisshow/compare/v1.3.0...v1.4.0
