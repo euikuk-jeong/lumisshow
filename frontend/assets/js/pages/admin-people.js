@@ -179,6 +179,7 @@ async function loadPeopleOptions(selectPersonId) {
   const select = document.getElementById('assign-person');
   try {
     const people = await api.get('/api/admin/people');
+    people.sort((a, b) => a.name.localeCompare(b.name, 'ko'));
     select.innerHTML = [
       `<option value="__new__">+ 새 인물 생성</option>`,
       ...people.map(p => `<option value="${p.id}">${esc(p.name)} (${p.labeled_count}/${p.matched_count})</option>`),
