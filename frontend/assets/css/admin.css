@@ -417,6 +417,7 @@
   object-fit: contain;
   border-radius: 4px;
   transition: opacity 0.15s;
+  touch-action: none;   /* 확대 시 드래그 팬이 페이지 스크롤로 새지 않게 */
 }
 .lightbox-caption {
   font-size: 12px;

@@ -4,7 +4,7 @@ import { renderAdminLogin } from './pages/admin-login.js';
 import { renderAdminAlbums } from './pages/admin-albums.js';
 import { renderAdminAlbumEdit } from './pages/admin-album-edit.js';
 import { renderAdminBrowse } from './pages/admin-browse.js';
-import { renderAdminPeople, renderUnassignedFaces } from './pages/admin-people.js';
+import { renderAdminPeople, renderUnassignedFaces, renderIgnoredFaces } from './pages/admin-people.js';
 import { renderAdminPersonDetail } from './pages/admin-person-detail.js';
 import { renderAdminPersonPhotos } from './pages/admin-person-photos.js';
 import { renderAdminSettings } from './pages/admin-settings.js';
@@ -20,6 +20,7 @@ const ROUTES = [
   { path: '/admin/browse',    render: () => renderAdminBrowse(),        public: false },
   { path: '/admin/people',    render: () => renderAdminPeople(),        public: false },
   { path: '/admin/people/unassigned', render: () => renderUnassignedFaces(), public: false },
+  { path: '/admin/people/ignored',    render: () => renderIgnoredFaces(),    public: false },
   { path: '/admin/settings',      render: () => renderAdminSettings(),      public: false },
   { path: '/admin/hidden-paths',  render: () => renderAdminHiddenPaths(),   public: false },
   { path: '/admin/albums/new',render: () => renderAdminAlbumEdit(null), public: false },
