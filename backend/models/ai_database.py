@@ -79,7 +79,7 @@ async def init_ai_db() -> None:
     os.makedirs(os.path.dirname(path), exist_ok=True)
     async with aiosqlite.connect(path) as db:
         await db.execute("PRAGMA journal_mode=WAL")
-        await db.execute("PRAGMA busy_timeout=5000")
+        await db.execute("PRAGMA busy_timeout=15000")
         await db.executescript(_AI_DDL)
         await db.commit()
 
@@ -87,7 +87,7 @@ async def init_ai_db() -> None:
 async def get_ai_db():
     async with aiosqlite.connect(_ai_db_path()) as db:
         await db.execute("PRAGMA journal_mode=WAL")
-        await db.execute("PRAGMA busy_timeout=5000")
+        await db.execute("PRAGMA busy_timeout=15000")
         await db.execute("PRAGMA foreign_keys = ON")
         db.row_factory = aiosqlite.Row
         yield db

@@ -138,6 +138,19 @@ def test_rematch_all_skips_labeled_faces(conn):
     assert [(r["face_id"], r["person_id"]) for r in rows] == [(similar_id, 1)]
 
 
+def test_rematch_all_clears_stale_matches_when_no_enrollment(conn):
+    face_id = _insert_face(conn, "s.jpg", _unit_vec(0))
+    conn.execute(
+        "INSERT INTO face_matches (face_id, person_id, score) VALUES (?, 1, 0.9)",
+        (face_id,),
+    )
+    conn.commit()
+
+    count = matcher.rematch_all(conn, threshold=0.45)
+    assert count == 0
+    assert conn.execute("SELECT COUNT(*) AS n FROM face_matches").fetchone()["n"] == 0
+
+
 def test_embedding_blob_roundtrip():
     vec = np.random.rand(matcher.EMBEDDING_DIM).astype(np.float32)
     assert np.array_equal(matcher.blob_to_embedding(matcher.embedding_to_blob(vec)), vec)
