@@ -111,7 +111,7 @@ export async function renderAdminPersonDetail(personId) {
 
   document.getElementById('btn-make-album').addEventListener('click', async () => {
     try {
-      const { photos } = await api.get(`/api/admin/people/${personId}/photos`);
+      const { photos } = await api.get(`/api/admin/people/${personId}/photos?source=labeled`);
       if (!photos.length) { alert('이 인물의 사진이 없습니다.'); return; }
       const name = prompt(`사진 ${photos.length}장으로 앨범을 만듭니다.\n앨범 이름:`, person.name);
       if (!name?.trim()) return;

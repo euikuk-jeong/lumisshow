@@ -15,6 +15,7 @@ env/
 *.egg-info/
 dist/
 build/
+.coverage
 
 # Environment variables
 .env
