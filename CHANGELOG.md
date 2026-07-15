@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-07-16
+
+### Added
+- **라이트박스 터치 핀치 줌**: 두 손가락으로 확대/축소, 중점 이동으로 팬 처리 —
+  기존 마우스 휠·더블클릭·드래그 확대와 동일한 화면에 터치 제스처 추가.
+  확대 중 손가락 하나를 떼도 남은 손가락으로 팬이 끊김 없이 이어짐 (`lightbox.js`)
+
+### Fixed
+- **인물 슬라이드쇼·"이 인물로 앨범 만들기" 사진 목록 불일치**: 전체 사진 페이지는
+  확정(라벨) 얼굴 사진만 보여주는데, 인물 슬라이드쇼와 앨범 생성은 확정+추정 사진을
+  섞어 써서 전체 사진 페이지에서 특정 사진을 눌러 슬라이드쇼로 진입하면 다른 사진이
+  뜰 수 있었던 문제 — 셋 다 확정(`source=labeled`) 기준으로 통일
+  (`admin_people.py`, `slideshow.js`, `admin-person-detail.js`)
+
+### Changed
+- `.gitignore`에 `.coverage` 추가
+
 ## [1.6.2] - 2026-07-12
 
 ### Fixed
@@ -557,7 +574,8 @@ Phase 2 — AI 얼굴 인식 스마트 앨범. NAS 로컬 AI(InsightFace)로 사
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v1.6.2...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v1.7.0...HEAD
+[1.7.0]: https://github.com/euikuk-jeong/lumisshow/compare/v1.6.2...v1.7.0
 [1.6.2]: https://github.com/euikuk-jeong/lumisshow/compare/v1.6.1...v1.6.2
 [1.6.1]: https://github.com/euikuk-jeong/lumisshow/compare/v1.6.0...v1.6.1
 [1.6.0]: https://github.com/euikuk-jeong/lumisshow/compare/v1.5.0...v1.6.0
