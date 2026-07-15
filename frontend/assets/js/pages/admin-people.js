@@ -382,7 +382,7 @@ async function unignoreSelected() {
   if (!ids.length) return;
   if (!confirm(`선택한 ${ids.length}개 얼굴의 무시를 해제할까요?\n(미분류 얼굴로 돌아가며, 다음 재매칭 때 추정 대상이 됩니다)`)) return;
   try {
-    await Promise.all(ids.map(id => api.delete(`/api/admin/faces/${id}/label`)));
+    await api.delete('/api/admin/faces/batch-unlabel', { face_ids: ids });
     ids.forEach(id => document.querySelector(`.face-card[data-face="${id}"]`)?.remove());
     _selected.clear();
     updateToolbar();

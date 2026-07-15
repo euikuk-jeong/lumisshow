@@ -264,6 +264,9 @@ class BatchFaceLabel(BaseModel):
     face_ids: list[int]
     person_id: Optional[int] = None
 
+class BatchFaceUnlabel(BaseModel):
+    face_ids: list[int]
+
 class ConfirmByScore(BaseModel):
     min_score: float = Field(ge=0.0, le=1.0)
 

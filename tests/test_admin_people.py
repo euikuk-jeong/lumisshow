@@ -346,6 +346,44 @@ async def test_batch_label_faces(admin_client):
     assert face_ids[2] not in {f["face_id"] for f in faces}
 
 
+async def test_batch_unlabel_faces(admin_client, client):
+    face_ids = await _seed_faces(3)
+    pid = (await admin_client.post("/api/admin/people", json={"name": "지우"})).json()["id"]
+    await admin_client.post(
+        "/api/admin/faces/batch-label", json={"face_ids": face_ids, "person_id": pid}
+    )
+
+    # 두 개만 한 번에 라벨 삭제 (httpx delete()는 body 미지원 — request()로 호출)
+    r = await admin_client.request(
+        "DELETE", "/api/admin/faces/batch-unlabel", json={"face_ids": face_ids[:2]}
+    )
+    assert r.status_code == 204
+
+    faces = (await admin_client.get(f"/api/admin/people/{pid}/faces?source=labeled")).json()["faces"]
+    assert {f["face_id"] for f in faces} == {face_ids[2]}
+
+    # 빈 목록 400
+    r = await admin_client.request(
+        "DELETE", "/api/admin/faces/batch-unlabel", json={"face_ids": []}
+    )
+    assert r.status_code == 400
+
+    # 존재하지 않는 face_id가 섞여도 존재하는 것만 조용히 삭제
+    r = await admin_client.request(
+        "DELETE", "/api/admin/faces/batch-unlabel", json={"face_ids": [face_ids[2], 999]}
+    )
+    assert r.status_code == 204
+    faces = (await admin_client.get(f"/api/admin/people/{pid}/faces?source=labeled")).json()["faces"]
+    assert faces == []
+
+    # 인증 필요
+    del client.headers["Authorization"]
+    r = await client.request(
+        "DELETE", "/api/admin/faces/batch-unlabel", json={"face_ids": face_ids[:1]}
+    )
+    assert r.status_code in (401, 403)
+
+
 async def test_confirm_matched_by_score(admin_client):
     face_ids = await _seed_faces(3)
     pid = (await admin_client.post("/api/admin/people", json={"name": "지우"})).json()["id"]
