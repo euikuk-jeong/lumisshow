@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.7.1] - 2026-07-16
+
+### Added
+- **얼굴 무시 해제 batch API**: `DELETE /api/admin/faces/batch-unlabel` 추가 —
+  무시된 얼굴을 여러 개 선택해 해제할 때 얼굴별 DELETE를 병렬로 여러 번 호출하던
+  것을 단일 요청으로 교체 (`admin_people.py`, `admin-people.js`)
+
 ## [1.7.0] - 2026-07-16
 
 ### Added
@@ -574,7 +581,8 @@ Phase 2 — AI 얼굴 인식 스마트 앨범. NAS 로컬 AI(InsightFace)로 사
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v1.7.0...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v1.7.1...HEAD
+[1.7.1]: https://github.com/euikuk-jeong/lumisshow/compare/v1.7.0...v1.7.1
 [1.7.0]: https://github.com/euikuk-jeong/lumisshow/compare/v1.6.2...v1.7.0
 [1.6.2]: https://github.com/euikuk-jeong/lumisshow/compare/v1.6.1...v1.6.2
 [1.6.1]: https://github.com/euikuk-jeong/lumisshow/compare/v1.6.0...v1.6.1
