@@ -121,6 +121,14 @@ async def test_label_and_person_faces(admin_client):
     photos = (await admin_client.get(f"/api/admin/people/{pid}/photos")).json()["photos"]
     assert photos == ["2024/photo_0.jpg", "2024/photo_1.jpg"]
 
+    # source=labeled — 확정 사진만 (매칭된 photo_1.jpg 제외)
+    photos = (await admin_client.get(f"/api/admin/people/{pid}/photos?source=labeled")).json()["photos"]
+    assert photos == ["2024/photo_0.jpg"]
+
+    # 잘못된 source 422
+    r = await admin_client.get(f"/api/admin/people/{pid}/photos?source=bogus")
+    assert r.status_code == 422
+
 
 async def test_person_faces_max_score_and_offset(admin_client):
     """max_score — 임계값 미리보기용 필터, offset/limit — 더보기 페이지네이션."""

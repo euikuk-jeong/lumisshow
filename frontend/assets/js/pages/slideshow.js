@@ -58,7 +58,7 @@ export function renderPersonSlideshow(personId) {
         },
       };
     },
-    loadPhotos: (page, size) => api.get(`/api/admin/people/${personId}/photos-detail?page=${page}&size=${size}`),
+    loadPhotos: (page, size) => api.get(`/api/admin/people/${personId}/photos-detail?page=${page}&size=${size}&source=labeled`),
     // 401이면 api.js가 이미 /admin/login으로 이동시킴 — 화면을 덮어쓰지 않는다
     onLoadError: (e) => e instanceof AdminAuthError,
   });

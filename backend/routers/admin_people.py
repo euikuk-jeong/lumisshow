@@ -179,11 +179,13 @@ async def list_person_faces(
 
 @router.get("/people/{person_id}/photos")
 async def list_person_photos(
-    person_id: int, _: str = Depends(get_current_admin), db=Depends(get_ai_db)
+    person_id: int,
+    source: str = Query(default="all", pattern="^(all|labeled)$"),
+    _: str = Depends(get_current_admin), db=Depends(get_ai_db)
 ):
-    """인물이 등장하는 사진 경로 목록 (라벨 우선 + 매칭). 앨범 생성용."""
+    """인물이 등장하는 사진 경로 목록 (라벨 우선 + 매칭, source=labeled면 확정만). 앨범 생성용."""
     await _person_or_404(person_id, db)
-    return {"photos": await _person_photo_paths(person_id, db)}
+    return {"photos": await _person_photo_paths(person_id, db, labeled_only=source == "labeled")}
 
 
 @router.get("/people/{person_id}/photos-detail", response_model=SharePhotosResponse)
