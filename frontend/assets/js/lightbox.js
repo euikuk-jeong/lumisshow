@@ -77,7 +77,23 @@ export function openLightbox(paths, startIdx, options = {}) {
   });
 
   let dragging = null;
+  let pinch = null;
+  const activePointers = new Map();
+
+  function pointDist(a, b) { return Math.hypot(a.x - b.x, a.y - b.y); }
+  function pointMid(a, b) { return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }; }
+
   imgEl.addEventListener('pointerdown', e => {
+    activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (e.pointerType === 'touch') imgEl.setPointerCapture(e.pointerId);
+
+    if (activePointers.size >= 2) {
+      e.preventDefault();
+      dragging = null;
+      const [p1, p2] = [...activePointers.values()];
+      pinch = { startDist: pointDist(p1, p2), startScale: scale, lastMid: pointMid(p1, p2) };
+      return;
+    }
     if (scale === 1) return;
     e.preventDefault();
     dragging = { x: e.clientX, y: e.clientY };
@@ -85,14 +101,40 @@ export function openLightbox(paths, startIdx, options = {}) {
     imgEl.style.cursor = 'grabbing';
   });
   imgEl.addEventListener('pointermove', e => {
+    if (!activePointers.has(e.pointerId)) return;
+    activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+    if (pinch && activePointers.size >= 2) {
+      const [p1, p2] = [...activePointers.values()];
+      const mid = pointMid(p1, p2);
+      tx += mid.x - pinch.lastMid.x;
+      ty += mid.y - pinch.lastMid.y;
+      pinch.lastMid = mid;
+      const dist = pointDist(p1, p2);
+      const newScale = Math.min(6, Math.max(1, pinch.startScale * (dist / pinch.startDist)));
+      zoomAt(mid.x, mid.y, newScale);
+      return;
+    }
+
     if (!dragging) return;
     tx += e.clientX - dragging.x;
     ty += e.clientY - dragging.y;
     dragging = { x: e.clientX, y: e.clientY };
     applyTransform();
   });
-  imgEl.addEventListener('pointerup', () => { dragging = null; applyTransform(); });
-  imgEl.addEventListener('pointercancel', () => { dragging = null; applyTransform(); });
+  function endPointer(e) {
+    activePointers.delete(e.pointerId);
+    if (activePointers.size < 2) pinch = null;
+    if (activePointers.size === 1 && scale > 1) {
+      const [p] = [...activePointers.values()];
+      dragging = { x: p.x, y: p.y };
+    } else {
+      dragging = null;
+    }
+    applyTransform();
+  }
+  imgEl.addEventListener('pointerup', endPointer);
+  imgEl.addEventListener('pointercancel', endPointer);
   const prevBtn   = overlay.querySelector('.lightbox-prev');
   const nextBtn   = overlay.querySelector('.lightbox-next');
   const coverBtn  = overlay.querySelector('#lb-btn-cover');
