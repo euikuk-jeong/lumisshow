@@ -17,6 +17,7 @@ from backend.models.database import get_db
 from backend.models.schemas import (
     AiSettingsUpdate,
     BatchFaceLabel,
+    BatchFaceUnlabel,
     ConfirmByScore,
     FaceLabelSet,
     JobCreate,
@@ -398,6 +399,19 @@ async def delete_face_label(
     face_id: int, _: str = Depends(get_current_admin), db=Depends(get_ai_db)
 ):
     await db.execute("DELETE FROM face_labels WHERE face_id = ?", (face_id,))
+    await db.commit()
+
+
+@router.delete("/faces/batch-unlabel", status_code=204)
+async def batch_unlabel_faces(
+    body: BatchFaceUnlabel, _: str = Depends(get_current_admin), db=Depends(get_ai_db)
+):
+    """여러 얼굴의 라벨을 한 번에 삭제 (무시 해제/확정 취소 일괄 처리용)."""
+    if not body.face_ids:
+        raise HTTPException(status_code=400, detail="face_ids가 비어 있습니다")
+    ids = list(dict.fromkeys(body.face_ids))
+    placeholders = ",".join("?" * len(ids))
+    await db.execute(f"DELETE FROM face_labels WHERE face_id IN ({placeholders})", ids)
     await db.commit()
 
 
