@@ -34,6 +34,12 @@ def thumb_path(file_path: str, size: str) -> str:
 _thumb_locks: dict[str, threading.Lock] = {}
 _thumb_locks_mutex = threading.Lock()
 
+# 동시 썸네일 생성(원본 디코딩) 개수 제한 — 그리드 첫 로딩 시 수십 개 요청이
+# 동시에 executor 스레드로 들어와도 대형 원본 디코딩이 한꺼번에 몰려
+# 메모리 스파이크가 나지 않도록 제한. 락 자체(파일별 중복 생성 방지)와는 별개.
+_THUMB_MAX_CONCURRENCY = int(os.getenv("THUMB_MAX_CONCURRENCY", "4"))
+_thumb_semaphore = threading.Semaphore(_THUMB_MAX_CONCURRENCY)
+
 
 def _get_thumb_lock(out_path: str) -> threading.Lock:
     with _thumb_locks_mutex:
@@ -54,7 +60,10 @@ def generate_thumbnail(file_path: str, size: str) -> str:
             return out_path
         os.makedirs(_thumb_dir(), exist_ok=True)
         max_w, max_h = SIZES[size]
-        with Image.open(file_path) as img:
+        with _thumb_semaphore, Image.open(file_path) as img:
+            # JPEG draft: 목표 크기보다 큰 원본을 요청 크기에 가까운 스케일(1/2, 1/4...)로
+            # 디코딩해 풀해상도 디코딩 대비 속도·메모리를 크게 절감 (JPEG 외 포맷은 no-op)
+            img.draft("RGB", (max_w * 2, max_h * 2))
             img = ImageOps.exif_transpose(img)
             img.thumbnail((max_w, max_h), Image.LANCZOS)
             img.convert("RGB").save(out_path, "JPEG", quality=85, optimize=True)
