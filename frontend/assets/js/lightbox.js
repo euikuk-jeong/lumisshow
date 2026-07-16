@@ -3,6 +3,8 @@
  *   isCover(path)          → boolean   현재 커버 여부
  *   onSetCover(path)       → Promise   커버 설정 콜백
  *   onDelete(path)         → Promise   삭제 콜백 (라이트박스 내 사진 제거)
+ *   deleteLabel            → string    삭제 버튼 텍스트 (기본 '앨범에서 삭제')
+ *   deleteConfirmMsg       → string    삭제 확인 메시지 (기본 '이 사진을 앨범에서 제외하시겠습니까?')
  *   getSelectionState(path)→ { isSelected, selectedCount, totalCount }
  *   onToggleSelect(path)   → void      선택 토글 콜백
  */
@@ -29,7 +31,7 @@ export function openLightbox(paths, startIdx, options = {}) {
         </div>` : '<div></div>'}
         ${hasActions ? `<div class="lightbox-actions">
           ${options.onSetCover ? '<button class="lightbox-action-btn" id="lb-btn-cover">커버로 설정</button>' : ''}
-          ${options.onDelete   ? '<button class="lightbox-action-btn lightbox-action-danger" id="lb-btn-delete">앨범에서 삭제</button>' : ''}
+          ${options.onDelete   ? `<button class="lightbox-action-btn lightbox-action-danger" id="lb-btn-delete">${options.deleteLabel || '앨범에서 삭제'}</button>` : ''}
         </div>` : ''}
       </div>` : ''}
     </div>
@@ -212,7 +214,7 @@ export function openLightbox(paths, startIdx, options = {}) {
 
   if (deleteBtn) {
     deleteBtn.addEventListener('click', async () => {
-      if (!confirm('이 사진을 앨범에서 제외하시겠습니까?')) return;
+      if (!confirm(options.deleteConfirmMsg || '이 사진을 앨범에서 제외하시겠습니까?')) return;
       deleteBtn.disabled = true;
       const path = localPaths[idx];
       try {

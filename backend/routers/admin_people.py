@@ -258,6 +258,25 @@ async def list_person_photos_detail(
     return SharePhotosResponse(photos=photos, total=total, page=page)
 
 
+@router.delete("/people/{person_id}/photo-label", status_code=204)
+async def unlabel_person_photo(
+    person_id: int, path: str = Query(...),
+    _: str = Depends(get_current_admin), db=Depends(get_ai_db),
+):
+    """이 인물의 확정 라벨 중 해당 사진 경로에 속한 것을 모두 해제 (전체 사진 라이트박스 '확정 해제' 버튼용)."""
+    await _person_or_404(person_id, db)
+    async with db.execute(
+        """SELECT fl.face_id FROM face_labels fl JOIN faces f ON f.id = fl.face_id
+           WHERE fl.person_id = ? AND f.photo_path = ?""",
+        (person_id, path),
+    ) as cur:
+        face_ids = [r["face_id"] for r in await cur.fetchall()]
+    if face_ids:
+        placeholders = ",".join("?" * len(face_ids))
+        await db.execute(f"DELETE FROM face_labels WHERE face_id IN ({placeholders})", face_ids)
+        await db.commit()
+
+
 @router.post("/people/{person_id}/confirm-matched")
 async def confirm_matched_by_score(
     person_id: int, body: ConfirmByScore,

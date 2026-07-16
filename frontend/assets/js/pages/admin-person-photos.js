@@ -212,7 +212,17 @@ export async function renderAdminPersonPhotos(personId) {
   document.getElementById('photos-content').addEventListener('click', e => {
     const item = e.target.closest('[data-idx]');
     if (!item) return;
-    openLightbox(displayed.map(p => p.file_path), Number(item.dataset.idx));
+    openLightbox(displayed.map(p => p.file_path), Number(item.dataset.idx), {
+      deleteLabel: '확정 해제',
+      deleteConfirmMsg: '이 사진에서 인물 확정을 해제할까요?',
+      onDelete: async path => {
+        await api.delete(`/api/admin/people/${personId}/photo-label?path=${encodeURIComponent(path)}`);
+        state.photos = state.photos.filter(p => p.file_path !== path);
+        subtitle.textContent = `확정 얼굴이 포함된 사진 ${state.photos.length}장`;
+        document.getElementById('btn-slideshow').disabled = !state.photos.length;
+        refresh();
+      },
+    });
   });
 
   refresh();
