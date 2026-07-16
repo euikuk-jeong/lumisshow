@@ -84,6 +84,23 @@ async def test_create_rename_delete_person(admin_client):
     assert r.status_code == 404
 
 
+async def test_get_person(admin_client, client):
+    pid = (await admin_client.post("/api/admin/people", json={"name": "지우"})).json()["id"]
+
+    r = await admin_client.get(f"/api/admin/people/{pid}")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["id"] == pid and body["name"] == "지우"
+    assert body["labeled_count"] == 0 and body["matched_count"] == 0
+
+    r = await admin_client.get("/api/admin/people/999")
+    assert r.status_code == 404
+
+    del client.headers["Authorization"]
+    r = await client.get(f"/api/admin/people/{pid}")
+    assert r.status_code in (401, 403)
+
+
 # ── 얼굴 라벨/조회 ────────────────────────────────────────────────────
 
 

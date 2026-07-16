@@ -17,12 +17,14 @@ export async function renderAdminPersonDetail(personId) {
   _matchedMaxScore = null;
   _labeledOffset = 0;
   _labeledFaces = [];
-  const people = await api.get('/api/admin/people');
-  const person = people.find(p => p.id === Number(personId));
-  if (!person) {
+  let person;
+  try {
+    person = await api.get(`/api/admin/people/${personId}`);
+  } catch {
     window.navigate('/admin/people', true);
     return;
   }
+  const people = await api.get('/api/admin/people');
 
   renderAdminShell(`
     <div class="page-header">
