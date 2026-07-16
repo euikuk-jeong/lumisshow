@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.8.6] - 2026-07-17
+
+### Security
+- **공유 링크 브루트포스 잠금 IP+token 복합 키**: token 단독 키였던 잠금을
+  IP+token 조합으로 변경 — 공격자가 일부러 5회 오입력해 정상 사용자까지
+  15분 차단시키는 것을 방지 (관리자 로그인 잠금과 동일한 패턴, `share.py`)
+- **PHOTO_ROOT 경로 이탈 차단 (og-image, ZIP 다운로드)**: `media.py`와
+  동일한 realpath 기반 containment 검사를 추가 — `album_photos.file_path`가
+  상대경로 이탈("..")을 포함해도 서빙 단계에서 403 (`share.py`)
+- **공유 토큰 enumeration 방어**: 토큰 존재 여부를 노출하는 공개 GET
+  (`/api/share/{token}`, `/og-image`)에 속도 제한 추가. 존재하지 않는
+  토큰(404) 조회만 카운트하며 정상 조회(200)는 잠금에 영향 없음 —
+  IP당 60초 30회 초과 시 429 (`share.py`)
+- **응답 보안 헤더 추가**: `X-Content-Type-Options`, `X-Frame-Options`,
+  `Referrer-Policy` 미들웨어 (`main.py`)
+- **bcrypt 논블로킹화**: 관리자 로그인 검증, 공유 링크 패스워드 검증·해싱
+  총 4곳의 동기 bcrypt 호출을 `asyncio.to_thread`로 감싸 이벤트 루프
+  블로킹 방지 (`auth.py`, `share.py`, `admin_links.py`)
+
 ## [1.8.5] - 2026-07-17
 
 ### Changed
@@ -669,7 +688,8 @@ Phase 2 — AI 얼굴 인식 스마트 앨범. NAS 로컬 AI(InsightFace)로 사
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v1.8.5...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v1.8.6...HEAD
+[1.8.6]: https://github.com/euikuk-jeong/lumisshow/compare/v1.8.5...v1.8.6
 [1.8.5]: https://github.com/euikuk-jeong/lumisshow/compare/v1.8.4...v1.8.5
 [1.8.4]: https://github.com/euikuk-jeong/lumisshow/compare/v1.8.3...v1.8.4
 [1.8.3]: https://github.com/euikuk-jeong/lumisshow/compare/v1.8.2...v1.8.3
