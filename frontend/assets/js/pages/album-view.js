@@ -379,6 +379,7 @@ function _openSharePhotoViewer(token, photos, startIdx) {
     document.removeEventListener('mousemove', onMouseMove);
     document.removeEventListener('mouseup', onMouseUp);
     overlay.remove();
+    if (window._pageCleanup === close) window._pageCleanup = null;
   }
 
   function onKey(e) {
@@ -396,6 +397,8 @@ function _openSharePhotoViewer(token, photos, startIdx) {
   prevBtn.addEventListener('click', () => show(idx - 1));
   nextBtn.addEventListener('click', () => show(idx + 1));
   document.addEventListener('keydown', onKey);
+  // SPA 네비게이션 시 뷰어가 닫히지 않고 잔존하는 문제 방지 (router.js renderRoute)
+  window._pageCleanup = close;
 
   overlay.querySelector('.spv-ss-btn').addEventListener('click', () => {
     close();

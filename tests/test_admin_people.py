@@ -292,6 +292,26 @@ async def test_similar_faces(admin_client):
     assert [f["face_id"] for f in r.json()["faces"]] == [ids[0], ids[2]]
 
 
+async def test_similar_faces_candidate_limit_still_includes_seed(admin_client, monkeypatch):
+    """SIMILAR_FACES_CANDIDATE_LIMIT로 후보가 잘려도 기준 얼굴 자신은 결과에 포함되어야 함."""
+    import backend.routers.admin_people as admin_people
+
+    monkeypatch.setattr(admin_people, "_SIMILAR_FACES_CANDIDATE_LIMIT", 1)
+
+    ids = await _seed_faces_with_embeddings([
+        [1.0, 0.0, 0.0],   # 기준 (가장 오래된 id → LIMIT 1 + id DESC 정렬에서 밀림)
+        [0.0, 1.0, 0.0],
+        [0.0, 0.0, 1.0],   # 가장 최신 id → LIMIT 1로 유일하게 선택될 후보
+    ])
+
+    r = await admin_client.get(f"/api/admin/faces/{ids[0]}/similar")
+    assert r.status_code == 200
+    face_ids = [f["face_id"] for f in r.json()["faces"]]
+    assert ids[0] in face_ids  # LIMIT에 밀려도 기준 얼굴은 항상 포함
+    assert r.json()["faces"][0]["face_id"] == ids[0]
+    assert r.json()["faces"][0]["score"] == 1.0
+
+
 async def test_unassigned_faces(admin_client):
     face_ids = await _seed_faces(2)
     pid = (await admin_client.post("/api/admin/people", json={"name": "지우"})).json()["id"]

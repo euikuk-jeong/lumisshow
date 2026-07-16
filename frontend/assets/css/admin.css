@@ -706,6 +706,15 @@
 }
 #photo-grid .photo-list-item { cursor: zoom-in; }
 
+/* ── Person screens: larger list-view thumbnails ───────── */
+#photos-content.photo-list .photo-list-thumb,
+#matched-grid .photo-list-thumb,
+#labeled-grid .photo-list-thumb {
+  width: 72px;
+  height: 72px;
+  border-radius: 6px;
+}
+
 /* ── Photo Sort Popover ─────────────────────────────────── */
 .photo-sort-wrap { position: relative; }
 .photo-sort-popover {

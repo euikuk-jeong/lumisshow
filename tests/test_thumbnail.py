@@ -165,3 +165,30 @@ def test_thumbnail_generation_respects_concurrency_limit(data_dir, monkeypatch, 
         t.join()
 
     assert peak <= 2
+
+
+def test_thumb_locks_cleaned_up_after_generation(data_dir, tmp_path):
+    """생성 완료 후 _thumb_locks에 경로별 락이 남아있으면 안 됨 (무한 증가 방지)."""
+    for i in range(5):
+        p = str(tmp_path / f"cleanup{i}.jpg")
+        Image.new("RGB", (200, 200), color=(i * 10, 100, 100)).save(p, "JPEG")
+        generate_thumbnail(p, "small")
+
+    assert thumbnail_module._thumb_locks == {}
+
+
+def test_thumb_locks_cleaned_up_under_concurrency(data_dir, tmp_path):
+    """동시 요청 후에도 _thumb_locks가 비어 있어야 함."""
+    paths = []
+    for i in range(6):
+        p = str(tmp_path / f"conc{i}.jpg")
+        Image.new("RGB", (200, 200), color=(i * 10, 100, 100)).save(p, "JPEG")
+        paths.append(p)
+
+    threads = [threading.Thread(target=generate_thumbnail, args=(p, "small")) for p in paths]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    assert thumbnail_module._thumb_locks == {}

@@ -175,6 +175,7 @@ export function openLightbox(paths, startIdx, options = {}) {
     closed = true;
     document.removeEventListener('keydown', onKey);
     overlay.remove();
+    if (window._pageCleanup === close) window._pageCleanup = null;
   }
 
   function onKey(e) {
@@ -188,6 +189,8 @@ export function openLightbox(paths, startIdx, options = {}) {
   prevBtn.addEventListener('click', () => show(idx - 1));
   nextBtn.addEventListener('click', () => show(idx + 1));
   document.addEventListener('keydown', onKey);
+  // SPA 네비게이션 시 라이트박스가 닫히지 않고 잔존하는 문제 방지 (router.js renderRoute)
+  window._pageCleanup = close;
 
   if (selBtn && options.onToggleSelect) {
     selBtn.addEventListener('click', () => {
