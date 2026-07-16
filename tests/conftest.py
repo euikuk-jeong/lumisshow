@@ -19,6 +19,9 @@ async def client(tmp_path, monkeypatch):
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
         yield c
 
+    from backend.models.database import close_db_pool
+    await close_db_pool()
+
 
 @pytest_asyncio.fixture
 async def admin_client(client):

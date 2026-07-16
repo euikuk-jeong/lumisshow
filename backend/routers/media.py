@@ -99,7 +99,7 @@ async def serve_thumb(file_path: str, request: Request, size: str = "small", db=
     out_path = await asyncio.get_running_loop().run_in_executor(
         None, generate_thumbnail, abs_path, size
     )
-    return FileResponse(out_path, media_type="image/jpeg")
+    return FileResponse(out_path, media_type="image/jpeg", headers={"Cache-Control": "private, max-age=86400"})
 
 
 @router.get("/media/{file_path:path}")

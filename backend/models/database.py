@@ -1,3 +1,4 @@
+import asyncio
 import os
 import aiosqlite
 
@@ -116,6 +117,30 @@ def _db_path() -> str:
     return os.path.join(data_dir, "db", "app.db")
 
 
+_DB_POOL_SIZE = int(os.getenv("DB_POOL_SIZE", "5"))
+_pool: "asyncio.Queue[aiosqlite.Connection] | None" = None
+
+
+async def _create_pooled_connection() -> aiosqlite.Connection:
+    db = await aiosqlite.connect(_db_path())
+    await db.execute("PRAGMA journal_mode=WAL")
+    await db.execute("PRAGMA busy_timeout=5000")
+    await db.execute("PRAGMA foreign_keys = ON")
+    db.row_factory = aiosqlite.Row
+    return db
+
+
+async def _init_pool() -> None:
+    global _pool
+    if _pool is not None:
+        while not _pool.empty():
+            conn = _pool.get_nowait()
+            await conn.close()
+    _pool = asyncio.Queue()
+    for _ in range(_DB_POOL_SIZE):
+        await _pool.put(await _create_pooled_connection())
+
+
 async def _migrate_absolute_to_relative(db) -> None:
     """album_photos.file_path의 절대 경로를 PHOTO_ROOT 기준 상대 경로로 변환."""
     photo_root = os.path.realpath(os.getenv("PHOTO_ROOT", "./testdata/photos"))
@@ -159,11 +184,24 @@ async def init_db() -> None:
         await _migrate_absolute_to_relative(db)
         await db.commit()
 
+    await _init_pool()
+
+
+async def close_db_pool() -> None:
+    """풀에 있는 커넥션을 모두 닫는다. 앱 종료(lifespan) 및 테스트 teardown에서 호출."""
+    global _pool
+    if _pool is None:
+        return
+    while not _pool.empty():
+        conn = _pool.get_nowait()
+        await conn.close()
+    _pool = None
+
 
 async def get_db():
-    async with aiosqlite.connect(_db_path()) as db:
-        await db.execute("PRAGMA journal_mode=WAL")
-        await db.execute("PRAGMA busy_timeout=5000")
-        await db.execute("PRAGMA foreign_keys = ON")
-        db.row_factory = aiosqlite.Row
-        yield db
+    conn = await _pool.get()
+    try:
+        yield conn
+    finally:
+        await conn.rollback()  # 미커밋 트랜잭션 잔존 방지 (기존 connect-per-request의 close 동작과 동일)
+        await _pool.put(conn)

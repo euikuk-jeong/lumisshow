@@ -63,6 +63,9 @@ def match_one(
     return None
 
 
+_REMATCH_FETCH_BATCH = 2000
+
+
 def rematch_all(conn: sqlite3.Connection, threshold: float) -> int:
     """모든 얼굴을 현재 등록 셋 기준으로 재매칭. face_matches 전체 갱신.
 
@@ -71,19 +74,24 @@ def rematch_all(conn: sqlite3.Connection, threshold: float) -> int:
     갱신된 face_matches 행 수를 반환.
     """
     enrollment = load_enrollment(conn)
-    rows = conn.execute(
+    cursor = conn.execute(
         """SELECT f.id, f.embedding FROM faces f
            LEFT JOIN face_labels fl ON fl.face_id = f.id
            WHERE fl.face_id IS NULL"""
-    ).fetchall()
+    )
 
     # 매칭 계산은 트랜잭션 밖에서 — 수만 얼굴 계산 동안 쓰기 락을 잡으면
     # LumisShow의 face_labels 쓰기가 busy_timeout 초과로 실패한다.
+    # fetchmany로 배치 스트리밍 — 전체 임베딩을 한 번에 메모리에 올리지 않음.
     matches = []
-    for row in rows:
-        result = match_one(blob_to_embedding(row["embedding"]), enrollment, threshold)
-        if result is not None:
-            matches.append((row["id"], result[0], result[1]))
+    while True:
+        batch = cursor.fetchmany(_REMATCH_FETCH_BATCH)
+        if not batch:
+            break
+        for row in batch:
+            result = match_one(blob_to_embedding(row["embedding"]), enrollment, threshold)
+            if result is not None:
+                matches.append((row["id"], result[0], result[1]))
 
     conn.execute("DELETE FROM face_matches")
     conn.executemany(

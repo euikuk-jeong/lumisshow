@@ -9,7 +9,7 @@ from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
 from backend.models.ai_database import init_ai_db
-from backend.models.database import get_db, init_db
+from backend.models.database import close_db_pool, get_db, init_db
 from backend.routers import admin_albums, admin_browse, admin_links, admin_people, admin_settings, auth, media, share
 
 _FRONTEND_DIR = Path(__file__).parent.parent / "frontend"
@@ -37,6 +37,7 @@ async def lifespan(app: FastAPI):
     await init_db()
     await init_ai_db()
     yield
+    await close_db_pool()
 
 
 app = FastAPI(title="LumisShow", version=APP_VERSION, lifespan=lifespan)
