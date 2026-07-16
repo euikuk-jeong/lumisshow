@@ -261,11 +261,11 @@ class FaceLabelSet(BaseModel):
     person_id: Optional[int] = None   # None = 등록 인물 아님(무시)
 
 class BatchFaceLabel(BaseModel):
-    face_ids: list[int]
+    face_ids: list[int] = Field(max_length=5000)
     person_id: Optional[int] = None
 
 class BatchFaceUnlabel(BaseModel):
-    face_ids: list[int]
+    face_ids: list[int] = Field(max_length=5000)
 
 class ConfirmByScore(BaseModel):
     min_score: float = Field(ge=0.0, le=1.0)

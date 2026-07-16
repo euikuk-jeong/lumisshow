@@ -113,6 +113,7 @@ async def share_spa(full_path: str, db=Depends(get_db)):
             ) as cur:
                 row = await cur.fetchone()
         except Exception:
+            _logger.exception("share_spa: failed to load OG meta for token %s", token)
             row = None
 
         if row:

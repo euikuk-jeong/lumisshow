@@ -52,7 +52,9 @@ def test_db_creates_person_indexes(conn):
         row["name"]
         for row in conn.execute("SELECT name FROM sqlite_master WHERE type='index'")
     }
-    assert {"idx_faces_photo", "idx_face_matches_person", "idx_face_labels_person"} <= indexes
+    assert {
+        "idx_faces_photo", "idx_face_matches_person", "idx_face_labels_person", "idx_persons_name",
+    } <= indexes
 
 
 def test_db_wal_mode(conn):

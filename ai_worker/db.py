@@ -1,10 +1,13 @@
 """ai.db 연결/스키마. 워커는 photos_analyzed·faces·face_matches를 쓰고
 persons·face_labels·jobs·ai_settings는 LumisShow가 쓴다 (jobs.status만 워커가 갱신)."""
 
+import logging
 import os
 import sqlite3
 
 from ai_worker import config
+
+_logger = logging.getLogger(__name__)
 
 _DDL = """
 PRAGMA foreign_keys = ON;
@@ -73,4 +76,13 @@ def connect(db_path: str | None = None) -> sqlite3.Connection:
     conn.execute("PRAGMA foreign_keys=ON")
     conn.row_factory = sqlite3.Row
     conn.executescript(_DDL)
+    # 별도 실행: 기존 DB에 중복된 persons.name이 있으면 인덱스 생성이
+    # 실패할 수 있어 워커 부팅이 막히지 않도록 격리 (실패 시 수동 정리 필요).
+    try:
+        conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_persons_name ON persons(name)")
+    except sqlite3.IntegrityError:
+        _logger.exception(
+            "persons.name UNIQUE 인덱스 생성 실패 — 중복된 이름이 있는지 확인 필요: "
+            "SELECT name, COUNT(*) FROM persons GROUP BY name HAVING COUNT(*) > 1;"
+        )
     return conn
