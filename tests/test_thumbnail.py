@@ -70,9 +70,11 @@ def test_get_image_meta_dimensions(img_path):
     assert meta["height"] == 800
 
 
-def test_get_image_meta_no_exif(img_path):
+def test_get_image_meta_no_exif_falls_back_to_mtime(img_path):
+    """EXIF 촬영일 없으면 파일 mtime으로 taken_at 대체."""
+    expected = datetime.fromtimestamp(os.path.getmtime(img_path))
     meta = get_image_meta(img_path)
-    assert meta["taken_at"] is None
+    assert meta["taken_at"] == expected
 
 
 def test_get_image_meta_with_exif(tmp_path):

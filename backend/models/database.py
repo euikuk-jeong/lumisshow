@@ -78,7 +78,8 @@ CREATE TABLE IF NOT EXISTS settings (
 # 버전을 올리면 기존 캐시 전체가 삭제되고 다음 접근 시 EXIF를 새로 읽어 다시 채운다.
 # v1: 전체 EXIF 컬럼(make/camera 등) 추가
 # v2: 실패 읽기(width=None) 캐시 저장 금지 → 기존 빈 캐시 행 일괄 삭제
-_PHOTO_META_CACHE_VERSION = 2
+# v3: EXIF 촬영일 없으면 파일 mtime으로 taken_at 대체
+_PHOTO_META_CACHE_VERSION = 3
 
 # 기존 DB에 컬럼이 없을 때만 추가 (SQLite는 IF NOT EXISTS 미지원)
 _META_CACHE_MIGRATIONS = [
