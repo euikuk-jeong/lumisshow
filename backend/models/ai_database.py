@@ -7,9 +7,13 @@ photos_analyzed·faces·face_matches는 AI 워커(ai_worker/) 전용 쓰기 테�
    코드를 공유할 수 없어 복제함). 한쪽을 변경하면 반드시 다른 쪽도 변경한다.
 """
 
+import logging
 import os
+import sqlite3
 
 import aiosqlite
+
+_logger = logging.getLogger(__name__)
 
 _AI_DDL = """
 PRAGMA foreign_keys = ON;
@@ -84,6 +88,18 @@ async def init_ai_db() -> None:
         await db.execute("PRAGMA busy_timeout=15000")
         await db.executescript(_AI_DDL)
         await db.commit()
+        # 별도 실행: 기존 DB에 중복된 persons.name이 있으면 인덱스 생성이
+        # 실패할 수 있어 앱 부팅이 막히지 않도록 격리 (실패 시 수동 정리 필요).
+        try:
+            await db.execute(
+                "CREATE UNIQUE INDEX IF NOT EXISTS idx_persons_name ON persons(name)"
+            )
+            await db.commit()
+        except sqlite3.IntegrityError:
+            _logger.exception(
+                "persons.name UNIQUE 인덱스 생성 실패 — 중복된 이름이 있는지 확인 필요: "
+                "SELECT name, COUNT(*) FROM persons GROUP BY name HAVING COUNT(*) > 1;"
+            )
 
 
 async def get_ai_db():

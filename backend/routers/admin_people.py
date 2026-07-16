@@ -5,6 +5,7 @@
 """
 
 import os
+import sqlite3
 from typing import Optional
 from urllib.parse import quote
 
@@ -123,11 +124,16 @@ async def create_person(
     name = body.name.strip()
     if not name:
         raise HTTPException(status_code=400, detail="이름을 입력하세요")
+    # DB의 UNIQUE 인덱스가 (기존 중복 데이터로 인해) 생성되지 못했을 가능성에 대비한
+    # 애플리케이션 레벨 방어 — 정상 케이스는 UNIQUE 인덱스가 원자적으로 막아준다.
     async with db.execute("SELECT id FROM persons WHERE name = ?", (name,)) as cur:
         if await cur.fetchone() is not None:
             raise HTTPException(status_code=400, detail="이미 존재하는 인물입니다")
-    cur = await db.execute("INSERT INTO persons (name) VALUES (?)", (name,))
-    await db.commit()
+    try:
+        cur = await db.execute("INSERT INTO persons (name) VALUES (?)", (name,))
+        await db.commit()
+    except sqlite3.IntegrityError:
+        raise HTTPException(status_code=400, detail="이미 존재하는 인물입니다")
     return {"id": cur.lastrowid, "name": name}
 
 
@@ -140,8 +146,16 @@ async def rename_person(
     if not name:
         raise HTTPException(status_code=400, detail="이름을 입력하세요")
     await _person_or_404(person_id, db)
-    await db.execute("UPDATE persons SET name = ? WHERE id = ?", (name, person_id))
-    await db.commit()
+    async with db.execute(
+        "SELECT id FROM persons WHERE name = ? AND id != ?", (name, person_id)
+    ) as cur:
+        if await cur.fetchone() is not None:
+            raise HTTPException(status_code=400, detail="이미 존재하는 인물입니다")
+    try:
+        await db.execute("UPDATE persons SET name = ? WHERE id = ?", (name, person_id))
+        await db.commit()
+    except sqlite3.IntegrityError:
+        raise HTTPException(status_code=400, detail="이미 존재하는 인물입니다")
     return {"id": person_id, "name": name}
 
 
@@ -457,7 +471,7 @@ async def delete_face_label(
     await db.commit()
 
 
-@router.delete("/faces/batch-unlabel", status_code=204)
+@router.post("/faces/batch-unlabel", status_code=204)
 async def batch_unlabel_faces(
     body: BatchFaceUnlabel, _: str = Depends(get_current_admin), db=Depends(get_ai_db)
 ):

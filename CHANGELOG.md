@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **얼굴 무시 해제 batch API를 POST로 전환**: `DELETE /api/admin/faces/batch-unlabel`
+  → `POST /api/admin/faces/batch-unlabel` (프록시 이식성 위해 body가 있는
+  DELETE 제거, `admin_people.py`, `admin-people.js`, `admin-person-detail.js`)
+
+### Fixed
+- **persons.name 중복 방지**: UNIQUE 인덱스 추가 + create/rename 양쪽에 애플리케이션
+  레벨 중복 검사 — 기존에는 create만 검사(레이스 있음), rename은 검사 자체 없었음
+  (`ai_database.py`, `ai_worker/db.py`, `admin_people.py`)
+- **batch-label/unlabel face_ids 무제한 입력 방지**: `Field(max_length=5000)` 추가
+  (`schemas.py`)
+
 ## [1.8.6] - 2026-07-17
 
 ### Security

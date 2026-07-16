@@ -418,7 +418,7 @@ async function unlabelSelectedLabeled(personId) {
   if (!ids.length) return;
   if (!confirm(`선택한 ${ids.length}개 얼굴의 확정을 해제할까요?`)) return;
   try {
-    await api.delete('/api/admin/faces/batch-unlabel', { face_ids: ids });
+    await api.post('/api/admin/faces/batch-unlabel', { face_ids: ids });
     renderAdminPersonDetail(personId);
   } catch (e) { alert(e.message); }
 }

@@ -61,7 +61,9 @@ async def test_init_ai_db_creates_person_indexes(client):
     async with aiosqlite.connect(_ai_db_path()) as db:
         async with db.execute("SELECT name FROM sqlite_master WHERE type='index'") as cur:
             indexes = {row[0] for row in await cur.fetchall()}
-    assert {"idx_faces_photo", "idx_face_matches_person", "idx_face_labels_person"} <= indexes
+    assert {
+        "idx_faces_photo", "idx_face_matches_person", "idx_face_labels_person", "idx_persons_name",
+    } <= indexes
 
 
 # ── 인물 CRUD ─────────────────────────────────────────────────────────
@@ -90,6 +92,12 @@ async def test_create_rename_delete_person(admin_client):
 
     r = await admin_client.put(f"/api/admin/people/{pid}", json={"name": "정지우"})
     assert r.status_code == 200 and r.json()["name"] == "정지우"
+
+    # 다른 인물 이름으로 변경 시도 시 중복 400
+    pid2 = (await admin_client.post("/api/admin/people", json={"name": "철수"})).json()["id"]
+    r = await admin_client.put(f"/api/admin/people/{pid2}", json={"name": "정지우"})
+    assert r.status_code == 400
+    await admin_client.delete(f"/api/admin/people/{pid2}")
 
     r = await admin_client.delete(f"/api/admin/people/{pid}")
     assert r.status_code == 204
@@ -395,6 +403,13 @@ async def test_batch_label_faces(admin_client):
     faces = (await admin_client.get(f"/api/admin/people/{pid}/faces?source=labeled")).json()["faces"]
     assert face_ids[2] not in {f["face_id"] for f in faces}
 
+    # face_ids 5000개 초과 시 422
+    r = await admin_client.post(
+        "/api/admin/faces/batch-label",
+        json={"face_ids": list(range(5001)), "person_id": pid},
+    )
+    assert r.status_code == 422
+
 
 async def test_batch_unlabel_faces(admin_client, client):
     face_ids = await _seed_faces(3)
@@ -403,9 +418,15 @@ async def test_batch_unlabel_faces(admin_client, client):
         "/api/admin/faces/batch-label", json={"face_ids": face_ids, "person_id": pid}
     )
 
-    # 두 개만 한 번에 라벨 삭제 (httpx delete()는 body 미지원 — request()로 호출)
-    r = await admin_client.request(
-        "DELETE", "/api/admin/faces/batch-unlabel", json={"face_ids": face_ids[:2]}
+    # face_ids 5000개 초과 시 422
+    r = await admin_client.post(
+        "/api/admin/faces/batch-unlabel", json={"face_ids": list(range(5001))}
+    )
+    assert r.status_code == 422
+
+    # 두 개만 한 번에 라벨 삭제
+    r = await admin_client.post(
+        "/api/admin/faces/batch-unlabel", json={"face_ids": face_ids[:2]}
     )
     assert r.status_code == 204
 
@@ -413,14 +434,14 @@ async def test_batch_unlabel_faces(admin_client, client):
     assert {f["face_id"] for f in faces} == {face_ids[2]}
 
     # 빈 목록 400
-    r = await admin_client.request(
-        "DELETE", "/api/admin/faces/batch-unlabel", json={"face_ids": []}
+    r = await admin_client.post(
+        "/api/admin/faces/batch-unlabel", json={"face_ids": []}
     )
     assert r.status_code == 400
 
     # 존재하지 않는 face_id가 섞여도 존재하는 것만 조용히 삭제
-    r = await admin_client.request(
-        "DELETE", "/api/admin/faces/batch-unlabel", json={"face_ids": [face_ids[2], 999]}
+    r = await admin_client.post(
+        "/api/admin/faces/batch-unlabel", json={"face_ids": [face_ids[2], 999]}
     )
     assert r.status_code == 204
     faces = (await admin_client.get(f"/api/admin/people/{pid}/faces?source=labeled")).json()["faces"]
@@ -428,8 +449,8 @@ async def test_batch_unlabel_faces(admin_client, client):
 
     # 인증 필요
     del client.headers["Authorization"]
-    r = await client.request(
-        "DELETE", "/api/admin/faces/batch-unlabel", json={"face_ids": face_ids[:1]}
+    r = await client.post(
+        "/api/admin/faces/batch-unlabel", json={"face_ids": face_ids[:1]}
     )
     assert r.status_code in (401, 403)
 
