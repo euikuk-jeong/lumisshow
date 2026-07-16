@@ -37,6 +37,7 @@ CREATE TABLE IF NOT EXISTS face_matches (
     score      REAL NOT NULL,
     matched_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
+CREATE INDEX IF NOT EXISTS idx_face_matches_person ON face_matches(person_id);
 
 CREATE TABLE IF NOT EXISTS persons (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -49,6 +50,7 @@ CREATE TABLE IF NOT EXISTS face_labels (
     person_id  INTEGER,
     labeled_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
+CREATE INDEX IF NOT EXISTS idx_face_labels_person ON face_labels(person_id);
 
 CREATE TABLE IF NOT EXISTS jobs (
     id           INTEGER PRIMARY KEY AUTOINCREMENT,
