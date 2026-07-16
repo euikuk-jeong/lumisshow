@@ -90,7 +90,7 @@ async def share_spa(full_path: str, db=Depends(get_db)):
         try:
             async with db.execute(
                 """
-                SELECT a.name, a.description, COUNT(ap.id) AS photo_count
+                SELECT a.name, a.description, sl.password_hash, COUNT(ap.id) AS photo_count
                 FROM share_links sl
                 JOIN albums a ON a.id = sl.album_id
                 LEFT JOIN album_photos ap ON ap.album_id = a.id
@@ -120,12 +120,14 @@ async def share_spa(full_path: str, db=Depends(get_db)):
                 '  <meta property="og:site_name" content="LumisShow" />',
             ]
             if base_url:
-                og_lines += [
-                    f'  <meta property="og:image" content="{base_url}/api/share/{token}/og-image" />',
-                    '  <meta property="og:image:width" content="800" />',
-                    '  <meta property="og:image:height" content="600" />',
-                    f'  <meta property="og:url" content="{base_url}/s/{token}" />',
-                ]
+                # 패스워드 보호 앨범은 커버 이미지를 노출하지 않음 (제목/설명은 유지)
+                if row["password_hash"] is None:
+                    og_lines += [
+                        f'  <meta property="og:image" content="{base_url}/api/share/{token}/og-image" />',
+                        '  <meta property="og:image:width" content="800" />',
+                        '  <meta property="og:image:height" content="600" />',
+                    ]
+                og_lines.append(f'  <meta property="og:url" content="{base_url}/s/{token}" />')
             og_block = "\n".join(og_lines) + "\n"
             html_content = html_content.replace("</head>", og_block + "</head>", 1)
 

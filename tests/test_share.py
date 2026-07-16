@@ -287,6 +287,26 @@ async def test_og_image_empty_album(admin_client):
     assert r.status_code == 404
 
 
+async def test_og_image_blocked_for_password_protected_album(admin_client, tmp_path):
+    """패스워드 보호 앨범은 세션 없이 커버 이미지를 얻을 수 없어야 한다."""
+    photos_dir = tmp_path / "photos"
+    img_path = photos_dir / "cover.jpg"
+    Image.new("RGB", (400, 300), color="blue").save(str(img_path))
+
+    r = await admin_client.post(
+        "/api/admin/albums",
+        json={"name": "Protected OG", "photo_paths": ["cover.jpg"]},
+    )
+    album_id = r.json()["id"]
+    r = await admin_client.post(
+        f"/api/admin/albums/{album_id}/links", json={"password": "secret"}
+    )
+    token = r.json()["token"]
+
+    r = await admin_client.get(f"/api/share/{token}/og-image")
+    assert r.status_code == 404
+
+
 async def test_og_image_with_photos(admin_client, tmp_path):
     photos_dir = tmp_path / "photos"
     img_path = photos_dir / "cover.jpg"
@@ -325,6 +345,18 @@ async def test_share_spa_og_skips_image_without_base_url(admin_client, monkeypat
     assert r.status_code == 200
     assert 'property="og:title"' in r.text
     assert 'property="og:image"' not in r.text
+
+
+async def test_share_spa_og_skips_image_for_password_protected_album(admin_client, monkeypatch):
+    """패스워드 보호 앨범은 제목/설명은 노출하되 og:image는 생략해야 한다."""
+    monkeypatch.setenv("BASE_URL", "https://example.com")
+    token = await _setup_link(admin_client, password="secret")
+    r = await admin_client.get(f"/s/{token}")
+    assert r.status_code == 200
+    assert 'property="og:title"' in r.text
+    assert "Test Album" in r.text
+    assert 'property="og:image"' not in r.text
+    assert f'property="og:url" content="https://example.com/s/{token}"' in r.text
 
 
 async def test_share_spa_invalid_token_still_returns_html(admin_client):
