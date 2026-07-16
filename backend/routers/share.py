@@ -17,6 +17,7 @@ from backend.models.schemas import (
 )
 from backend.routers.admin_settings import get_settings
 from backend.routers.admin_browse import load_photo_meta
+from backend.routers.media import _assert_within_photo_root, _resolve_abs
 from backend.services.auth import (
     create_share_session_token,
     verify_password,
@@ -34,8 +35,22 @@ _MAX_ATTEMPTS = 5
 _LOCKOUT_SECONDS = 15 * 60
 _FAIL_ENTRY_TTL = _LOCKOUT_SECONDS
 
+# 공개 GET 엔드포인트(토큰 존재 여부 노출) 속도 제한 — IP당 창구간 최대 요청 수
+_RATE_LIMIT_WINDOW = 60
+_RATE_LIMIT_MAX = 30
+
 # 세션 쿠키(JWT) 기준 조회수 중복 방지: cookie -> expires_at(float)
 _counted_sessions: dict[str, float] = {}
+
+
+def _client_ip(request: Request) -> str:
+    return request.client.host if request.client else "unknown"
+
+
+def _lockout_key(token: str, request: Request) -> str:
+    """브루트포스 잠금 키를 IP+token 복합으로 구성 — token 단독 키는 공격자가
+    일부러 5회 오입력해 정상 사용자까지 15분 차단시킬 수 있어 IP를 함께 묶는다."""
+    return f"{_client_ip(request)}:{token}"
 
 
 async def _purge_stale_failures(db) -> None:
@@ -51,36 +66,78 @@ async def _purge_stale_failures(db) -> None:
     await db.commit()
 
 
-async def _check_lockout(token: str, db) -> None:
+async def _check_lockout(key: str, db) -> None:
     await _purge_stale_failures(db)
     async with db.execute(
-        "SELECT fail_count, locked_until FROM share_link_failures WHERE token = ?", (token,)
+        "SELECT fail_count, locked_until FROM share_link_failures WHERE token = ?", (key,)
     ) as cur:
         row = await cur.fetchone()
     if row and row["fail_count"] >= _MAX_ATTEMPTS:
         if time.time() < row["locked_until"]:
             raise HTTPException(status_code=429, detail="Too many attempts. Try again later.")
-        await db.execute("DELETE FROM share_link_failures WHERE token = ?", (token,))
+        await db.execute("DELETE FROM share_link_failures WHERE token = ?", (key,))
         await db.commit()
 
 
-async def _record_failure(token: str, db) -> None:
+async def _record_failure(key: str, db) -> None:
     now = time.time()
     async with db.execute(
-        "SELECT fail_count FROM share_link_failures WHERE token = ?", (token,)
+        "SELECT fail_count FROM share_link_failures WHERE token = ?", (key,)
     ) as cur:
         row = await cur.fetchone()
     count = (row["fail_count"] if row else 0) + 1
     locked_until = now + _LOCKOUT_SECONDS if count >= _MAX_ATTEMPTS else 0.0
     await db.execute(
         "INSERT OR REPLACE INTO share_link_failures (token, fail_count, locked_until, recorded_at) VALUES (?, ?, ?, ?)",
-        (token, count, locked_until, now),
+        (key, count, locked_until, now),
     )
     await db.commit()
 
 
-async def _clear_failures(token: str, db) -> None:
-    await db.execute("DELETE FROM share_link_failures WHERE token = ?", (token,))
+async def _clear_failures(key: str, db) -> None:
+    await db.execute("DELETE FROM share_link_failures WHERE token = ?", (key,))
+    await db.commit()
+
+
+async def _purge_stale_rate_limits(db) -> None:
+    now = time.time()
+    await db.execute(
+        "DELETE FROM public_rate_limit WHERE ? - window_start >= ?",
+        (now, _RATE_LIMIT_WINDOW),
+    )
+    await db.commit()
+
+
+async def _check_public_rate_limit(request: Request, db) -> None:
+    """존재하지 않는 토큰(404) 조회만 카운트 — 정상 사용자의 200 응답은 절대
+    잠금에 영향을 주지 않는다 (IP당 60초에 30회 404 시 429).
+    가입 로그인 잠금(_check_lockout)과 동일하게 실패만 세는 방식."""
+    await _purge_stale_rate_limits(db)
+    ip = _client_ip(request)
+    now = time.time()
+    async with db.execute(
+        "SELECT count, window_start FROM public_rate_limit WHERE key = ?", (ip,)
+    ) as cur:
+        row = await cur.fetchone()
+    if row and now - row["window_start"] < _RATE_LIMIT_WINDOW and row["count"] >= _RATE_LIMIT_MAX:
+        raise HTTPException(status_code=429, detail="Too many requests")
+
+
+async def _record_invalid_token_probe(request: Request, db) -> None:
+    ip = _client_ip(request)
+    now = time.time()
+    async with db.execute(
+        "SELECT count, window_start FROM public_rate_limit WHERE key = ?", (ip,)
+    ) as cur:
+        row = await cur.fetchone()
+    if row is None or now - row["window_start"] >= _RATE_LIMIT_WINDOW:
+        count, window_start = 1, now
+    else:
+        count, window_start = row["count"] + 1, row["window_start"]
+    await db.execute(
+        "INSERT OR REPLACE INTO public_rate_limit (key, count, window_start) VALUES (?, ?, ?)",
+        (ip, count, window_start),
+    )
     await db.commit()
 
 
@@ -104,12 +161,24 @@ async def _get_valid_link(token: str, db):
     return row
 
 
+async def _get_valid_link_tracked(token: str, request: Request, db):
+    """_get_valid_link + 존재하지 않는/만료된 토큰(404) 조회 시 enumeration
+    카운터 증가. 공개 GET 엔드포인트 전용 — 정상 토큰 조회는 카운트하지 않는다."""
+    try:
+        return await _get_valid_link(token, db)
+    except HTTPException as e:
+        if e.status_code == 404:
+            await _record_invalid_token_probe(request, db)
+        raise
+
+
 # ── 공개 엔드포인트 ────────────────────────────────────────────────────────────
 
 @router.get("/{token}")
-async def get_link_info(token: str, db=Depends(get_db)):
+async def get_link_info(token: str, request: Request, db=Depends(get_db)):
     """패스워드 필요 여부 반환. 프론트엔드가 비밀번호 입력 폼 표시 여부 결정에 사용."""
-    link = await _get_valid_link(token, db)
+    await _check_public_rate_limit(request, db)
+    link = await _get_valid_link_tracked(token, request, db)
     return {"requires_password": link["password_hash"] is not None}
 
 
@@ -117,17 +186,19 @@ async def get_link_info(token: str, db=Depends(get_db)):
 async def auth_link(
     token: str,
     body: ShareAuthRequest,
+    request: Request,
     response: Response,
     db=Depends(get_db),
 ):
     """패스워드 검증 후 httpOnly 세션 쿠키 발급."""
-    await _check_lockout(token, db)
+    key = _lockout_key(token, request)
+    await _check_lockout(key, db)
     link = await _get_valid_link(token, db)
     if link["password_hash"]:
-        if not body.password or not verify_password(body.password, link["password_hash"]):
-            await _record_failure(token, db)
+        if not body.password or not await asyncio.to_thread(verify_password, body.password, link["password_hash"]):
+            await _record_failure(key, db)
             raise HTTPException(status_code=401, detail="Invalid password")
-    await _clear_failures(token, db)
+    await _clear_failures(key, db)
 
     session_jwt = create_share_session_token(token)
     base_url = os.getenv("BASE_URL", "")
@@ -280,12 +351,13 @@ async def get_photos(
 
 
 @router.get("/{token}/og-image")
-async def og_cover_image(token: str, db=Depends(get_db)):
+async def og_cover_image(token: str, request: Request, db=Depends(get_db)):
     """카카오톡 등 SNS 미리보기용 커버 이미지. 세션 쿠키 불필요.
 
     패스워드 보호 앨범은 노출하지 않음 — 제목/설명(share_spa OG 메타)은 유지하되
     커버 이미지만 차단."""
-    link = await _get_valid_link(token, db)
+    await _check_public_rate_limit(request, db)
+    link = await _get_valid_link_tracked(token, request, db)
     if link["password_hash"] is not None:
         raise HTTPException(status_code=404, detail="Cover image not available for protected album")
 
@@ -318,7 +390,8 @@ async def og_cover_image(token: str, db=Depends(get_db)):
         cover_path = photo_row["file_path"]
 
     photo_root = os.path.realpath(os.getenv("PHOTO_ROOT", "./testdata/photos"))
-    abs_path = cover_path if os.path.isabs(cover_path) else os.path.join(photo_root, cover_path)
+    abs_path = _resolve_abs(cover_path, photo_root)
+    _assert_within_photo_root(abs_path, photo_root)
 
     if not os.path.isfile(abs_path):
         raise HTTPException(status_code=404, detail="Cover image not found")
@@ -353,10 +426,11 @@ async def download_zip(token: str, request: Request, db=Depends(get_db)):
         raise HTTPException(status_code=404, detail="No photos in album")
 
     zip_root = os.path.realpath(os.getenv("PHOTO_ROOT", "./testdata/photos"))
-    paths = [
-        p if os.path.isabs(p) else os.path.join(zip_root, p)
-        for p in (r["file_path"] for r in rows)
-    ]
+    paths = []
+    for r in rows:
+        abs_path = _resolve_abs(r["file_path"], zip_root)
+        _assert_within_photo_root(abs_path, zip_root)
+        paths.append(abs_path)
     album_name = rows[0]["album_name"]
     safe_name = "".join(c for c in album_name if c.isalnum() or c in " _-").strip() or "album"
     encoded_name = quote(safe_name + ".zip", safe="")

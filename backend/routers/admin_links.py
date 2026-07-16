@@ -1,3 +1,4 @@
+import asyncio
 import os
 import secrets
 from datetime import datetime, timezone
@@ -81,7 +82,7 @@ async def create_link(
 ):
     await _get_album_or_404(album_id, db)
     token = secrets.token_hex(5)
-    password_hash = hash_password(body.password) if body.password else None
+    password_hash = await asyncio.to_thread(hash_password, body.password) if body.password else None
     async with db.execute(
         "INSERT INTO share_links (album_id, token, password_hash, expires_at) VALUES (?, ?, ?, ?)",
         (album_id, token, password_hash, _to_utc_naive(body.expires_at)),
@@ -109,7 +110,7 @@ async def update_link(
 
     if "password" in updates:
         raw = updates.pop("password")
-        updates["password_hash"] = hash_password(raw) if raw else None
+        updates["password_hash"] = await asyncio.to_thread(hash_password, raw) if raw else None
 
     if "expires_at" in updates:
         updates["expires_at"] = _to_utc_naive(updates["expires_at"])

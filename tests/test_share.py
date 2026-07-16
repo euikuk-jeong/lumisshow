@@ -1,4 +1,5 @@
 import pytest
+from httpx import ASGITransport, AsyncClient
 from PIL import Image
 
 
@@ -389,3 +390,72 @@ async def test_brute_force_resets_on_correct_password(admin_client):
     # 카운터 리셋 후 재시도 가능
     r = await _auth(admin_client, token, password="wrong")
     assert r.status_code == 401  # 429가 아닌 401
+
+
+async def test_lockout_is_per_ip_not_just_token(admin_client):
+    """token 단독 키였다면 공격자의 5회 오입력이 다른 IP의 정상 사용자까지
+    차단시켰을 것 — IP+token 복합 키로 공격자 IP만 잠긴다."""
+    token = await _setup_link(admin_client, password="secret")
+
+    from backend.main import app
+
+    attacker_transport = ASGITransport(app=app, client=("9.9.9.9", 1234))
+    async with AsyncClient(transport=attacker_transport, base_url="http://test") as attacker:
+        for _ in range(5):
+            r = await attacker.post(f"/api/share/{token}/auth", json={"password": "wrong"})
+            assert r.status_code == 401
+        r = await attacker.post(f"/api/share/{token}/auth", json={"password": "wrong"})
+        assert r.status_code == 429
+
+    # 다른 IP(기본 admin_client, 127.0.0.1)는 여전히 정상 인증 가능해야 한다
+    r = await _auth(admin_client, token, password="secret")
+    assert r.status_code == 200
+
+
+# ── 공개 GET 엔드포인트 속도 제한 ─────────────────────────────────────────────
+
+async def test_public_endpoint_rate_limit_ignores_valid_token_lookups(admin_client):
+    """정상 토큰 조회(200)는 아무리 반복해도 잠금에 영향을 주지 않는다 —
+    프론트엔드가 진입 시마다 호출하는 정상 트래픽을 오탐하지 않기 위함."""
+    token = await _setup_link(admin_client)
+    for _ in range(40):
+        r = await admin_client.get(f"/api/share/{token}")
+        assert r.status_code == 200
+
+
+async def test_public_endpoint_rate_limit_blocks_invalid_token_probing(admin_client):
+    """존재하지 않는 토큰(404) 반복 조회는 enumeration 시도로 간주해 IP당 60초 30회로 제한된다."""
+    for _ in range(30):
+        r = await admin_client.get("/api/share/nonexistent-token")
+        assert r.status_code == 404
+    r = await admin_client.get("/api/share/nonexistent-token")
+    assert r.status_code == 429
+
+
+# ── PHOTO_ROOT 이탈 경로 차단 ─────────────────────────────────────────────────
+
+async def test_og_image_blocks_path_outside_photo_root(admin_client):
+    r = await admin_client.post(
+        "/api/admin/albums",
+        json={"name": "Escape Album", "photo_paths": ["../outside.jpg"]},
+    )
+    album_id = r.json()["id"]
+    r = await admin_client.post(f"/api/admin/albums/{album_id}/links", json={})
+    token = r.json()["token"]
+
+    r = await admin_client.get(f"/api/share/{token}/og-image")
+    assert r.status_code == 403
+
+
+async def test_download_zip_blocks_path_outside_photo_root(admin_client):
+    r = await admin_client.post(
+        "/api/admin/albums",
+        json={"name": "Escape Album 2", "photo_paths": ["../outside2.jpg"]},
+    )
+    album_id = r.json()["id"]
+    r = await admin_client.post(f"/api/admin/albums/{album_id}/links", json={})
+    token = r.json()["token"]
+    await _auth(admin_client, token)
+
+    r = await admin_client.get(f"/api/share/{token}/download")
+    assert r.status_code == 403
