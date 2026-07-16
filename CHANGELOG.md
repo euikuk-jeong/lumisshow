@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.8.5] - 2026-07-17
+
+### Changed
+- **SQLite 커넥션 풀 도입**: `/api/*` 요청마다 새 연결을 열고 PRAGMA를 3회
+  재실행하던 것을 크기 5(`DB_POOL_SIZE`) 커넥션 풀로 교체 — 연결·PRAGMA 오버헤드를
+  앱 시작 시점으로 옮김. 반환 시 `rollback()`을 호출해 커밋 전 예외로 남은
+  미완료 트랜잭션이 다음 요청으로 전파되지 않도록 함 (`database.py`)
+- **공유 뷰어 사진 목록 페이지네이션 SQL화**: `/api/share/{token}/photos`가
+  전체 사진을 fetch한 뒤 Python에서 슬라이싱하던 것을 `COUNT(*)` +
+  `LIMIT/OFFSET` 쿼리로 교체 (`share.py`)
+- **썸네일 응답 캐시 헤더 추가**: 썸네일은 사실상 불변이므로 매 요청 재검증을
+  피하도록 `Cache-Control: private, max-age=86400` 추가 (`media.py`, `admin_browse.py`)
+- **rematch_all 임베딩 배치 스트리밍**: 미분류 얼굴 전체 임베딩을 `fetchall()`로
+  한 번에 적재하던 것을 `fetchmany(2000)` 배치 스트리밍으로 교체 — 얼굴 수가
+  많을수록 커지던 피크 메모리 사용량 절감 (`ai_worker/matcher.py`)
+
 ## [1.8.4] - 2026-07-17
 
 ### Changed
@@ -653,7 +669,8 @@ Phase 2 — AI 얼굴 인식 스마트 앨범. NAS 로컬 AI(InsightFace)로 사
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v1.8.4...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v1.8.5...HEAD
+[1.8.5]: https://github.com/euikuk-jeong/lumisshow/compare/v1.8.4...v1.8.5
 [1.8.4]: https://github.com/euikuk-jeong/lumisshow/compare/v1.8.3...v1.8.4
 [1.8.3]: https://github.com/euikuk-jeong/lumisshow/compare/v1.8.2...v1.8.3
 [1.8.2]: https://github.com/euikuk-jeong/lumisshow/compare/v1.8.1...v1.8.2
