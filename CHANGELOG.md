@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.8.2] - 2026-07-16
+
+### Fixed
+- **EXIF 촬영일 없는 사진의 날짜별 보기**: 앨범·인물 전체보기의 날짜별 그룹에서
+  EXIF `DateTimeOriginal`/`DateTime`이 없는 사진이 전부 "날짜 정보 없음"으로
+  묶이던 문제 — EXIF 촬영일이 없으면 파일 mtime을 `taken_at`으로 대체 (`thumbnail.py`).
+  `photo_meta_cache` 버전 v2→v3로 올려 기존 캐시 재계산 유도 (`database.py`)
+
 ## [1.8.1] - 2026-07-16
 
 ### Changed
@@ -607,7 +615,8 @@ Phase 2 — AI 얼굴 인식 스마트 앨범. NAS 로컬 AI(InsightFace)로 사
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v1.8.1...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v1.8.2...HEAD
+[1.8.2]: https://github.com/euikuk-jeong/lumisshow/compare/v1.8.1...v1.8.2
 [1.8.1]: https://github.com/euikuk-jeong/lumisshow/compare/v1.8.0...v1.8.1
 [1.8.0]: https://github.com/euikuk-jeong/lumisshow/compare/v1.7.1...v1.8.0
 [1.7.1]: https://github.com/euikuk-jeong/lumisshow/compare/v1.7.0...v1.7.1
