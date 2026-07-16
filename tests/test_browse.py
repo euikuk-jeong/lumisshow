@@ -391,3 +391,67 @@ async def test_failed_exif_not_cached(auth_client, monkeypatch):
     r2 = await auth_client.get("/api/admin/browse")
     assert r2.status_code == 200
     assert all(p["width"] == 100 for p in r2.json()["photos"]), "재시도 후 width가 실제 값(100)이어야 함"
+
+
+# ── search 전체 트리 walk 캐시 (P1) ─────────────────────────────────────────────
+
+async def test_search_walk_cache_hides_new_file_within_ttl(auth_client, photo_root):
+    """캐시 TTL 내 새로 추가된 파일은 반영되지 않고, 캐시 만료 후에는 반영돼야 한다."""
+    from backend.routers import admin_browse
+
+    admin_browse._walk_cache.clear()
+    r1 = await auth_client.get("/api/admin/search")
+    total1 = r1.json()["total"]
+
+    _make_jpg(photo_root / "new_during_ttl.jpg")
+    r2 = await auth_client.get("/api/admin/search")
+    assert r2.json()["total"] == total1, "TTL 내에는 캐시된 walk 결과를 재사용해야 함"
+
+    admin_browse._walk_cache.clear()  # TTL 만료를 흉내
+    r3 = await auth_client.get("/api/admin/search")
+    assert r3.json()["total"] == total1 + 1, "캐시 만료 후에는 새 파일이 반영돼야 함"
+
+
+# ── EXIF 읽기 동시성 제한 (P1) ───────────────────────────────────────────────────
+
+async def test_load_photo_meta_respects_exif_concurrency_limit(client, monkeypatch):
+    """캐시 미스 EXIF 읽기가 세마포어 한도를 넘어 동시 실행되면 안 된다."""
+    import asyncio
+    import threading
+    import time as time_mod
+
+    from backend.models.database import get_db
+    from backend.routers import admin_browse
+
+    monkeypatch.setattr(admin_browse, "_exif_read_semaphore", asyncio.Semaphore(2))
+
+    current = 0
+    peak = 0
+    counter_lock = threading.Lock()
+
+    def slow_get_image_meta(path):
+        nonlocal current, peak
+        with counter_lock:
+            current += 1
+            peak = max(peak, current)
+        time_mod.sleep(0.05)
+        with counter_lock:
+            current -= 1
+        return {
+            "width": 10, "height": 10, "taken_at": None,
+            "make": None, "camera": None, "software": None,
+            "shutter": None, "aperture": None, "iso": None, "focal_length": None,
+            "shoot_mode": None, "flash": None, "metering": None, "exposure_mode": None,
+        }
+
+    monkeypatch.setattr(admin_browse, "get_image_meta", slow_get_image_meta)
+
+    rels = [f"nofile_{i}.jpg" for i in range(8)]
+    db_gen = get_db()
+    db = await db_gen.__anext__()
+    try:
+        await admin_browse.load_photo_meta(rels, db)
+    finally:
+        await db_gen.aclose()
+
+    assert peak <= 2
