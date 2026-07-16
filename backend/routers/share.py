@@ -274,8 +274,13 @@ async def get_photos(
 
 @router.get("/{token}/og-image")
 async def og_cover_image(token: str, db=Depends(get_db)):
-    """카카오톡 등 SNS 미리보기용 커버 이미지. 세션 쿠키 불필요."""
-    await _get_valid_link(token, db)
+    """카카오톡 등 SNS 미리보기용 커버 이미지. 세션 쿠키 불필요.
+
+    패스워드 보호 앨범은 노출하지 않음 — 제목/설명(share_spa OG 메타)은 유지하되
+    커버 이미지만 차단."""
+    link = await _get_valid_link(token, db)
+    if link["password_hash"] is not None:
+        raise HTTPException(status_code=404, detail="Cover image not available for protected album")
 
     async with db.execute(
         """
