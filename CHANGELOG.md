@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.8.0] - 2026-07-16
+
+### Added
+- **인물 상세 얼굴 리스트 보기**: 추정/확정 얼굴 섹션에 그리드⊞/리스트☰ 보기 토글
+  추가. 리스트는 체크박스·얼굴 썸네일·사진 경로·매칭율 컬럼으로 구성. 확정 얼굴
+  리스트는 체크박스로 여러 개 선택해 기존 batch-unlabel API로 일괄 확정 해제 가능
+  (개별 ↩ 버튼도 유지) (`admin-person-detail.js`)
+- **전체 사진 라이트박스 확정 해제 버튼**: 인물의 전체 사진 페이지에서 라이트박스로
+  사진을 확대했을 때 하단에 '확정 해제' 버튼 추가 — 새
+  `DELETE /api/admin/people/{id}/photo-label` 엔드포인트로 해당 사진의 이 인물
+  라벨만 제거 (`admin_people.py`, `admin-person-photos.js`)
+
+### Changed
+- `lightbox.js`의 삭제 버튼 텍스트·확인 문구를 옵션으로 분리해 '앨범에서 삭제'와
+  '확정 해제' 양쪽에서 재사용
+
 ## [1.7.1] - 2026-07-16
 
 ### Added
@@ -581,7 +597,8 @@ Phase 2 — AI 얼굴 인식 스마트 앨범. NAS 로컬 AI(InsightFace)로 사
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v1.7.1...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v1.8.0...HEAD
+[1.8.0]: https://github.com/euikuk-jeong/lumisshow/compare/v1.7.1...v1.8.0
 [1.7.1]: https://github.com/euikuk-jeong/lumisshow/compare/v1.7.0...v1.7.1
 [1.7.0]: https://github.com/euikuk-jeong/lumisshow/compare/v1.6.2...v1.7.0
 [1.6.2]: https://github.com/euikuk-jeong/lumisshow/compare/v1.6.1...v1.6.2
