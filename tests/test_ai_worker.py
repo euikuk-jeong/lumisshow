@@ -46,6 +46,15 @@ def test_db_creates_tables(conn):
             "persons", "face_labels", "jobs"} <= tables
 
 
+def test_db_creates_person_indexes(conn):
+    """list_people 등 person_id 조회용 인덱스가 생성돼야 한다."""
+    indexes = {
+        row["name"]
+        for row in conn.execute("SELECT name FROM sqlite_master WHERE type='index'")
+    }
+    assert {"idx_faces_photo", "idx_face_matches_person", "idx_face_labels_person"} <= indexes
+
+
 def test_db_wal_mode(conn):
     assert conn.execute("PRAGMA journal_mode").fetchone()[0] == "wal"
 

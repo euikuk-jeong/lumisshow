@@ -51,6 +51,19 @@ async def _seed_match(face_id: int, person_id: int, score: float = 0.8) -> None:
         await db.commit()
 
 
+# ── 스키마 ────────────────────────────────────────────────────────────
+
+
+async def test_init_ai_db_creates_person_indexes(client):
+    """backend init_ai_db도 워커 DDL과 동일하게 person_id 인덱스를 생성해야 한다."""
+    from backend.models.ai_database import _ai_db_path
+
+    async with aiosqlite.connect(_ai_db_path()) as db:
+        async with db.execute("SELECT name FROM sqlite_master WHERE type='index'") as cur:
+            indexes = {row[0] for row in await cur.fetchall()}
+    assert {"idx_faces_photo", "idx_face_matches_person", "idx_face_labels_person"} <= indexes
+
+
 # ── 인물 CRUD ─────────────────────────────────────────────────────────
 
 
