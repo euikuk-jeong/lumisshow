@@ -541,6 +541,29 @@ async def test_get_album_photos_taken_at_none_without_exif(admin_client):
     assert photos[0]["taken_at"] is None
 
 
+async def test_photo_sort_taken_at_uses_meta_cache(dated_admin_client, tmp_path):
+    """정렬이 photo_meta_cache를 사용해야 한다 — 원본 파일 삭제 후에도 캐시 히트로 동일 정렬."""
+    r = await dated_admin_client.post(
+        "/api/admin/albums",
+        json={"name": "Cached", "photo_paths": ["new.jpg", "old.jpg", "mid.jpg"]},
+    )
+    album_id = r.json()["id"]
+
+    # 첫 정렬 — 캐시 미스 → EXIF 읽어 photo_meta_cache에 저장됨 (앨범 생성 시 기본 taken_at 정렬)
+    photo_root = tmp_path / "photos"
+    for name in ("new.jpg", "old.jpg", "mid.jpg"):
+        (photo_root / name).unlink()
+
+    # 파일이 사라져도 캐시에서 EXIF를 읽어 정렬돼야 한다
+    await dated_admin_client.put(
+        f"/api/admin/albums/{album_id}",
+        json={"photo_sort_by": "taken_at", "photo_sort_dir": "desc"},
+    )
+    photos = (await dated_admin_client.get(f"/api/admin/albums/{album_id}")).json()["photos"]
+    names = [os.path.basename(p["file_path"]) for p in photos]
+    assert names == ["new.jpg", "mid.jpg", "old.jpg"], f"캐시 기반 정렬 실패: {names}"
+
+
 async def test_photo_sort_taken_at_desc_uses_exif(dated_admin_client):
     """taken_at 내림차순 정렬이 EXIF 날짜 역순이어야 한다."""
     r = await dated_admin_client.post(
