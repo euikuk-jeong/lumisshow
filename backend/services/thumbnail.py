@@ -135,6 +135,12 @@ def get_image_meta(file_path: str) -> dict:
                     taken_at = datetime.strptime(str(raw_dt), "%Y:%m:%d %H:%M:%S")
                 except ValueError:
                     pass
+            if taken_at is None:
+                # EXIF 촬영일 없으면 파일 mtime으로 대체 (NAS는 진짜 생성시각 못 얻음, mtime은 복사 후에도 대개 보존됨)
+                try:
+                    taken_at = datetime.fromtimestamp(os.path.getmtime(file_path))
+                except OSError:
+                    pass
 
             # 제작사 / 모델
             make: Optional[str] = str(exif.get(_EXIF_MAKE, "") or "").strip() or None
