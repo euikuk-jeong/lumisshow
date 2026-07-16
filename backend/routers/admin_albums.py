@@ -20,7 +20,7 @@ from backend.models.schemas import (
 from backend.routers.admin_browse import load_photo_meta
 from backend.routers.admin_settings import get_settings
 from backend.services.auth import get_current_admin
-from backend.services.thumbnail import IMAGE_EXTENSIONS, get_image_meta
+from backend.services.thumbnail import IMAGE_EXTENSIONS
 
 _PHOTO_SKIP_PREFIXES = (".", "@", "#")
 
@@ -97,24 +97,18 @@ async def _apply_photo_sort(album_id: int, sort_by: str, sort_dir: str, db) -> N
     reverse = sort_dir == "desc"
 
     if sort_by == "taken_at":
-        root = os.path.realpath(os.getenv("PHOTO_ROOT", "./testdata/photos"))
-
-        def _abs(p: str) -> str:
-            return p if os.path.isabs(p) else os.path.join(root, p)
-
-        metas = await asyncio.gather(*[
-            asyncio.to_thread(get_image_meta, _abs(r["file_path"])) for r in rows
-        ])
+        # photo_meta_cache 일괄 조회 (미스만 EXIF 읽어 캐시) — 매번 파일 직접 읽기 방지
+        meta_by_rel = await load_photo_meta([r["file_path"] for r in rows], db)
         # taken_at None → datetime.min, 동일 날짜면 파일명으로 tiebreak
         combined = sorted(
-            zip(rows, metas),
-            key=lambda pair: (
-                pair[1]["taken_at"] or datetime.min,
-                os.path.basename(pair[0]["file_path"]).lower(),
+            rows,
+            key=lambda r: (
+                meta_by_rel.get(r["file_path"], {}).get("taken_at") or datetime.min,
+                os.path.basename(r["file_path"]).lower(),
             ),
             reverse=reverse,
         )
-        sorted_ids = [r["id"] for r, _ in combined]
+        sorted_ids = [r["id"] for r in combined]
     else:  # filename (default)
         sorted_rows = sorted(
             rows,
