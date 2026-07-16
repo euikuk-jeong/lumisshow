@@ -1,3 +1,4 @@
+import asyncio
 import os
 import time
 
@@ -58,7 +59,7 @@ async def _clear_admin_failures(key: str, db) -> None:
 async def login(req: LoginRequest, request: Request, response: Response, db=Depends(get_db)):
     key = _admin_key(request)
     await _check_admin_lockout(key, db)
-    if not verify_admin_password(req.password):
+    if not await asyncio.to_thread(verify_admin_password, req.password):
         await _record_admin_failure(key, db)
         raise HTTPException(status_code=401, detail="Invalid password")
     await _clear_admin_failures(key, db)

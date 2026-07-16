@@ -72,6 +72,12 @@ CREATE TABLE IF NOT EXISTS settings (
     key   TEXT PRIMARY KEY,
     value TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS public_rate_limit (
+    key          TEXT PRIMARY KEY,
+    count        INTEGER NOT NULL DEFAULT 0,
+    window_start REAL    NOT NULL
+);
 """
 
 # photo_meta_cache 캐시 버전. 이 값보다 낮은 행은 기동 시 삭제됨.

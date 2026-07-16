@@ -42,6 +42,16 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="LumisShow", version=APP_VERSION, lifespan=lifespan)
 
+
+@app.middleware("http")
+async def _security_headers(request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    return response
+
+
 app.include_router(auth.router)
 app.include_router(admin_browse.router)
 app.include_router(admin_albums.router)
