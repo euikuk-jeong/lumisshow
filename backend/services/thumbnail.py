@@ -55,18 +55,25 @@ def generate_thumbnail(file_path: str, size: str) -> str:
         return out_path
 
     lock = _get_thumb_lock(out_path)
-    with lock:
-        if os.path.exists(out_path):
-            return out_path
-        os.makedirs(_thumb_dir(), exist_ok=True)
-        max_w, max_h = SIZES[size]
-        with _thumb_semaphore, Image.open(file_path) as img:
-            # JPEG draft: 목표 크기보다 큰 원본을 요청 크기에 가까운 스케일(1/2, 1/4...)로
-            # 디코딩해 풀해상도 디코딩 대비 속도·메모리를 크게 절감 (JPEG 외 포맷은 no-op)
-            img.draft("RGB", (max_w * 2, max_h * 2))
-            img = ImageOps.exif_transpose(img)
-            img.thumbnail((max_w, max_h), Image.LANCZOS)
-            img.convert("RGB").save(out_path, "JPEG", quality=85, optimize=True)
+    try:
+        with lock:
+            if os.path.exists(out_path):
+                return out_path
+            os.makedirs(_thumb_dir(), exist_ok=True)
+            max_w, max_h = SIZES[size]
+            with _thumb_semaphore, Image.open(file_path) as img:
+                # JPEG draft: 목표 크기보다 큰 원본을 요청 크기에 가까운 스케일(1/2, 1/4...)로
+                # 디코딩해 풀해상도 디코딩 대비 속도·메모리를 크게 절감 (JPEG 외 포맷은 no-op)
+                img.draft("RGB", (max_w * 2, max_h * 2))
+                img = ImageOps.exif_transpose(img)
+                img.thumbnail((max_w, max_h), Image.LANCZOS)
+                img.convert("RGB").save(out_path, "JPEG", quality=85, optimize=True)
+    finally:
+        # 생성 완료 후 dict에서 제거 — 그대로 두면 앨범 내 사진 경로 수만큼 무한 증가.
+        # 같은 경로로 이미 대기 중인 스레드는 위에서 얻은 lock 참조를 그대로 쓰므로 안전.
+        with _thumb_locks_mutex:
+            if _thumb_locks.get(out_path) is lock:
+                del _thumb_locks[out_path]
 
     return out_path
 
