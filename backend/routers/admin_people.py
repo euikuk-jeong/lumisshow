@@ -92,6 +92,30 @@ async def list_people(_: str = Depends(get_current_admin), db=Depends(get_ai_db)
     return [dict(r) for r in rows]
 
 
+@router.get("/people/{person_id}")
+async def get_person(
+    person_id: int, _: str = Depends(get_current_admin), db=Depends(get_ai_db)
+):
+    async with db.execute(
+        """
+        SELECT p.id, p.name, p.created_at,
+               (SELECT COUNT(*) FROM face_labels fl
+                 WHERE fl.person_id = p.id) AS labeled_count,
+               (SELECT COUNT(*) FROM face_matches fm
+                 WHERE fm.person_id = p.id
+                   AND fm.face_id NOT IN (SELECT face_id FROM face_labels)) AS matched_count,
+               (SELECT fl.face_id FROM face_labels fl
+                 WHERE fl.person_id = p.id ORDER BY fl.labeled_at LIMIT 1) AS cover_face_id
+        FROM persons p WHERE p.id = ?
+        """,
+        (person_id,),
+    ) as cur:
+        row = await cur.fetchone()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Person not found")
+    return dict(row)
+
+
 @router.post("/people", status_code=201)
 async def create_person(
     body: PersonCreate, _: str = Depends(get_current_admin), db=Depends(get_ai_db)

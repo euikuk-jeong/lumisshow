@@ -7,9 +7,10 @@ const PAGE_SIZE = 500;
 
 // 인물 전체 사진 (/admin/people/{id}/photos) — 확정(라벨) 얼굴이 포함된 사진만 표시
 export async function renderAdminPersonPhotos(personId) {
-  const people = await api.get('/api/admin/people');
-  const person = people.find(p => p.id === Number(personId));
-  if (!person) {
+  let person;
+  try {
+    person = await api.get(`/api/admin/people/${personId}`);
+  } catch {
     window.navigate('/admin/people', true);
     return;
   }
