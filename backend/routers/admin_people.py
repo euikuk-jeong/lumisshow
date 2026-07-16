@@ -344,6 +344,9 @@ async def list_ignored_faces(
     return {"faces": [dict(r) for r in rows]}
 
 
+_SIMILAR_FACES_CANDIDATE_LIMIT = int(os.getenv("SIMILAR_FACES_CANDIDATE_LIMIT", "20000"))
+
+
 @router.get("/faces/{face_id}/similar")
 async def similar_faces(
     face_id: int,
@@ -354,7 +357,9 @@ async def similar_faces(
     """face_id와 임베딩이 비슷한 미분류 얼굴을 유사도순으로 반환 (신규 인물 탐색용).
     임베딩 벡터 계산 방식은 ai_worker/matcher.py와 동일 로직을 backend에 복제
     (컨테이너가 분리되어 코드를 공유할 수 없음 — ai.db 스키마 복제와 같은 이유)."""
-    async with db.execute("SELECT embedding FROM faces WHERE id = ?", (face_id,)) as cur:
+    async with db.execute(
+        "SELECT id, photo_path, embedding FROM faces WHERE id = ?", (face_id,)
+    ) as cur:
         seed_row = await cur.fetchone()
     if seed_row is None:
         raise HTTPException(status_code=404, detail="Face not found")
@@ -364,16 +369,23 @@ async def similar_faces(
         return {"faces": []}
     seed = seed / seed_norm
 
-    # 기준 얼굴 자신도 결과에 포함(유사도 1.0로 최상단) — 재정렬 화면에서 그대로 선택 가능하게.
+    # 미분류 얼굴이 매우 많을 경우 매 요청마다 전체를 np.stack하면 메모리 부담이 크므로
+    # 후보를 SIMILAR_FACES_CANDIDATE_LIMIT로 제한 (최근 얼굴 우선).
     async with db.execute(
         """SELECT f.id, f.photo_path, f.embedding
            FROM faces f
            LEFT JOIN face_labels fl ON fl.face_id = f.id
            LEFT JOIN face_matches fm ON fm.face_id = f.id
-           WHERE (fl.face_id IS NULL AND fm.face_id IS NULL) OR f.id = ?""",
-        (face_id,),
+           WHERE fl.face_id IS NULL AND fm.face_id IS NULL
+           ORDER BY f.id DESC LIMIT ?""",
+        (_SIMILAR_FACES_CANDIDATE_LIMIT,),
     ) as cur:
         rows = await cur.fetchall()
+
+    # 기준 얼굴 자신도 결과에 포함(유사도 1.0로 최상단) — 재정렬 화면에서 그대로 선택 가능하게.
+    # LIMIT으로 인해 후보 목록에서 밀려났을 수 있으므로 별도로 보장.
+    if not any(r["id"] == face_id for r in rows):
+        rows = [seed_row] + list(rows)
     if not rows:
         return {"faces": []}
 
