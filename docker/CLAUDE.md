@@ -42,6 +42,7 @@ docker compose -f docker/docker-compose.yml restart
 | `DATA_DIR` | DB/썸네일/음악 저장 경로 | `/data` |
 | `BASE_URL` | 공유 링크 URL 생성용 베이스 | `http://192.168.1.100:8080` |
 | `APP_PORT` | 서버 포트 (기본 8080) | `8080` |
+| `THUMB_MAX_CONCURRENCY` | 동시 썸네일 생성(원본 디코딩) 최대 개수 — NAS 메모리 스파이크 방지 (기본 4) | `4` |
 
 ### AI 워커 (lumisshow-ai) 전용
 

@@ -1,9 +1,12 @@
 import os
+import threading
+import time
 from datetime import datetime
 
 import pytest
 from PIL import Image
 
+from backend.services import thumbnail as thumbnail_module
 from backend.services.thumbnail import (
     generate_thumbnail,
     get_image_meta,
@@ -112,3 +115,53 @@ def test_thumb_path_deterministic(img_path):
 
 def test_thumb_path_different_sizes(img_path):
     assert thumb_path(img_path, "small") != thumb_path(img_path, "medium")
+
+
+# ── JPEG draft + 동시 생성 제한 ────────────────────────────────────────────────
+
+def test_thumbnail_large_image_draft_preserves_aspect(data_dir, tmp_path):
+    """draft로 축소 디코딩되는 대형 원본도 최종 썸네일 비율이 유지돼야 한다."""
+    p = str(tmp_path / "large.jpg")
+    Image.new("RGB", (4000, 3000), color=(50, 60, 70)).save(p, "JPEG")
+    out = generate_thumbnail(p, "small")
+    with Image.open(out) as t:
+        assert t.width <= 300
+        assert t.height <= 200
+        assert abs(t.width / t.height - 4000 / 3000) < 0.05
+
+
+def test_thumbnail_generation_respects_concurrency_limit(data_dir, monkeypatch, tmp_path):
+    """동시 생성 요청이 세마포어 한도를 넘지 않아야 한다."""
+    monkeypatch.setattr(thumbnail_module, "_thumb_semaphore", threading.Semaphore(2))
+
+    current = 0
+    peak = 0
+    counter_lock = threading.Lock()
+    orig_open = thumbnail_module.Image.open
+
+    def slow_open(path, *a, **kw):
+        nonlocal current, peak
+        with counter_lock:
+            current += 1
+            peak = max(peak, current)
+        img = orig_open(path, *a, **kw)
+        time.sleep(0.05)
+        with counter_lock:
+            current -= 1
+        return img
+
+    monkeypatch.setattr(thumbnail_module.Image, "open", slow_open)
+
+    paths = []
+    for i in range(6):
+        p = str(tmp_path / f"img{i}.jpg")
+        Image.new("RGB", (200, 200), color=(i * 10, 100, 100)).save(p, "JPEG")
+        paths.append(p)
+
+    threads = [threading.Thread(target=generate_thumbnail, args=(p, "small")) for p in paths]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    assert peak <= 2
