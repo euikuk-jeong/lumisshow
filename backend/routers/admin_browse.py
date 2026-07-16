@@ -392,7 +392,7 @@ async def admin_thumb(
     if not os.path.isfile(full_path):
         raise HTTPException(status_code=404, detail="File not found")
     out = await asyncio.to_thread(generate_thumbnail, full_path, size)
-    return FileResponse(out, media_type="image/jpeg")
+    return FileResponse(out, media_type="image/jpeg", headers={"Cache-Control": "private, max-age=86400"})
 
 
 @router.get("/photo")

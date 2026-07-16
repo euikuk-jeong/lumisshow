@@ -147,6 +147,23 @@ def test_rematch_all_skips_labeled_faces(conn):
     assert [(r["face_id"], r["person_id"]) for r in rows] == [(similar_id, 1)]
 
 
+def test_rematch_all_streams_across_multiple_batches(conn, monkeypatch):
+    """fetchmany 배치 크기를 1로 낮춰 여러 배치에 걸친 스트리밍 경로를 검증."""
+    monkeypatch.setattr(matcher, "_REMATCH_FETCH_BATCH", 1)
+    conn.execute("INSERT INTO persons (name) VALUES ('테스트')")
+    enrolled_id = _insert_face(conn, "e.jpg", _unit_vec(0))
+    conn.execute(
+        "INSERT INTO face_labels (face_id, person_id) VALUES (?, 1)", (enrolled_id,)
+    )
+    similar_ids = [_insert_face(conn, f"s{i}.jpg", _unit_vec(0)) for i in range(3)]
+    conn.commit()
+
+    count = matcher.rematch_all(conn, threshold=0.45)
+    assert count == 3
+    rows = conn.execute("SELECT face_id FROM face_matches").fetchall()
+    assert {r["face_id"] for r in rows} == set(similar_ids)
+
+
 def test_rematch_all_clears_stale_matches_when_no_enrollment(conn):
     face_id = _insert_face(conn, "s.jpg", _unit_vec(0))
     conn.execute(

@@ -238,22 +238,29 @@ async def get_photos(
 
     async with db.execute(
         """
+        SELECT COUNT(*) AS n
+        FROM share_links sl
+        JOIN album_photos ap ON ap.album_id = sl.album_id
+        WHERE sl.token = ? AND sl.is_active = 1
+        """,
+        (token,),
+    ) as cur:
+        total = (await cur.fetchone())["n"]
+
+    query = """
         SELECT ap.id, ap.file_path
         FROM share_links sl
         JOIN album_photos ap ON ap.album_id = sl.album_id
         WHERE sl.token = ? AND sl.is_active = 1
         ORDER BY ap.sort_order, ap.id
-        """,
-        (token,),
-    ) as cur:
-        all_rows = await cur.fetchall()
-
-    total = len(all_rows)
+    """
+    params: list = [token]
     if size > 0:
-        offset = (page - 1) * size
-        rows = all_rows[offset: offset + size]
-    else:
-        rows = all_rows
+        query += " LIMIT ? OFFSET ?"
+        params += [size, (page - 1) * size]
+
+    async with db.execute(query, params) as cur:
+        rows = await cur.fetchall()
 
     # photo_meta_cache에서 IN 쿼리로 일괄 조회 (미스는 EXIF 읽어 캐시)
     cached = await load_photo_meta([r["file_path"] for r in rows], db)
