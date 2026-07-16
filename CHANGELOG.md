@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.8.3] - 2026-07-17
+
+### Changed
+- **썸네일 생성 동시성 제한 + JPEG draft 디코딩**: 그리드 첫 로딩 시 대형 원본
+  디코딩이 한꺼번에 몰려 NAS 메모리가 스파이크하지 않도록
+  `THUMB_MAX_CONCURRENCY`(기본 4) 세마포어 적용. JPEG는 `img.draft()`로 목표
+  크기에 가까운 스케일로 디코딩해 풀해상도 디코딩 대비 속도·메모리 절감
+  (`thumbnail.py`)
+- **search 전체 트리 walk 캐싱 + EXIF 읽기 동시성 제한**: `/api/admin/search`가
+  매 요청마다 PHOTO_ROOT 전체를 재순회하던 것을 30초 TTL 캐시로 교체 —
+  검색어만 바뀌는 반복 호출에서도 NAS 재순회 없음. 날짜 필터 시 캐시 미스
+  EXIF 읽기를 `EXIF_READ_CONCURRENCY`(기본 8) 세마포어로 제한해 대량 미스가
+  한꺼번에 NAS I/O를 몰아붙이지 않도록 함 (`load_photo_meta` 전역 적용)
+  (`admin_browse.py`)
+
+### Security
+- **패스워드 보호 앨범 커버 이미지 노출 차단**: 링크만 알면 패스워드 없이도
+  카카오톡 등 SNS 미리보기의 커버 이미지(og-image)를 얻을 수 있던 문제 —
+  제목·설명(사진 수)은 미리보기 편의를 위해 유지하되 커버 이미지만 404 차단
+  (`main.py`, `share.py`)
+
 ## [1.8.2] - 2026-07-16
 
 ### Fixed
@@ -615,7 +636,8 @@ Phase 2 — AI 얼굴 인식 스마트 앨범. NAS 로컬 AI(InsightFace)로 사
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v1.8.2...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v1.8.3...HEAD
+[1.8.3]: https://github.com/euikuk-jeong/lumisshow/compare/v1.8.2...v1.8.3
 [1.8.2]: https://github.com/euikuk-jeong/lumisshow/compare/v1.8.1...v1.8.2
 [1.8.1]: https://github.com/euikuk-jeong/lumisshow/compare/v1.8.0...v1.8.1
 [1.8.0]: https://github.com/euikuk-jeong/lumisshow/compare/v1.7.1...v1.8.0
