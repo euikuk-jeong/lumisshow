@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.8.4] - 2026-07-17
+
+### Changed
+- **인물 화면 리스트 보기 썸네일 확대**: 인물 상세/전체 사진 리스트 보기의
+  얼굴·사진 썸네일을 40px → 72px로 확대해 식별이 쉽도록 개선 (`admin.css`)
+- **similar_faces 후보 임베딩 LIMIT 적용**: 미분류 얼굴이 매우 많을 경우 매
+  요청마다 전체를 np.stack하던 메모리 부담을 `SIMILAR_FACES_CANDIDATE_LIMIT`
+  (기본 20000)로 제한. 후보에서 밀려나도 기준 얼굴 자신은 항상 결과 최상단에
+  포함되도록 별도 보장 (`admin_people.py`)
+
+### Fixed
+- **`_thumb_locks` dict 무한 증가 방지**: 썸네일 생성 완료 후 경로별 락을 dict에서
+  제거 — 장기 운영 시 앨범 내 사진 경로 수만큼 무한히 쌓이던 문제 (`thumbnail.py`)
+- **라이트박스/공유 뷰어 오버레이 SPA 네비게이션 잔존**: 확대 보기 중 다른
+  페이지로 이동해도 오버레이와 keydown 리스너가 정리되지 않던 문제 —
+  `window._pageCleanup`에 close 등록 (`lightbox.js`, `album-view.js`)
+
 ## [1.8.3] - 2026-07-17
 
 ### Changed
@@ -636,7 +653,8 @@ Phase 2 — AI 얼굴 인식 스마트 앨범. NAS 로컬 AI(InsightFace)로 사
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v1.8.3...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v1.8.4...HEAD
+[1.8.4]: https://github.com/euikuk-jeong/lumisshow/compare/v1.8.3...v1.8.4
 [1.8.3]: https://github.com/euikuk-jeong/lumisshow/compare/v1.8.2...v1.8.3
 [1.8.2]: https://github.com/euikuk-jeong/lumisshow/compare/v1.8.1...v1.8.2
 [1.8.1]: https://github.com/euikuk-jeong/lumisshow/compare/v1.8.0...v1.8.1
