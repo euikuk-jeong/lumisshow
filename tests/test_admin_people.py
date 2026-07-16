@@ -401,6 +401,45 @@ async def test_batch_unlabel_faces(admin_client, client):
     assert r.status_code in (401, 403)
 
 
+async def test_unlabel_person_photo(admin_client, client):
+    """사진 경로 기준 라벨 일괄 해제 — 전체 사진 라이트박스 '확정 해제' 버튼용."""
+    face_ids = await _seed_faces(3)  # photo_0/1/2.jpg 각 1개 얼굴
+    pid = (await admin_client.post("/api/admin/people", json={"name": "지우"})).json()["id"]
+    await admin_client.post(f"/api/admin/faces/{face_ids[0]}/label", json={"person_id": pid})
+    await admin_client.post(f"/api/admin/faces/{face_ids[1]}/label", json={"person_id": pid})
+
+    r = await admin_client.delete(
+        f"/api/admin/people/{pid}/photo-label", params={"path": "2024/photo_0.jpg"}
+    )
+    assert r.status_code == 204
+
+    faces = (await admin_client.get(f"/api/admin/people/{pid}/faces?source=labeled")).json()["faces"]
+    assert {f["face_id"] for f in faces} == {face_ids[1]}
+
+    # path 쿼리 파라미터 누락 422
+    r = await admin_client.delete(f"/api/admin/people/{pid}/photo-label")
+    assert r.status_code == 422
+
+    # 해당 사진에 라벨이 없어도(이미 해제됐거나 원래 없음) 조용히 204
+    r = await admin_client.delete(
+        f"/api/admin/people/{pid}/photo-label", params={"path": "2024/photo_0.jpg"}
+    )
+    assert r.status_code == 204
+
+    # 없는 인물 404
+    r = await admin_client.delete(
+        "/api/admin/people/999/photo-label", params={"path": "2024/photo_0.jpg"}
+    )
+    assert r.status_code == 404
+
+    # 인증 필요
+    del client.headers["Authorization"]
+    r = await client.delete(
+        f"/api/admin/people/{pid}/photo-label", params={"path": "2024/photo_1.jpg"}
+    )
+    assert r.status_code in (401, 403)
+
+
 async def test_confirm_matched_by_score(admin_client):
     face_ids = await _seed_faces(3)
     pid = (await admin_client.post("/api/admin/people", json={"name": "지우"})).json()["id"]
