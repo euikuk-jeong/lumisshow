@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.8.7] - 2026-07-17
+
 ### Changed
 - **얼굴 무시 해제 batch API를 POST로 전환**: `DELETE /api/admin/faces/batch-unlabel`
   → `POST /api/admin/faces/batch-unlabel` (프록시 이식성 위해 body가 있는
@@ -14,10 +16,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - **persons.name 중복 방지**: UNIQUE 인덱스 추가 + create/rename 양쪽에 애플리케이션
-  레벨 중복 검사 — 기존에는 create만 검사(레이스 있음), rename은 검사 자체 없었음
-  (`ai_database.py`, `ai_worker/db.py`, `admin_people.py`)
+  레벨 중복 검사 — 기존에는 create만 검사(레이스 있음), rename은 검사 자체 없었음.
+  인덱스 생성이 기존 중복 데이터로 실패해도 애플리케이션 레벨 체크가 계속 동작하도록
+  이중 방어 (`ai_database.py`, `ai_worker/db.py`, `admin_people.py`)
 - **batch-label/unlabel face_ids 무제한 입력 방지**: `Field(max_length=5000)` 추가
   (`schemas.py`)
+- **share_spa 광역 예외 무음 처리 개선**: OG 메타 조회 실패 시 로그 기록 (`main.py`)
+- **불필요한 Docker 빌드 의존성 제거**: Pillow는 manylinux wheel을 사용해
+  `libjpeg-dev`/`libpng-dev` 헤더가 불필요 — 이미지 크기 절감 (`Dockerfile`)
 
 ## [1.8.6] - 2026-07-17
 
@@ -700,7 +706,8 @@ Phase 2 — AI 얼굴 인식 스마트 앨범. NAS 로컬 AI(InsightFace)로 사
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v1.8.6...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v1.8.7...HEAD
+[1.8.7]: https://github.com/euikuk-jeong/lumisshow/compare/v1.8.6...v1.8.7
 [1.8.6]: https://github.com/euikuk-jeong/lumisshow/compare/v1.8.5...v1.8.6
 [1.8.5]: https://github.com/euikuk-jeong/lumisshow/compare/v1.8.4...v1.8.5
 [1.8.4]: https://github.com/euikuk-jeong/lumisshow/compare/v1.8.3...v1.8.4
