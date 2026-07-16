@@ -1,5 +1,6 @@
 import asyncio
 import os
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -117,6 +118,37 @@ def _walk_photos_basic(
     return results
 
 
+# search()의 전체 트리 walk 결과를 짧게 캐싱 — 검색어(q)만 바뀌는 반복 호출마다
+# NAS 전체를 재순회하지 않도록 q 필터 없이(전체) 캐싱하고 q는 캐시 조회 후 적용
+_WALK_CACHE_TTL = 30  # 초
+_walk_cache: dict[tuple[str, tuple[str, ...]], tuple[list[tuple[str, str, int]], float]] = {}
+
+
+def _evict_stale_walk_cache() -> None:
+    now = time.time()
+    stale = [k for k, (_, exp) in _walk_cache.items() if now >= exp]
+    for k in stale:
+        del _walk_cache[k]
+    if len(_walk_cache) > 100:
+        oldest = min(_walk_cache, key=lambda k: _walk_cache[k][1])
+        del _walk_cache[oldest]
+
+
+def _walk_all_photos_basic_cached(
+    start_dir: str, root: str, hidden_paths: list[str]
+) -> list[tuple[str, str, int]]:
+    key = (start_dir, tuple(hidden_paths))
+    now = time.time()
+    entry = _walk_cache.get(key)
+    if entry and now < entry[1]:
+        return entry[0]
+
+    _evict_stale_walk_cache()
+    results = _walk_photos_basic(start_dir, root, None, hidden_paths)
+    _walk_cache[key] = (results, now + _WALK_CACHE_TTL)
+    return results
+
+
 _CACHE_INSERT_SQL = """
 INSERT OR REPLACE INTO photo_meta_cache
     (file_path, taken_at, width, height, make, camera, software,
@@ -169,8 +201,21 @@ def _row_to_meta(row) -> dict:
     }
 
 
+_EXIF_READ_CONCURRENCY = int(os.getenv("EXIF_READ_CONCURRENCY", "8"))
+_exif_read_semaphore = asyncio.Semaphore(_EXIF_READ_CONCURRENCY)
+
+
+async def _read_meta_limited(abs_path: str) -> dict:
+    async with _exif_read_semaphore:
+        return await asyncio.to_thread(get_image_meta, abs_path)
+
+
 async def load_photo_meta(rels: list[str], db) -> dict[str, dict]:
-    """rel 경로 목록의 EXIF 메타를 photo_meta_cache에서 일괄 조회, 미스는 파일에서 읽어 캐시."""
+    """rel 경로 목록의 EXIF 메타를 photo_meta_cache에서 일괄 조회, 미스는 파일에서 읽어 캐시.
+
+    미스 읽기는 세마포어(EXIF_READ_CONCURRENCY)로 동시 실행 개수를 제한 —
+    캐시 미스가 대량(예: search 날짜 필터 첫 조회)이어도 NAS I/O가 한꺼번에
+    몰리지 않도록 한다."""
     root = _photo_root()
     meta_by_rel: dict[str, dict] = {}
 
@@ -190,7 +235,7 @@ async def load_photo_meta(rels: list[str], db) -> dict[str, dict]:
             return p if os.path.isabs(p) else os.path.join(root, p)
 
         metas = await asyncio.gather(*[
-            asyncio.to_thread(get_image_meta, _abs(r)) for r in uncached
+            _read_meta_limited(_abs(r)) for r in uncached
         ])
         for rel, meta in zip(uncached, metas):
             meta_by_rel[rel] = meta
@@ -271,7 +316,12 @@ async def search(
         else None
     )
 
-    basics = await asyncio.to_thread(_walk_photos_basic, start_dir, root, q, hidden_paths)
+    all_basics = await asyncio.to_thread(_walk_all_photos_basic_cached, start_dir, root, hidden_paths)
+    if q:
+        ql = q.lower()
+        basics = [b for b in all_basics if ql in b[1].lower()]
+    else:
+        basics = all_basics
 
     if df or dt:
         # 날짜 필터: 전체 EXIF 필요 → 먼저 enrich, 필터 후 페이지네이션

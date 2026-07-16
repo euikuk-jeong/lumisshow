@@ -43,6 +43,7 @@ docker compose -f docker/docker-compose.yml restart
 | `BASE_URL` | 공유 링크 URL 생성용 베이스 | `http://192.168.1.100:8080` |
 | `APP_PORT` | 서버 포트 (기본 8080) | `8080` |
 | `THUMB_MAX_CONCURRENCY` | 동시 썸네일 생성(원본 디코딩) 최대 개수 — NAS 메모리 스파이크 방지 (기본 4) | `4` |
+| `EXIF_READ_CONCURRENCY` | photo_meta_cache 미스 시 동시 EXIF 읽기 최대 개수 — search 날짜 필터 등 대량 미스 시 NAS I/O 폭주 방지 (기본 8) | `8` |
 
 ### AI 워커 (lumisshow-ai) 전용
 
