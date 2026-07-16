@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.8.1] - 2026-07-16
+
+### Changed
+- **앨범 taken_at 정렬이 photo_meta_cache 사용**: 사진 추가·정렬 변경 시 앨범 전체
+  사진의 EXIF를 매번 원본 파일에서 직접 읽던 것을 `load_photo_meta()` 캐시 조회로
+  교체 — 캐시 워밍 후 NAS 파일 접근 0회 (`admin_albums.py`)
+- **ai.db person_id 인덱스 추가**: `face_matches(person_id)`,
+  `face_labels(person_id)` — 인물 목록 등 인물별 집계 쿼리의 풀스캔 제거.
+  기존 DB는 다음 컨테이너 기동 시 자동 생성 (`ai_database.py`, `ai_worker/db.py`)
+
 ## [1.8.0] - 2026-07-16
 
 ### Added
@@ -597,7 +607,8 @@ Phase 2 — AI 얼굴 인식 스마트 앨범. NAS 로컬 AI(InsightFace)로 사
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v1.8.0...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v1.8.1...HEAD
+[1.8.1]: https://github.com/euikuk-jeong/lumisshow/compare/v1.8.0...v1.8.1
 [1.8.0]: https://github.com/euikuk-jeong/lumisshow/compare/v1.7.1...v1.8.0
 [1.7.1]: https://github.com/euikuk-jeong/lumisshow/compare/v1.7.0...v1.7.1
 [1.7.0]: https://github.com/euikuk-jeong/lumisshow/compare/v1.6.2...v1.7.0
