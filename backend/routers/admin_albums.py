@@ -17,9 +17,9 @@ from backend.models.schemas import (
     PhotoPathsRequest,
     parse_music_paths,
 )
-from backend.routers.admin_browse import load_photo_meta
-from backend.routers.admin_settings import get_settings
 from backend.services.auth import get_current_admin
+from backend.services.photo_meta import load_photo_meta
+from backend.services.settings import get_settings
 from backend.services.thumbnail import IMAGE_EXTENSIONS
 
 _PHOTO_SKIP_PREFIXES = (".", "@", "#")
