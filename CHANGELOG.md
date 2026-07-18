@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.9.0] - 2026-07-19
+
+### Added
+- **비-root 컨테이너 실행 지원 (PUID/PGID)**: 환경변수 `PUID`/`PGID` 설정 시
+  entrypoint(`docker/entrypoint.sh`)가 `DATA_DIR` 소유권을 맞추고 `setpriv`로
+  권한을 하강시켜 실행 — 미설정 시 기존 root 동작 100% 유지(하위 호환).
+  `lumisshow`/`lumisshow-ai`는 `/data`를 공유하므로 두 서비스에 동일한 값을
+  사용해야 함 (`docker/Dockerfile`, `docker/Dockerfile.ai`, `docker/CLAUDE.md`)
+
 ## [1.8.7] - 2026-07-17
 
 ### Changed
@@ -706,7 +715,8 @@ Phase 2 — AI 얼굴 인식 스마트 앨범. NAS 로컬 AI(InsightFace)로 사
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v1.8.7...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v1.9.0...HEAD
+[1.9.0]: https://github.com/euikuk-jeong/lumisshow/compare/v1.8.7...v1.9.0
 [1.8.7]: https://github.com/euikuk-jeong/lumisshow/compare/v1.8.6...v1.8.7
 [1.8.6]: https://github.com/euikuk-jeong/lumisshow/compare/v1.8.5...v1.8.6
 [1.8.5]: https://github.com/euikuk-jeong/lumisshow/compare/v1.8.4...v1.8.5
