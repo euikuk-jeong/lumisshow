@@ -44,6 +44,7 @@ docker compose -f docker/docker-compose.yml restart
 | `APP_PORT` | 서버 포트 (기본 8080) | `8080` |
 | `THUMB_MAX_CONCURRENCY` | 동시 썸네일 생성(원본 디코딩) 최대 개수 — NAS 메모리 스파이크 방지 (기본 4) | `4` |
 | `EXIF_READ_CONCURRENCY` | photo_meta_cache 미스 시 동시 EXIF 읽기 최대 개수 — search 날짜 필터 등 대량 미스 시 NAS I/O 폭주 방지 (기본 8) | `8` |
+| `PUID` / `PGID` | 비-root 실행 시 사용할 UID/GID (선택, 미설정 시 root로 실행) | `1000` |
 
 ### AI 워커 (lumisshow-ai) 전용
 
@@ -66,6 +67,29 @@ docker compose -f docker/docker-compose.yml restart
 ```bash
 python3 -c "import bcrypt; print(bcrypt.hashpw(b'your_password', bcrypt.gensalt()).decode())"
 ```
+
+---
+
+## 비-root 실행 (PUID/PGID)
+
+기본값은 root 실행(하위 호환). 컨테이너를 비-root로 돌리려면 `PHOTO_ROOT`를 읽을 수 있는 계정의 UID/GID를 `.env`에 지정한다.
+
+```bash
+# NAS에서 PHOTO_ROOT 소유 계정 확인
+stat /volume1/photo
+# Uid: (138862/PhotoStation)   Gid: (138862/PhotoStation)
+
+# .env
+PUID=138862
+PGID=138862
+```
+
+- `lumisshow`, `lumisshow-ai` 두 컨테이너가 `/data`를 공유하므로 **반드시 동일한 PUID/PGID**를 사용해야 한다. 값이 다르면 한쪽이 만든 파일을 다른 쪽이 못 읽는 문제가 생긴다.
+- entrypoint(`docker/entrypoint.sh`)가 컨테이너 시작마다 `/data` 소유권을 확인하고, `PUID:PGID`와 다를 때만 `chown -R`을 수행한다. 즉 **재귀 chown은 이 값을 처음 설정한 직후 1회만** 발생하고, 이후 재기동부터는 소유권이 이미 맞아 즉시 스킵된다. 파일이 많으면(썸네일·얼굴 크롭 캐시) 최초 1회에 한해 시작이 다소 지연될 수 있다.
+- `PHOTO_ROOT`(`:ro` 마운트)는 chown 대상이 아니다 — 원본 사진은 절대 건드리지 않는다.
+- 값을 바꾸는 경우(예: 138862 → 다른 값)에도 위 로직대로 다음 시작 시 자동으로 재-chown된다.
+- entrypoint는 `/data` **최상위 디렉토리 소유권만 보고** 일치 여부를 판단한다. `/data`를 수동으로 최상위만 `chown`해두면 하위 파일은 여전히 이전 소유자로 남아 재귀 chown이 스킵되니, 소유권 변경은 이 entrypoint에 맡기고 수동 chown은 하지 않는다.
+- `APP_PORT`를 1024 미만으로 바꾸면 비-root 프로세스는 해당 포트에 bind할 수 없다. 기본값(8080)은 문제없다.
 
 ---
 

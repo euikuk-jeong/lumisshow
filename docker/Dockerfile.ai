@@ -37,8 +37,12 @@ RUN --mount=type=bind,from=builder,source=/wheels,target=/wheels \
 
 COPY ai_worker/ ./ai_worker/
 
+COPY docker/entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh && setpriv --version
+
 ARG APP_VERSION=dev
 ENV APP_VERSION=${APP_VERSION}
 ENV PYTHONUNBUFFERED=1
 
+ENTRYPOINT ["/entrypoint.sh"]
 CMD ["python", "-m", "ai_worker.main", "daemon"]
