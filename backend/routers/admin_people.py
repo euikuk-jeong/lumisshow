@@ -5,7 +5,9 @@
 """
 
 import os
+import secrets
 import sqlite3
+import time
 from typing import Optional
 from urllib.parse import quote
 
@@ -25,13 +27,34 @@ from backend.models.schemas import (
     PersonCreate,
     SharePhotosResponse,
     build_share_photo_item,
+    build_slideshow_defaults,
 )
 from backend.services.auth import admin_image_auth, get_current_admin
 from backend.services.photo_meta import load_photo_meta
+from backend.services.settings import get_settings
 
 router = APIRouter(prefix="/api/admin", tags=["admin-people"])
 
 _JOB_TYPES = {"scan", "rematch"}
+
+# photos-detail 페이지네이션 스냅샷: 최초 요청(page=1, snapshot 미지정)에서 계산한
+# 전체 photo_path 순서를 토큰에 고정해두고 이후 페이지 요청은 이 목록만 슬라이스한다.
+# 슬라이드쇼 재생 중 다른 곳에서 라벨/매칭이 바뀌어도 이미 시작된 세션의 페이지
+# 순서·개수가 흔들리지 않도록 하기 위함 (OFFSET 기반 재계산 시 밀림 발생 가능).
+_PERSON_PHOTOS_SNAPSHOT_TTL = 1800  # 초
+# 토큰 -> (person_id, labeled_only, photo_paths, 만료시각). person_id/labeled_only를
+# 함께 저장해 토큰이 발급된 (인물, source) 조합에서만 유효하도록 검증한다.
+_person_photos_snapshots: dict[str, tuple[int, bool, list[str], float]] = {}
+
+
+def _evict_stale_person_photos_snapshots() -> None:
+    now = time.time()
+    stale = [k for k, v in _person_photos_snapshots.items() if now >= v[3]]
+    for k in stale:
+        del _person_photos_snapshots[k]
+    if len(_person_photos_snapshots) > 200:
+        oldest = min(_person_photos_snapshots, key=lambda k: _person_photos_snapshots[k][3])
+        del _person_photos_snapshots[oldest]
 
 
 async def _person_or_404(person_id: int, db) -> None:
@@ -233,28 +256,35 @@ async def list_person_photos_detail(
     page: int = Query(default=1, ge=1),
     size: int = Query(default=50, ge=1, le=500),
     source: str = Query(default="all", pattern="^(all|labeled)$"),
+    snapshot: Optional[str] = Query(default=None),
     _: str = Depends(get_current_admin),
     db=Depends(get_ai_db),
     app_db=Depends(get_db),
 ):
     """인물 사진 상세 목록 (EXIF·URL 포함, 페이지네이션) — Admin 슬라이드쇼/전체 사진용.
 
-    source=labeled면 확정(라벨) 얼굴이 있는 사진만, 기본(all)은 확정+추정."""
+    source=labeled면 확정(라벨) 얼굴이 있는 사진만, 기본(all)은 확정+추정.
+
+    snapshot 미지정(최초 요청) 시 전체 photo_path 순서를 계산해 토큰에 고정하고
+    응답에 실어 보낸다. 이후 요청이 같은 snapshot을 넘기면 그 고정 목록만 슬라이스한다
+    (라벨/매칭이 재생 중 바뀌어도 이미 시작된 세션의 페이지가 밀리지 않도록)."""
     await _person_or_404(person_id, db)
     labeled_only = source == "labeled"
-    if labeled_only:
-        count_sql = f"SELECT COUNT(DISTINCT f.photo_path) AS total {_PERSON_PHOTOS_LABELED_FROM}"
-        count_params: tuple = (person_id,)
-    else:
-        count_sql = f"SELECT COUNT(DISTINCT f.photo_path) AS total {_PERSON_PHOTOS_FROM}"
-        count_params = (person_id, person_id)
-    async with db.execute(count_sql, count_params) as cur:
-        total = (await cur.fetchone())["total"]
 
+    _evict_stale_person_photos_snapshots()
+    cached = _person_photos_snapshots.get(snapshot) if snapshot else None
+    # 캐시된 토큰이 다른 인물/source로 발급된 것이면(URL 재사용 등) 무시하고 새로 계산 —
+    # 토큰이 자신이 속한 (person_id, source) 조합에서만 유효하도록 보장.
+    if cached and cached[0] == person_id and cached[1] == labeled_only:
+        all_paths = cached[2]
+    else:
+        all_paths = await _person_photo_paths(person_id, db, labeled_only=labeled_only)
+        snapshot = secrets.token_hex(8)
+        _person_photos_snapshots[snapshot] = (person_id, labeled_only, all_paths, time.time() + _PERSON_PHOTOS_SNAPSHOT_TTL)
+
+    total = len(all_paths)
     offset = (page - 1) * size
-    paths = await _person_photo_paths(
-        person_id, db, limit=size, offset=offset, labeled_only=labeled_only
-    )
+    paths = all_paths[offset: offset + size]
 
     meta_map = await load_photo_meta(paths, app_db)
     photos = [
@@ -269,7 +299,26 @@ async def list_person_photos_detail(
         )
         for i, p in enumerate(paths)
     ]
-    return SharePhotosResponse(photos=photos, total=total, page=page)
+    return SharePhotosResponse(photos=photos, total=total, page=page, snapshot=snapshot)
+
+
+@router.get("/people/{person_id}/slideshow-meta")
+async def person_slideshow_meta(
+    person_id: int,
+    _: str = Depends(get_current_admin),
+    db=Depends(get_ai_db),
+    app_db=Depends(get_db),
+):
+    """인물 슬라이드쇼 진입 화면(loadAlbum)용 메타 — 인물에는 앨범이 없으므로 전역
+    설정만 적용하고 음악은 항상 없음(False) 고정. share.py get_album()과 동일한
+    build_slideshow_defaults()를 사용해 필드 매핑·폴백 규칙을 공유한다."""
+    await _person_or_404(person_id, db)
+    sv = await get_settings(app_db)
+    return {
+        "music_count": 0,
+        "music_names": [],
+        "slideshow_defaults": build_slideshow_defaults({"music": False}, sv),
+    }
 
 
 @router.delete("/people/{person_id}/photo-label", status_code=204)

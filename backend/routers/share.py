@@ -13,6 +13,7 @@ from backend.models.schemas import (
     ShareAuthRequest,
     SharePhotosResponse,
     build_share_photo_item,
+    build_slideshow_defaults,
     parse_music_paths,
 )
 from backend.services.auth import (
@@ -272,14 +273,17 @@ async def get_album(token: str, request: Request, db=Depends(get_db)):
 
     music_paths = parse_music_paths(row["music_path"])
     sv = await get_settings(db)
-    slideshow_defaults = {
-        "interval": row["slideshow_interval"] or sv["slideshow_interval"],
-        "order":    row["slideshow_order"]    or sv["slideshow_order"],
-        "effect":   row["slideshow_effect"]   or sv["slideshow_effect"],
-        "music":    bool(row["slideshow_music"]) if row["slideshow_music"] is not None else sv["slideshow_music"],
-        "volume":   row["slideshow_volume"]   if row["slideshow_volume"] is not None else sv["slideshow_volume"],
-        "loop":     bool(row["slideshow_loop"]) if row["slideshow_loop"] is not None else sv["slideshow_loop"],
-    }
+    slideshow_defaults = build_slideshow_defaults(
+        {
+            "interval": row["slideshow_interval"],
+            "order": row["slideshow_order"],
+            "effect": row["slideshow_effect"],
+            "music": row["slideshow_music"],
+            "volume": row["slideshow_volume"],
+            "loop": row["slideshow_loop"],
+        },
+        sv,
+    )
     return {
         "album_name": row["name"],
         "description": row["description"],

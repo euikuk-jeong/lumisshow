@@ -40,25 +40,19 @@ export function renderSlideshow(token) {
 
 // Admin 인물 슬라이드쇼 — 별도 앨범 없이 인물 사진으로 재생 (음악 없음)
 export function renderPersonSlideshow(personId) {
+  let snapshot = null; // photos-detail 최초 응답의 스냅샷 토큰 — 이후 페이지 요청에 그대로 전달
   return runSlideshow({
     settingsKey: `person_${personId}`,
     closePath: `/admin/people/${personId}/photos`,
-    loadAlbum: async () => {
-      const s = await api.get('/api/admin/settings');
-      return {
-        music_count: 0,
-        music_names: [],
-        slideshow_defaults: {
-          interval: s.slideshow_interval,
-          order: s.slideshow_order,
-          effect: s.slideshow_effect,
-          music: false,
-          volume: s.slideshow_volume,
-          loop: s.slideshow_loop,
-        },
-      };
+    // slideshow_defaults 조립(전역 설정 폴백)은 백엔드 build_slideshow_defaults()가
+    // share.py 앨범 슬라이드쇼와 동일 규칙으로 처리 — 프론트는 그대로 사용만 한다
+    loadAlbum: () => api.get(`/api/admin/people/${personId}/slideshow-meta`),
+    loadPhotos: async (page, size) => {
+      const snapshotQuery = snapshot ? `&snapshot=${snapshot}` : '';
+      const res = await api.get(`/api/admin/people/${personId}/photos-detail?page=${page}&size=${size}&source=labeled${snapshotQuery}`);
+      if (res.snapshot) snapshot = res.snapshot;
+      return res;
     },
-    loadPhotos: (page, size) => api.get(`/api/admin/people/${personId}/photos-detail?page=${page}&size=${size}&source=labeled`),
     // 401이면 api.js가 이미 /admin/login으로 이동시킴 — 화면을 덮어쓰지 않는다
     onLoadError: (e) => e instanceof AdminAuthError,
   });
