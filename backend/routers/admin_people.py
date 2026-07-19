@@ -29,9 +29,9 @@ from backend.models.schemas import (
     build_share_photo_item,
     build_slideshow_defaults,
 )
-from backend.routers.admin_browse import _admin_image_auth, load_photo_meta
-from backend.routers.admin_settings import get_settings
-from backend.services.auth import get_current_admin
+from backend.services.auth import admin_image_auth, get_current_admin
+from backend.services.photo_meta import load_photo_meta
+from backend.services.settings import get_settings
 
 router = APIRouter(prefix="/api/admin", tags=["admin-people"])
 
@@ -534,7 +534,7 @@ async def batch_unlabel_faces(
 
 
 @router.get("/faces/{face_id}/crop")
-async def face_crop(face_id: int, _: str = Depends(_admin_image_auth)):
+async def face_crop(face_id: int, _: str = Depends(admin_image_auth)):
     """워커가 저장한 얼굴 크롭 썸네일 서빙 (Bearer 또는 admin_img_session 쿠키)."""
     path = os.path.join(faces_dir(), f"{face_id}.jpg")
     if not os.path.isfile(path):

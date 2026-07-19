@@ -4,7 +4,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 import bcrypt as _bcrypt
-from fastapi import Depends, HTTPException
+from fastapi import Depends, HTTPException, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
 
@@ -13,6 +13,8 @@ _ADMIN_JWT_EXPIRE_HOURS = 8
 _SHARE_SESSION_EXPIRE_HOURS = 24
 
 _bearer = HTTPBearer()
+_bearer_optional = HTTPBearer(auto_error=False)
+_ADMIN_IMG_COOKIE = "admin_img_session"
 
 
 def _secret() -> str:
@@ -70,6 +72,17 @@ def verify_admin_token(token: str) -> bool:
         return payload.get("sub") == "admin"
     except (JWTError, ValueError):
         return False
+
+
+async def admin_image_auth(
+    request: Request,
+    cred: Optional[HTTPAuthorizationCredentials] = Depends(_bearer_optional),
+) -> str:
+    """이미지 서빙용: Bearer 헤더 또는 admin_img_session 쿠키로 인증."""
+    raw = (cred.credentials if cred else None) or request.cookies.get(_ADMIN_IMG_COOKIE)
+    if raw and verify_admin_token(raw):
+        return "admin"
+    raise HTTPException(status_code=401, detail="Admin authentication required")
 
 
 def verify_share_session_cookie(share_token: str, cookie: Optional[str]) -> None:

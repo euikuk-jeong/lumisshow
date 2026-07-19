@@ -63,7 +63,10 @@ models/
   schemas.py         # Pydantic 요청/응답 모델 + parse_music_paths()
 services/
   thumbnail.py       # Pillow 썸네일 생성, EXIF 전체 메타 추출
-  auth.py            # JWT 생성/검증, bcrypt 해시 (ADMIN_PASSWORD_HASH 지원)
+  photo_meta.py      # photo_meta_cache 조회/적재 (load_photo_meta) — admin_browse/admin_albums/admin_people/share 공용
+  paths.py           # PHOTO_ROOT 하위 경로 resolve·containment 검증 (resolve_abs, assert_within_photo_root) — media/share 공용
+  settings.py        # settings 테이블 조회 (get_settings, DEFAULTS) — admin_settings/admin_browse/admin_albums/share 공용
+  auth.py            # JWT 생성/검증, bcrypt 해시 (ADMIN_PASSWORD_HASH 지원), admin_image_auth (이미지 서빙 인증)
   zip_stream.py      # 스트리밍 ZIP 생성
 ```
 
@@ -111,7 +114,7 @@ services/
 
 설계 불변식:
 - `_CACHE_INSERT_SQL`에서 `cache_version`은 `?` 플레이스홀더로, `_meta_to_row()`가 마지막 원소로 `_PHOTO_META_CACHE_VERSION`을 넘긴다.
-- SELECT 쿼리는 `cache_version >= ?`를 사용하며 `_PHOTO_META_CACHE_VERSION`을 파라미터로 전달한다 — 단일 경로: `admin_browse.py`의 `load_photo_meta()` (`share.py`·`admin_people.py`·`_enrich_photos`는 이를 호출).
+- SELECT 쿼리는 `cache_version >= ?`를 사용하며 `_PHOTO_META_CACHE_VERSION`을 파라미터로 전달한다 — 단일 경로: `services/photo_meta.py`의 `load_photo_meta()` (`admin_browse.py`의 `_enrich_photos`·`admin_albums.py`·`admin_people.py`·`share.py`가 이를 호출).
 - EXIF 읽기 실패(`width is None`)는 캐시에 저장하지 않아 NAS 재접근 시 자동 재시도된다.
 
 ### ZIP 다운로드
