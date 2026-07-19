@@ -153,6 +153,8 @@ export async function renderUnassignedFaces() {
         <p class="page-subtitle">얼굴을 클릭해 선택한 뒤 인물을 지정하거나 무시 처리합니다. 카드에 🔍를 누르면 비슷한 얼굴순으로 다시 정렬됩니다</p>
       </div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <button class="btn btn-ghost btn-sm" id="btn-select-all">전체 선택</button>
+        <button class="btn btn-ghost btn-sm" id="btn-select-none">전체 해제</button>
         <span class="text-muted" id="sel-count" style="min-width:64px;text-align:right;font-size:13px">0개 선택</span>
         <select id="assign-person" class="form-input" style="width:auto;max-width:200px"></select>
         <button class="btn btn-primary" id="btn-assign" disabled>선택 지정</button>
@@ -170,6 +172,8 @@ export async function renderUnassignedFaces() {
 
   document.getElementById('btn-assign').addEventListener('click', handleAssignClick);
   document.getElementById('btn-ignore').addEventListener('click', () => labelSelected(null));
+  document.getElementById('btn-select-all').addEventListener('click', () => setAllSelected(true));
+  document.getElementById('btn-select-none').addEventListener('click', () => setAllSelected(false));
 
   document.getElementById('btn-more').addEventListener('click', () => { _offset += PAGE_SIZE; loadFaces(); });
   await loadFaces();
@@ -285,6 +289,15 @@ function faceCard(f) {
     </div>`;
 }
 
+function setAllSelected(on) {
+  document.querySelectorAll('#faces-content .face-card').forEach(card => {
+    const id = Number(card.dataset.face);
+    if (on) { _selected.add(id); card.classList.add('selected'); }
+    else    { _selected.delete(id); card.classList.remove('selected'); }
+  });
+  updateToolbar();
+}
+
 // 버튼 텍스트는 고정 — 폭이 변하면 flex-wrap으로 버튼이 줄바꿈되는 버그 방지.
 // 선택 개수는 고정 폭 #sel-count 라벨에만 표시.
 // 미분류(btn-ignore)·무시 목록(btn-unignore) 두 페이지가 공용.
@@ -320,6 +333,8 @@ export async function renderIgnoredFaces() {
         <p class="page-subtitle">'등록 인물 아님'으로 무시 처리된 얼굴 목록 (최근 무시 순). 선택 후 무시를 해제하거나 인물로 지정해 복구합니다</p>
       </div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <button class="btn btn-ghost btn-sm" id="btn-select-all">전체 선택</button>
+        <button class="btn btn-ghost btn-sm" id="btn-select-none">전체 해제</button>
         <span class="text-muted" id="sel-count" style="min-width:64px;text-align:right;font-size:13px">0개 선택</span>
         <select id="assign-person" class="form-input" style="width:auto;max-width:200px"></select>
         <button class="btn btn-primary" id="btn-assign" disabled>선택 지정</button>
@@ -337,6 +352,8 @@ export async function renderIgnoredFaces() {
 
   document.getElementById('btn-assign').addEventListener('click', handleAssignClick);
   document.getElementById('btn-unignore').addEventListener('click', unignoreSelected);
+  document.getElementById('btn-select-all').addEventListener('click', () => setAllSelected(true));
+  document.getElementById('btn-select-none').addEventListener('click', () => setAllSelected(false));
   document.getElementById('btn-more').addEventListener('click', () => { _offset += PAGE_SIZE; loadIgnoredFaces(); });
   await loadIgnoredFaces();
 }
