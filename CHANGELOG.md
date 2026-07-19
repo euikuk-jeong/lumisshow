@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.9.2] - 2026-07-19
+
+### Added
+- **미분류/무시된 얼굴 페이지 전체 선택·해제 버튼**: 인물 상세의 추정 얼굴
+  선택 UX와 동일한 패턴으로, 다수 얼굴을 한 번에 선택·해제할 수 있도록 추가
+  (`admin-people.js`)
+
 ## [1.9.1] - 2026-07-19
 
 ### Added
@@ -738,7 +745,8 @@ Phase 2 — AI 얼굴 인식 스마트 앨범. NAS 로컬 AI(InsightFace)로 사
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v1.9.1...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v1.9.2...HEAD
+[1.9.2]: https://github.com/euikuk-jeong/lumisshow/compare/v1.9.1...v1.9.2
 [1.9.1]: https://github.com/euikuk-jeong/lumisshow/compare/v1.9.0...v1.9.1
 [1.9.0]: https://github.com/euikuk-jeong/lumisshow/compare/v1.8.7...v1.9.0
 [1.8.7]: https://github.com/euikuk-jeong/lumisshow/compare/v1.8.6...v1.8.7
