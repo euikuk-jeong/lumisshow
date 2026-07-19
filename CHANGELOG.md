@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.9.1] - 2026-07-19
+
+### Added
+- **`GET /api/admin/people/{id}/slideshow-meta`**: 인물 슬라이드쇼 진입 화면(loadAlbum)용
+  메타 엔드포인트 — 앨범이 없는 인물 슬라이드쇼도 앨범 슬라이드쇼와 동일한
+  `build_slideshow_defaults()` 규칙(전역 설정 폴백)을 공유 (`admin_people.py`)
+
+### Fixed
+- **인물 사진(photos-detail) 페이지네이션 밀림 방지**: 슬라이드쇼 재생 중 다른 얼굴이
+  라벨링/재매칭돼도 이미 시작된 세션의 페이지 순서·개수가 흔들리지 않도록 snapshot
+  토큰 도입 — 최초 요청에서 photo_path 전체 순서를 고정해 이후 페이지는 그 목록만
+  슬라이스 (`admin_people.py`, `slideshow.js`, `admin-person-photos.js`)
+- **slideshow_defaults 조립 로직 이중화 제거**: `share.py`(서버)와
+  `slideshow.js renderPersonSlideshow`(클라이언트)에 각각 있던 필드 매핑·폴백 로직을
+  `build_slideshow_defaults()` 공용 헬퍼(`schemas.py`)로 통합
+
+### Changed
+- **라우터 간 크로스 임포트 정리**: `admin_browse`/`admin_albums`/`admin_people`/
+  `share`/`media` 라우터가 서로를 직접 import하던 헬퍼(`load_photo_meta`,
+  `_admin_image_auth`, `resolve_abs`/`assert_within_photo_root`, `get_settings`)를
+  `backend/services/photo_meta.py`, `paths.py`, `settings.py`, `auth.py`로 이동 —
+  라우터는 서비스 레이어만 참조하도록 구조 정리 (동작 변경 없음)
+
 ## [1.9.0] - 2026-07-19
 
 ### Added
@@ -715,7 +738,8 @@ Phase 2 — AI 얼굴 인식 스마트 앨범. NAS 로컬 AI(InsightFace)로 사
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v1.9.0...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v1.9.1...HEAD
+[1.9.1]: https://github.com/euikuk-jeong/lumisshow/compare/v1.9.0...v1.9.1
 [1.9.0]: https://github.com/euikuk-jeong/lumisshow/compare/v1.8.7...v1.9.0
 [1.8.7]: https://github.com/euikuk-jeong/lumisshow/compare/v1.8.6...v1.8.7
 [1.8.6]: https://github.com/euikuk-jeong/lumisshow/compare/v1.8.5...v1.8.6
