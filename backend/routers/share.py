@@ -15,14 +15,14 @@ from backend.models.schemas import (
     build_share_photo_item,
     parse_music_paths,
 )
-from backend.routers.admin_settings import get_settings
-from backend.routers.admin_browse import load_photo_meta
-from backend.routers.media import _assert_within_photo_root, _resolve_abs
 from backend.services.auth import (
     create_share_session_token,
     verify_password,
     verify_share_session_cookie,
 )
+from backend.services.paths import assert_within_photo_root, resolve_abs
+from backend.services.photo_meta import load_photo_meta
+from backend.services.settings import get_settings
 from backend.services.thumbnail import generate_thumbnail
 from backend.services.zip_stream import zip_generator
 
@@ -390,8 +390,8 @@ async def og_cover_image(token: str, request: Request, db=Depends(get_db)):
         cover_path = photo_row["file_path"]
 
     photo_root = os.path.realpath(os.getenv("PHOTO_ROOT", "./testdata/photos"))
-    abs_path = _resolve_abs(cover_path, photo_root)
-    _assert_within_photo_root(abs_path, photo_root)
+    abs_path = resolve_abs(cover_path, photo_root)
+    assert_within_photo_root(abs_path, photo_root)
 
     if not os.path.isfile(abs_path):
         raise HTTPException(status_code=404, detail="Cover image not found")
@@ -428,8 +428,8 @@ async def download_zip(token: str, request: Request, db=Depends(get_db)):
     zip_root = os.path.realpath(os.getenv("PHOTO_ROOT", "./testdata/photos"))
     paths = []
     for r in rows:
-        abs_path = _resolve_abs(r["file_path"], zip_root)
-        _assert_within_photo_root(abs_path, zip_root)
+        abs_path = resolve_abs(r["file_path"], zip_root)
+        assert_within_photo_root(abs_path, zip_root)
         paths.append(abs_path)
     album_name = rows[0]["album_name"]
     safe_name = "".join(c for c in album_name if c.isalnum() or c in " _-").strip() or "album"

@@ -375,17 +375,17 @@ async def test_browse_exif_taken_at_returned(auth_client, photo_root):
 
 async def test_failed_exif_not_cached(auth_client, monkeypatch):
     """get_image_meta 실패(width=None) 결과는 캐시에 저장하지 않아 다음 요청에 재시도한다."""
-    from backend.routers import admin_browse as browse_mod
+    from backend.services import photo_meta
     from backend.services.thumbnail import _EMPTY_META, get_image_meta as real_get_meta
 
     # 1차 browse: EXIF 읽기 실패 시뮬레이션
-    monkeypatch.setattr(browse_mod, "get_image_meta", lambda fp: dict(_EMPTY_META))
+    monkeypatch.setattr(photo_meta, "get_image_meta", lambda fp: dict(_EMPTY_META))
     r1 = await auth_client.get("/api/admin/browse")
     assert r1.status_code == 200
     assert all(p["width"] is None for p in r1.json()["photos"]), "실패 시 width=None이어야 함"
 
     # 원래 함수 복구
-    monkeypatch.setattr(browse_mod, "get_image_meta", real_get_meta)
+    monkeypatch.setattr(photo_meta, "get_image_meta", real_get_meta)
 
     # 2차 browse: 실패 결과가 캐시되지 않았으므로 재시도해 실제 EXIF를 읽어야 함
     r2 = await auth_client.get("/api/admin/browse")
@@ -421,9 +421,9 @@ async def test_load_photo_meta_respects_exif_concurrency_limit(client, monkeypat
     import time as time_mod
 
     from backend.models.database import get_db
-    from backend.routers import admin_browse
+    from backend.services import photo_meta
 
-    monkeypatch.setattr(admin_browse, "_exif_read_semaphore", asyncio.Semaphore(2))
+    monkeypatch.setattr(photo_meta, "_exif_read_semaphore", asyncio.Semaphore(2))
 
     current = 0
     peak = 0
@@ -444,13 +444,13 @@ async def test_load_photo_meta_respects_exif_concurrency_limit(client, monkeypat
             "shoot_mode": None, "flash": None, "metering": None, "exposure_mode": None,
         }
 
-    monkeypatch.setattr(admin_browse, "get_image_meta", slow_get_image_meta)
+    monkeypatch.setattr(photo_meta, "get_image_meta", slow_get_image_meta)
 
     rels = [f"nofile_{i}.jpg" for i in range(8)]
     db_gen = get_db()
     db = await db_gen.__anext__()
     try:
-        await admin_browse.load_photo_meta(rels, db)
+        await photo_meta.load_photo_meta(rels, db)
     finally:
         await db_gen.aclose()
 

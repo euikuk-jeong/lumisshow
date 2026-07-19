@@ -8,6 +8,7 @@ from fastapi.responses import FileResponse
 from backend.models.database import get_db
 from backend.models.schemas import parse_music_paths
 from backend.services.auth import get_share_token_from_cookie, verify_share_session_cookie
+from backend.services.paths import assert_within_photo_root, resolve_abs
 from backend.services.thumbnail import SIZES, generate_thumbnail
 
 router = APIRouter(tags=["media"])
@@ -30,17 +31,6 @@ def _to_relative(file_path: str, root: str) -> str:
         except ValueError:
             return file_path
     return file_path.replace("\\", "/")
-
-
-def _resolve_abs(rel_path: str, root: str) -> str:
-    if os.path.isabs(rel_path):
-        return os.path.realpath(rel_path)
-    return os.path.realpath(os.path.join(root, rel_path))
-
-
-def _assert_within_photo_root(abs_path: str, root: str) -> None:
-    if abs_path != root and not abs_path.startswith(root + os.sep):
-        raise HTTPException(status_code=403, detail="Access denied")
 
 
 def _evict_stale_cache() -> None:
@@ -92,8 +82,8 @@ async def serve_thumb(file_path: str, request: Request, size: str = "small", db=
     token = get_share_token_from_cookie(request.cookies.get(_COOKIE))
     rel = _to_relative(file_path, root)
     await _verify_file_in_album(token, rel, db)
-    abs_path = _resolve_abs(rel, root)
-    _assert_within_photo_root(abs_path, root)
+    abs_path = resolve_abs(rel, root)
+    assert_within_photo_root(abs_path, root)
     if not os.path.isfile(abs_path):
         raise HTTPException(status_code=404, detail="File not found")
     out_path = await asyncio.get_running_loop().run_in_executor(
@@ -108,8 +98,8 @@ async def serve_media(file_path: str, request: Request, db=Depends(get_db)):
     token = get_share_token_from_cookie(request.cookies.get(_COOKIE))
     rel = _to_relative(file_path, root)
     await _verify_file_in_album(token, rel, db)
-    abs_path = _resolve_abs(rel, root)
-    _assert_within_photo_root(abs_path, root)
+    abs_path = resolve_abs(rel, root)
+    assert_within_photo_root(abs_path, root)
     if not os.path.isfile(abs_path):
         raise HTTPException(status_code=404, detail="File not found")
     return FileResponse(abs_path, filename=os.path.basename(abs_path))
