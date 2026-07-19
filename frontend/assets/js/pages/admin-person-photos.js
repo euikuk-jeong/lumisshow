@@ -65,11 +65,13 @@ export async function renderAdminPersonPhotos(personId) {
   // ── 확정 사진 전체 로드 (페이지네이션 순회) ──────────────────────────
   const subtitle = document.getElementById('photos-subtitle');
   try {
-    let page = 1, total = 0;
+    let page = 1, total = 0, snapshot = null;
     do {
+      const snapshotQuery = snapshot ? `&snapshot=${snapshot}` : '';
       const res = await api.get(
-        `/api/admin/people/${personId}/photos-detail?source=labeled&page=${page}&size=${PAGE_SIZE}`
+        `/api/admin/people/${personId}/photos-detail?source=labeled&page=${page}&size=${PAGE_SIZE}${snapshotQuery}`
       );
+      if (res.snapshot) snapshot = res.snapshot;
       total = res.total;
       state.photos = state.photos.concat(res.photos);
       if (!document.getElementById('photos-content')) return; // 페이지 이탈

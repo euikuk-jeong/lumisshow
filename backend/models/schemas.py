@@ -224,6 +224,7 @@ class SharePhotosResponse(BaseModel):
     photos: list[SharePhotoItem]
     total: int
     page: int = 1
+    snapshot: Optional[str] = None  # 인물 사진 페이지네이션 스냅샷 토큰 (admin_people.py 전용)
 
 
 _EXIF_META_FIELDS = (
@@ -250,6 +251,23 @@ def build_share_photo_item(
         file_path=file_path if include_file_path else None,
         **{k: meta.get(k) for k in _EXIF_META_FIELDS},
     )
+
+
+def build_slideshow_defaults(overrides: dict, sv: dict) -> dict:
+    """오버라이드(앨범 행 필드, 또는 person 슬라이드쇼처럼 일부 키만 지정된 dict)와
+    전역 설정(sv)을 병합해 slideshow_defaults 응답 형태를 만든다. overrides에 키가
+    없거나 값이 None이면 sv로 폴백 — share.py get_album()과 admin_people.py 인물
+    슬라이드쇼가 공유하는 단일 규칙."""
+    music = overrides.get("music")
+    loop = overrides.get("loop")
+    return {
+        "interval": overrides.get("interval") or sv["slideshow_interval"],
+        "order":    overrides.get("order")    or sv["slideshow_order"],
+        "effect":   overrides.get("effect")   or sv["slideshow_effect"],
+        "music":    bool(music) if music is not None else sv["slideshow_music"],
+        "volume":   overrides.get("volume") if overrides.get("volume") is not None else sv["slideshow_volume"],
+        "loop":     bool(loop) if loop is not None else sv["slideshow_loop"],
+    }
 
 
 # ── People (Phase 2 AI) ───────────────────────────────────────────────────────

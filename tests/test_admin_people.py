@@ -263,6 +263,106 @@ async def test_person_photos_detail_auth_required(client):
     assert r.status_code in (401, 403)
 
 
+async def test_person_photos_detail_snapshot_freezes_pagination(admin_client):
+    """slideshow 재생 중 다른 얼굴이 라벨링돼도 이미 발급된 snapshot의 페이지 구성은
+    바뀌지 않아야 한다 (OFFSET 재계산 시 페이지가 밀리는 문제 방지)."""
+    face_ids = await _seed_faces(3)
+    pid = (await admin_client.post("/api/admin/people", json={"name": "지우"})).json()["id"]
+    await admin_client.post(f"/api/admin/faces/{face_ids[0]}/label", json={"person_id": pid})
+    await admin_client.post(f"/api/admin/faces/{face_ids[2]}/label", json={"person_id": pid})
+
+    r1 = await admin_client.get(f"/api/admin/people/{pid}/photos-detail?source=labeled&page=1&size=1")
+    body1 = r1.json()
+    assert body1["total"] == 2
+    assert [p["filename"] for p in body1["photos"]] == ["photo_0.jpg"]
+    snapshot = body1["snapshot"]
+    assert snapshot
+
+    # 재생 도중 photo_1이 같은 인물로 라벨링됨 — 사전순으로 목록 중간에 끼어든다
+    await admin_client.post(f"/api/admin/faces/{face_ids[1]}/label", json={"person_id": pid})
+
+    # 같은 snapshot으로 이어서 요청하면 최초 계산 당시 목록(2장)이 그대로 유지되어야 함
+    r2 = await admin_client.get(
+        f"/api/admin/people/{pid}/photos-detail?source=labeled&page=2&size=1&snapshot={snapshot}"
+    )
+    body2 = r2.json()
+    assert body2["total"] == 2
+    assert [p["filename"] for p in body2["photos"]] == ["photo_2.jpg"]
+    assert body2["snapshot"] == snapshot
+
+    # snapshot 없이 새로 요청하면 갱신된 3장 기준으로 다시 계산된다
+    r3 = await admin_client.get(f"/api/admin/people/{pid}/photos-detail?source=labeled&page=2&size=1")
+    body3 = r3.json()
+    assert body3["total"] == 3
+    assert [p["filename"] for p in body3["photos"]] == ["photo_1.jpg"]
+
+
+async def test_person_photos_detail_snapshot_scoped_to_person_and_source(admin_client):
+    """다른 인물/source에서 발급된 snapshot 토큰을 재사용하면 무시하고 새로 계산해야
+    한다 — 토큰이 자신이 속한 (person_id, source) 조합에서만 유효해야 함."""
+    face_ids = await _seed_faces(2)
+    pid_a = (await admin_client.post("/api/admin/people", json={"name": "인물A"})).json()["id"]
+    pid_b = (await admin_client.post("/api/admin/people", json={"name": "인물B"})).json()["id"]
+    await admin_client.post(f"/api/admin/faces/{face_ids[0]}/label", json={"person_id": pid_a})
+    await admin_client.post(f"/api/admin/faces/{face_ids[1]}/label", json={"person_id": pid_b})
+
+    r_a = await admin_client.get(f"/api/admin/people/{pid_a}/photos-detail?source=labeled")
+    snapshot_a = r_a.json()["snapshot"]
+
+    # 인물 A의 snapshot을 인물 B 조회에 재사용해도 인물 B 자신의 목록으로 계산돼야 함
+    r_b = await admin_client.get(
+        f"/api/admin/people/{pid_b}/photos-detail?source=labeled&snapshot={snapshot_a}"
+    )
+    body_b = r_b.json()
+    assert body_b["total"] == 1
+    assert body_b["photos"][0]["filename"] == "photo_1.jpg"
+    assert body_b["snapshot"] != snapshot_a
+
+
+async def test_person_photos_detail_unknown_snapshot_recomputes(admin_client):
+    """모르는(만료·재시작된) snapshot 토큰이 오면 에러 없이 새로 계산해 새 토큰을 발급한다."""
+    face_ids = await _seed_faces(1)
+    pid = (await admin_client.post("/api/admin/people", json={"name": "철수"})).json()["id"]
+    await admin_client.post(f"/api/admin/faces/{face_ids[0]}/label", json={"person_id": pid})
+
+    r = await admin_client.get(
+        f"/api/admin/people/{pid}/photos-detail?source=labeled&snapshot=doesnotexist"
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert body["total"] == 1
+    assert body["snapshot"] and body["snapshot"] != "doesnotexist"
+
+
+async def test_person_slideshow_meta(admin_client):
+    """인물 슬라이드쇼 loadAlbum용 메타 — 앨범이 없으므로 전역 설정 폴백, 음악은 항상 없음."""
+    pid = (await admin_client.post("/api/admin/people", json={"name": "민수"})).json()["id"]
+
+    r = await admin_client.get(f"/api/admin/people/{pid}/slideshow-meta")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["music_count"] == 0
+    assert body["music_names"] == []
+    defaults = body["slideshow_defaults"]
+    assert defaults["music"] is False
+    assert defaults["interval"] == 5
+    assert defaults["order"] == "sequential"
+    assert defaults["loop"] is True
+
+    # 전역 설정 변경이 그대로 반영되는지 확인
+    await admin_client.patch("/api/admin/settings", json={"slideshow_interval": 15})
+    r2 = await admin_client.get(f"/api/admin/people/{pid}/slideshow-meta")
+    assert r2.json()["slideshow_defaults"]["interval"] == 15
+
+    r3 = await admin_client.get("/api/admin/people/999/slideshow-meta")
+    assert r3.status_code == 404
+
+
+async def test_person_slideshow_meta_auth_required(client):
+    r = await client.get("/api/admin/people/1/slideshow-meta")
+    assert r.status_code in (401, 403)
+
+
 async def test_label_validation(admin_client):
     r = await admin_client.post("/api/admin/faces/999/label", json={"person_id": None})
     assert r.status_code == 404  # 없는 얼굴
