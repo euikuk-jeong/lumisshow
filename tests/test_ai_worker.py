@@ -42,8 +42,8 @@ def test_db_creates_tables(conn):
         row["name"]
         for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")
     }
-    assert {"photos_analyzed", "faces", "face_matches",
-            "persons", "face_labels", "jobs"} <= tables
+    assert {"photos_analyzed", "faces", "face_matches", "persons", "face_labels",
+            "jobs", "ignored_review_candidates"} <= tables
 
 
 def test_db_creates_person_indexes(conn):
@@ -184,6 +184,71 @@ def test_embedding_blob_roundtrip():
     assert np.array_equal(matcher.blob_to_embedding(matcher.embedding_to_blob(vec)), vec)
 
 
+def test_match_ignored_for_person_finds_similar_and_replaces_prior_run(conn):
+    conn.execute("INSERT INTO persons (name) VALUES ('테스트')")
+    enrolled_id = _insert_face(conn, "e.jpg", _unit_vec(0))
+    conn.execute("INSERT INTO face_labels (face_id, person_id) VALUES (?, 1)", (enrolled_id,))
+
+    similar_id = _insert_face(conn, "s.jpg", _unit_vec(0))
+    different_id = _insert_face(conn, "d.jpg", _unit_vec(1))
+    conn.execute(
+        "INSERT INTO face_labels (face_id, person_id) VALUES (?, NULL)", (similar_id,)
+    )
+    conn.execute(
+        "INSERT INTO face_labels (face_id, person_id) VALUES (?, NULL)", (different_id,)
+    )
+    conn.commit()
+
+    count = matcher.match_ignored_for_person(conn, 1, threshold=0.45)
+    assert count == 1
+    rows = conn.execute(
+        "SELECT face_id, person_id FROM ignored_review_candidates"
+    ).fetchall()
+    assert [(r["face_id"], r["person_id"]) for r in rows] == [(similar_id, 1)]
+
+    # 재실행 시 이 인물 몫만 DELETE+INSERT로 교체 (같은 결과가 중복 누적되지 않음)
+    count2 = matcher.match_ignored_for_person(conn, 1, threshold=0.45)
+    assert count2 == 1
+    rows2 = conn.execute(
+        "SELECT face_id FROM ignored_review_candidates WHERE person_id = 1"
+    ).fetchall()
+    assert len(rows2) == 1
+
+
+def test_match_ignored_for_person_ignores_labeled_faces(conn):
+    """face_labels가 있는(무시 아닌) 얼굴은 후보 대상에서 제외."""
+    conn.execute("INSERT INTO persons (name) VALUES ('테스트')")
+    enrolled_id = _insert_face(conn, "e.jpg", _unit_vec(0))
+    conn.execute("INSERT INTO face_labels (face_id, person_id) VALUES (?, 1)", (enrolled_id,))
+    labeled_similar = _insert_face(conn, "l.jpg", _unit_vec(0))
+    conn.execute(
+        "INSERT INTO face_labels (face_id, person_id) VALUES (?, 1)", (labeled_similar,)
+    )
+    conn.commit()
+
+    count = matcher.match_ignored_for_person(conn, 1, threshold=0.45)
+    assert count == 0
+
+
+def test_match_ignored_for_person_no_enrollment_clears_candidates(conn):
+    conn.execute("INSERT INTO persons (name) VALUES ('테스트')")
+    ignored_id = _insert_face(conn, "s.jpg", _unit_vec(0))
+    conn.execute(
+        "INSERT INTO face_labels (face_id, person_id) VALUES (?, NULL)", (ignored_id,)
+    )
+    conn.execute(
+        "INSERT INTO ignored_review_candidates (face_id, person_id, score) VALUES (?, 1, 0.9)",
+        (ignored_id,),
+    )
+    conn.commit()
+
+    count = matcher.match_ignored_for_person(conn, 1, threshold=0.45)
+    assert count == 0
+    assert conn.execute(
+        "SELECT COUNT(*) AS n FROM ignored_review_candidates"
+    ).fetchone()["n"] == 0
+
+
 # ── daemon ────────────────────────────────────────────────────────────
 
 
@@ -206,8 +271,9 @@ def test_claim_and_finish_job_lifecycle(conn):
     conn.execute("INSERT INTO jobs (type) VALUES ('rematch')")
     conn.commit()
 
-    job_id, job_type = claim_next_job(conn)  # 오래된 잡 우선
+    job_id, job_type, target_person_id = claim_next_job(conn)  # 오래된 잡 우선
     assert job_type == "scan"
+    assert target_person_id is None
     assert conn.execute(
         "SELECT status FROM jobs WHERE id=?", (job_id,)
     ).fetchone()[0] == "running"
@@ -219,6 +285,19 @@ def test_claim_and_finish_job_lifecycle(conn):
     assert row["status"] == "done" and row["finished_at"] is not None
 
     assert claim_next_job(conn)[1] == "rematch"  # 다음 잡
+
+
+def test_claim_next_job_returns_target_person_id(conn):
+    from ai_worker.daemon import claim_next_job
+
+    conn.execute(
+        "INSERT INTO jobs (type, target_person_id) VALUES ('review_ignored', 7)"
+    )
+    conn.commit()
+
+    job_id, job_type, target_person_id = claim_next_job(conn)
+    assert job_type == "review_ignored"
+    assert target_person_id == 7
 
 
 def test_reset_stale_jobs(conn):

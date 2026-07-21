@@ -5,6 +5,7 @@ import { openLightbox } from '../lightbox.js';
 
 const MATCHED_PAGE_SIZE = 200;
 const LABELED_PAGE_SIZE = 200;
+const REVIEW_POLL_INTERVAL = 5000;
 let _matchedSelected = new Set();
 let _matchedOffset = 0;
 let _matchedMaxScore = null;   // 0~1 또는 null(전체) — % 임계값 미리보기용
@@ -13,6 +14,14 @@ let _labeledOffset = 0;
 let _labeledFaces = [];        // 로드된 확정 얼굴 누적 — 라이트박스 인덱스·리스트 보기 재렌더용
 let _labeledSelected = new Set();
 let _viewMode = 'grid';        // 'grid' | 'list' — 추정·확정 얼굴 공통 보기 모드
+let _reviewCandidates = [];    // 무시 얼굴 재검토 후보 — 클라이언트 로컬 숨기기 반영용
+let _reviewDismissed = new Set();
+let _reviewPollTimer = null;
+// SPA 네비게이션 가드 — 같은 동적 라우트(/admin/people/:id)에서 id만 바뀌는 경우
+// DOM 요소는 그대로라 존재 여부만으로는 이전 폴링을 못 끊는다. 렌더할 때마다
+// 새 토큰을 발급해 이전 회차의 setInterval 콜백이 자기 토큰이 최신이 아니면
+// 스스로 정지하도록 한다.
+let _reviewPollToken = null;
 
 export async function renderAdminPersonDetail(personId) {
   _matchedSelected = new Set();
@@ -23,6 +32,11 @@ export async function renderAdminPersonDetail(personId) {
   _labeledFaces = [];
   _labeledSelected = new Set();
   _viewMode = 'grid';
+  _reviewCandidates = [];
+  _reviewDismissed = new Set();
+  stopReviewPoll();
+  const pollToken = {};
+  _reviewPollToken = pollToken;
   let person;
   try {
     person = await api.get(`/api/admin/people/${personId}`);
@@ -92,6 +106,13 @@ export async function renderAdminPersonDetail(personId) {
     <div style="margin-top:10px;text-align:center">
       <button class="btn btn-ghost btn-sm" id="btn-labeled-more" style="display:none">더 보기</button>
     </div>
+
+    <h3 class="section-title" style="margin-top:28px">무시 얼굴 재검토</h3>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
+      <button class="btn btn-ghost btn-sm" id="btn-review-ignored">🔍 무시 얼굴에서 이 인물 찾기</button>
+      <span class="text-muted" id="review-status-line" style="font-size:13px"></span>
+    </div>
+    <div id="review-content"></div>
   `, '/admin/people');
 
   document.getElementById('btn-view-grid').addEventListener('click', () => setViewMode('grid', personId));
@@ -113,6 +134,7 @@ export async function renderAdminPersonDetail(personId) {
     loadLabeledFaces(personId, { append: true });
   });
   document.getElementById('btn-labeled-unlabel-selected').addEventListener('click', () => unlabelSelectedLabeled(personId));
+  document.getElementById('btn-review-ignored').addEventListener('click', () => startReview(personId));
 
   document.getElementById('btn-rename').addEventListener('click', async () => {
     const name = prompt('새 이름', person.name);
@@ -149,6 +171,7 @@ export async function renderAdminPersonDetail(personId) {
   await Promise.all([
     loadMatchedFaces(personId),
     loadLabeledFaces(personId),
+    initReview(personId, pollToken),
   ]);
 }
 
@@ -421,4 +444,137 @@ async function unlabelSelectedLabeled(personId) {
     await api.post('/api/admin/faces/batch-unlabel', { face_ids: ids });
     renderAdminPersonDetail(personId);
   } catch (e) { alert(e.message); }
+}
+
+// ── 무시 얼굴 재검토: 인물 1명 기준 job 큐잉 + 후보 확정/숨기기 ──────────
+
+function stopReviewPoll() {
+  if (_reviewPollTimer) { clearInterval(_reviewPollTimer); _reviewPollTimer = null; }
+}
+
+async function initReview(personId, pollToken) {
+  let status;
+  try {
+    status = await api.get(`/api/admin/people/${personId}/review-ignored-status`);
+  } catch (e) {
+    setReviewStatusLine(e.message);
+    return;
+  }
+  const job = status.job;
+  if (job && (job.status === 'pending' || job.status === 'running')) {
+    setReviewStatusLine(job.status === 'running' ? '재검토 실행 중…' : '재검토 대기 중…');
+    startReviewPoll(personId, pollToken);
+    return;
+  }
+  await loadReviewCandidates(personId);
+}
+
+async function startReview(personId) {
+  const btn = document.getElementById('btn-review-ignored');
+  btn.disabled = true;
+  try {
+    const r = await api.post('/api/admin/ai/jobs', { type: 'review_ignored', target_person_id: Number(personId) });
+    setReviewStatusLine(r.duplicated ? '이미 재검토가 진행 중입니다…' : '재검토를 요청했습니다…');
+    startReviewPoll(personId, _reviewPollToken);
+  } catch (e) {
+    alert(e.message);
+    btn.disabled = false;
+  }
+}
+
+function startReviewPoll(personId, pollToken) {
+  stopReviewPoll();
+  _reviewPollTimer = setInterval(async () => {
+    // pollToken 불일치 = 같은 라우트에서 다른 인물로 이동, 버튼 부재 = 인물 상세를
+    // 완전히 벗어남(둘 다 이 페이지 전용 정적 마크업이라 다른 페이지엔 없음).
+    if (pollToken !== _reviewPollToken || !document.getElementById('btn-review-ignored')) {
+      stopReviewPoll();
+      return;
+    }
+    let status;
+    try {
+      status = await api.get(`/api/admin/people/${personId}/review-ignored-status`);
+    } catch {
+      return; // 일시적 오류는 다음 폴링에서 재시도
+    }
+    if (pollToken !== _reviewPollToken || !document.getElementById('btn-review-ignored')) {
+      stopReviewPoll();
+      return;
+    }
+    const job = status.job;
+    if (!job || job.status === 'done' || job.status === 'error') {
+      stopReviewPoll();
+      const btn = document.getElementById('btn-review-ignored');
+      if (btn) btn.disabled = false;
+      if (job && job.status === 'error') {
+        setReviewStatusLine('재검토 중 오류가 발생했습니다.');
+        return;
+      }
+      await loadReviewCandidates(personId);
+      return;
+    }
+    setReviewStatusLine(job.status === 'running' ? '재검토 실행 중…' : '재검토 대기 중…');
+  }, REVIEW_POLL_INTERVAL);
+}
+
+function setReviewStatusLine(text) {
+  const el = document.getElementById('review-status-line');
+  if (el) el.textContent = text;
+}
+
+async function loadReviewCandidates(personId) {
+  const el = document.getElementById('review-content');
+  try {
+    const { candidates, reviewed_at } = await api.get(`/api/admin/people/${personId}/ignored-candidates`);
+    _reviewCandidates = candidates;
+    _reviewDismissed = new Set();
+    setReviewStatusLine(reviewed_at
+      // SQLite CURRENT_TIMESTAMP는 "YYYY-MM-DD HH:MM:SS"(UTC, 공백 구분) — 'T'+'Z'로
+      // 바꿔줘야 Date가 로컬시간이 아닌 UTC로 해석해 시간이 표시된다.
+      ? `마지막 재검토: ${new Date(reviewed_at.replace(' ', 'T') + 'Z').toLocaleString('ko-KR')}`
+      : '아직 재검토한 적이 없습니다.');
+    renderReviewContent(personId);
+  } catch (e) {
+    if (el) el.innerHTML = `<div class="alert alert-error">${esc(e.message)}</div>`;
+  }
+}
+
+function renderReviewContent(personId) {
+  const el = document.getElementById('review-content');
+  if (!el) return;
+  const visible = _reviewCandidates.filter(c => !_reviewDismissed.has(c.face_id));
+  if (!visible.length) {
+    el.innerHTML = '<p class="text-muted">찾은 후보가 없습니다.</p>';
+    return;
+  }
+  el.innerHTML = `<div class="face-grid" id="review-grid"></div>`;
+  const grid = document.getElementById('review-grid');
+  grid.innerHTML = visible.map(reviewCandidateCard).join('');
+  grid.querySelectorAll('[data-face]').forEach(card => {
+    const faceId = Number(card.dataset.face);
+    card.querySelector('[data-act="confirm"]').addEventListener('click', async (e) => {
+      e.stopPropagation();
+      try {
+        await api.post('/api/admin/faces/batch-label', { face_ids: [faceId], person_id: Number(personId) });
+        renderAdminPersonDetail(personId);
+      } catch (err) { alert(err.message); }
+    });
+    card.querySelector('[data-act="dismiss"]').addEventListener('click', (e) => {
+      e.stopPropagation();
+      _reviewDismissed.add(faceId);
+      renderReviewContent(personId);
+    });
+  });
+}
+
+function reviewCandidateCard(c) {
+  return `
+    <div class="face-card" data-face="${c.face_id}" title="${esc(c.photo_path)}">
+      <img src="/api/admin/faces/${c.face_id}/crop" alt="" loading="lazy">
+      <span class="face-score">${Math.round(c.score * 100)}%</span>
+      <div class="face-actions">
+        <button class="btn btn-sm btn-primary" data-act="confirm" title="확정">✓</button>
+        <button class="btn btn-sm btn-ghost" data-act="dismiss" title="숨기기">✕</button>
+      </div>
+    </div>`;
 }

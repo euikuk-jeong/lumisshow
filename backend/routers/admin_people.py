@@ -35,7 +35,7 @@ from backend.services.settings import get_settings
 
 router = APIRouter(prefix="/api/admin", tags=["admin-people"])
 
-_JOB_TYPES = {"scan", "rematch"}
+_JOB_TYPES = {"scan", "rematch", "review_ignored"}
 
 # photos-detail 페이지네이션 스냅샷: 최초 요청(page=1, snapshot 미지정)에서 계산한
 # 전체 photo_path 순서를 토큰에 고정해두고 이후 페이지 요청은 이 목록만 슬라이스한다.
@@ -363,6 +363,56 @@ async def confirm_matched_by_score(
     return {"count": len(face_ids)}
 
 
+@router.get("/people/{person_id}/ignored-candidates")
+async def list_ignored_review_candidates(
+    person_id: int, _: str = Depends(get_current_admin), db=Depends(get_ai_db)
+):
+    """review_ignored 잡이 찾아낸, 이 인물일 가능성이 있는 '무시' 얼굴 후보.
+    이미 확정/재무시 등으로 라벨이 바뀐 얼굴은 자동으로 제외(face_labels 조인 필터)."""
+    await _person_or_404(person_id, db)
+    async with db.execute(
+        """SELECT irc.face_id, f.photo_path, irc.score
+           FROM ignored_review_candidates irc
+           JOIN faces f ON f.id = irc.face_id
+           LEFT JOIN face_labels fl ON fl.face_id = irc.face_id
+           WHERE irc.person_id = ?
+             AND (fl.face_id IS NULL OR fl.person_id IS NULL)
+           ORDER BY irc.score DESC""",
+        (person_id,),
+    ) as cur:
+        rows = await cur.fetchall()
+    # '마지막 재검토' 시각은 후보 테이블이 아니라 jobs.finished_at에서 가져온다 —
+    # 후보가 0건으로 끝난 재검토는 ignored_review_candidates에 행을 남기지 않으므로
+    # 그 경우와 '한 번도 검토한 적 없음'을 구분할 수 있는 유일한 소스.
+    async with db.execute(
+        """SELECT finished_at FROM jobs
+           WHERE type = 'review_ignored' AND target_person_id = ? AND status = 'done'
+           ORDER BY finished_at DESC LIMIT 1""",
+        (person_id,),
+    ) as cur:
+        reviewed = await cur.fetchone()
+    return {
+        "candidates": [dict(r) for r in rows],
+        "reviewed_at": reviewed["finished_at"] if reviewed else None,
+    }
+
+
+@router.get("/people/{person_id}/review-ignored-status")
+async def review_ignored_status(
+    person_id: int, _: str = Depends(get_current_admin), db=Depends(get_ai_db)
+):
+    """이 인물에 대한 가장 최근 review_ignored 잡 상태 (Admin 인물 상세 폴링용)."""
+    await _person_or_404(person_id, db)
+    async with db.execute(
+        """SELECT id, status, requested_at, finished_at FROM jobs
+           WHERE type = 'review_ignored' AND target_person_id = ?
+           ORDER BY id DESC LIMIT 1""",
+        (person_id,),
+    ) as cur:
+        row = await cur.fetchone()
+    return {"job": dict(row) if row else None}
+
+
 @router.get("/faces/unassigned")
 async def list_unassigned_faces(
     limit: int = Query(default=100, ge=1, le=500),
@@ -569,6 +619,26 @@ async def create_job(
 ):
     if body.type not in _JOB_TYPES:
         raise HTTPException(status_code=400, detail=f"type은 {_JOB_TYPES} 중 하나")
+    if body.type == "review_ignored":
+        if body.target_person_id is None:
+            raise HTTPException(status_code=400, detail="target_person_id가 필요합니다")
+        await _person_or_404(body.target_person_id, db)
+        # 같은 인물의 대기/실행 중 잡이 있으면 중복 생성하지 않음
+        async with db.execute(
+            """SELECT id FROM jobs WHERE type = ? AND target_person_id = ?
+               AND status IN ('pending','running')""",
+            (body.type, body.target_person_id),
+        ) as cur:
+            existing = await cur.fetchone()
+        if existing:
+            return {"id": existing["id"], "type": body.type, "duplicated": True}
+        cur = await db.execute(
+            "INSERT INTO jobs (type, target_person_id) VALUES (?, ?)",
+            (body.type, body.target_person_id),
+        )
+        await db.commit()
+        return {"id": cur.lastrowid, "type": body.type, "duplicated": False}
+
     # 같은 타입의 대기/실행 중 잡이 있으면 중복 생성하지 않음
     async with db.execute(
         "SELECT id FROM jobs WHERE type = ? AND status IN ('pending','running')",

@@ -683,6 +683,136 @@ async def test_ai_status_and_jobs(admin_client):
     assert stats["recent_jobs"][0]["status"] == "pending"
 
 
+# ── 무시된 얼굴 재검토 ────────────────────────────────────────────────
+
+
+async def test_review_ignored_job_requires_and_validates_target_person(admin_client):
+    r = await admin_client.post("/api/admin/ai/jobs", json={"type": "review_ignored"})
+    assert r.status_code == 400  # target_person_id 누락
+
+    r = await admin_client.post(
+        "/api/admin/ai/jobs", json={"type": "review_ignored", "target_person_id": 999}
+    )
+    assert r.status_code == 404  # 없는 인물
+
+
+async def test_review_ignored_job_create_and_dedup_scoped_per_person(admin_client):
+    pid_a = (await admin_client.post("/api/admin/people", json={"name": "인물A"})).json()["id"]
+    pid_b = (await admin_client.post("/api/admin/people", json={"name": "인물B"})).json()["id"]
+
+    r = await admin_client.post(
+        "/api/admin/ai/jobs", json={"type": "review_ignored", "target_person_id": pid_a}
+    )
+    assert r.status_code == 201
+    body = r.json()
+    assert body["duplicated"] is False
+    job_id = body["id"]
+
+    # 같은 인물에 pending 잡이 있으면 중복 생성 대신 기존 잡 반환
+    r = await admin_client.post(
+        "/api/admin/ai/jobs", json={"type": "review_ignored", "target_person_id": pid_a}
+    )
+    assert r.json() == {"id": job_id, "type": "review_ignored", "duplicated": True}
+
+    # 다른 인물은 별도 잡으로 생성 가능
+    r = await admin_client.post(
+        "/api/admin/ai/jobs", json={"type": "review_ignored", "target_person_id": pid_b}
+    )
+    assert r.status_code == 201 and r.json()["duplicated"] is False
+
+
+async def test_review_ignored_status(admin_client):
+    from backend.models.ai_database import _ai_db_path
+    import aiosqlite
+
+    pid = (await admin_client.post("/api/admin/people", json={"name": "지우"})).json()["id"]
+
+    r = await admin_client.get(f"/api/admin/people/{pid}/review-ignored-status")
+    assert r.status_code == 200 and r.json() == {"job": None}
+
+    r = await admin_client.post(
+        "/api/admin/ai/jobs", json={"type": "review_ignored", "target_person_id": pid}
+    )
+    job_id = r.json()["id"]
+
+    r = await admin_client.get(f"/api/admin/people/{pid}/review-ignored-status")
+    body = r.json()
+    assert body["job"]["id"] == job_id
+    assert body["job"]["status"] == "pending"
+
+    # 워커가 완료 처리했다고 가정 (jobs.status만 워커가 갱신)
+    async with aiosqlite.connect(_ai_db_path()) as db:
+        await db.execute(
+            "UPDATE jobs SET status='done', finished_at=CURRENT_TIMESTAMP WHERE id=?",
+            (job_id,),
+        )
+        await db.commit()
+
+    r = await admin_client.get(f"/api/admin/people/{pid}/review-ignored-status")
+    assert r.json()["job"]["status"] == "done"
+
+    r = await admin_client.get("/api/admin/people/999/review-ignored-status")
+    assert r.status_code == 404
+
+
+async def test_ignored_candidates_list_filters_and_orders(admin_client, client):
+    from backend.models.ai_database import _ai_db_path
+    import aiosqlite
+
+    face_ids = await _seed_faces(3)
+    pid = (await admin_client.post("/api/admin/people", json={"name": "지우"})).json()["id"]
+
+    # 워커가 review_ignored 잡을 처리했다고 가정하고 후보 직접 삽입
+    async with aiosqlite.connect(_ai_db_path()) as db:
+        await db.execute(
+            "INSERT INTO ignored_review_candidates (face_id, person_id, score) VALUES (?, ?, ?)",
+            (face_ids[0], pid, 0.6),
+        )
+        await db.execute(
+            "INSERT INTO ignored_review_candidates (face_id, person_id, score) VALUES (?, ?, ?)",
+            (face_ids[1], pid, 0.9),
+        )
+        await db.execute(
+            "INSERT INTO ignored_review_candidates (face_id, person_id, score) VALUES (?, ?, ?)",
+            (face_ids[2], pid, 0.7),
+        )
+        await db.commit()
+
+    # 아직 재검토가 '완료'로 기록된 잡이 없으므로 reviewed_at은 null
+    r = await admin_client.get(f"/api/admin/people/{pid}/ignored-candidates")
+    assert r.status_code == 200
+    body = r.json()
+    assert [c["face_id"] for c in body["candidates"]] == [face_ids[1], face_ids[2], face_ids[0]]
+    assert body["reviewed_at"] is None
+
+    # face_ids[1]이 이미 이 인물로 확정되면 후보 목록에서 자동 제외
+    await admin_client.post(f"/api/admin/faces/{face_ids[1]}/label", json={"person_id": pid})
+    body = (await admin_client.get(f"/api/admin/people/{pid}/ignored-candidates")).json()
+    assert [c["face_id"] for c in body["candidates"]] == [face_ids[2], face_ids[0]]
+
+    # 완료된 잡이 기록되면 reviewed_at이 그 finished_at으로 채워짐
+    job_id = (await admin_client.post(
+        "/api/admin/ai/jobs", json={"type": "review_ignored", "target_person_id": pid}
+    )).json()["id"]
+    async with aiosqlite.connect(_ai_db_path()) as db:
+        await db.execute(
+            "UPDATE jobs SET status='done', finished_at=CURRENT_TIMESTAMP WHERE id=?",
+            (job_id,),
+        )
+        await db.commit()
+    body = (await admin_client.get(f"/api/admin/people/{pid}/ignored-candidates")).json()
+    assert body["reviewed_at"] is not None
+
+    # 없는 인물 404
+    r = await admin_client.get("/api/admin/people/999/ignored-candidates")
+    assert r.status_code == 404
+
+    # 인증 필요
+    del client.headers["Authorization"]
+    r = await client.get(f"/api/admin/people/{pid}/ignored-candidates")
+    assert r.status_code in (401, 403)
+
+
 # ── AI 설정 (야간 스캔 시각) ──────────────────────────────────────────
 
 

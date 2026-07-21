@@ -46,16 +46,16 @@ def reset_stale_jobs(conn: sqlite3.Connection) -> int:
     return cur.rowcount
 
 
-def claim_next_job(conn: sqlite3.Connection) -> tuple[int, str] | None:
-    """가장 오래된 pending 잡을 running으로 전환하고 (id, type) 반환."""
+def claim_next_job(conn: sqlite3.Connection) -> tuple[int, str, int | None] | None:
+    """가장 오래된 pending 잡을 running으로 전환하고 (id, type, target_person_id) 반환."""
     row = conn.execute(
-        "SELECT id, type FROM jobs WHERE status='pending' ORDER BY id LIMIT 1"
+        "SELECT id, type, target_person_id FROM jobs WHERE status='pending' ORDER BY id LIMIT 1"
     ).fetchone()
     if row is None:
         return None
     conn.execute("UPDATE jobs SET status='running' WHERE id=?", (row["id"],))
     conn.commit()
-    return row["id"], row["type"]
+    return row["id"], row["type"], row["target_person_id"]
 
 
 def finish_job(conn: sqlite3.Connection, job_id: int, status: str) -> None:
@@ -67,7 +67,7 @@ def finish_job(conn: sqlite3.Connection, job_id: int, status: str) -> None:
 
 
 def run_daemon() -> None:
-    from ai_worker.main import run_rematch, run_scan  # 순환 import 방지용 lazy
+    from ai_worker.main import run_rematch, run_review_ignored, run_scan  # 순환 import 방지용 lazy
 
     conn = db.connect()
     stale = reset_stale_jobs(conn)
@@ -87,13 +87,15 @@ def run_daemon() -> None:
 
         job = claim_next_job(conn)
         if job is not None:
-            job_id, job_type = job
+            job_id, job_type, target_person_id = job
             log.info("잡 #%d (%s) 실행", job_id, job_type)
             try:
                 if job_type == "scan":
                     run_scan()
                 elif job_type == "rematch":
                     run_rematch()
+                elif job_type == "review_ignored":
+                    run_review_ignored(target_person_id)
                 else:
                     raise ValueError(f"알 수 없는 잡 타입: {job_type}")
                 finish_job(conn, job_id, "done")

@@ -100,3 +100,50 @@ def rematch_all(conn: sqlite3.Connection, threshold: float) -> int:
     )
     conn.commit()
     return len(matches)
+
+
+def match_ignored_for_person(conn: sqlite3.Connection, person_id: int, threshold: float) -> int:
+    """'무시' 라벨(face_labels.person_id IS NULL)이 붙은 얼굴들을 이 인물 한 명의
+    등록 임베딩과만 비교해 후보를 뽑는다. ignored_review_candidates에서 이 인물
+    몫만 DELETE+INSERT로 교체(다른 인물의 후보는 건드리지 않음). 후보 수를 반환.
+    """
+    row = conn.execute(
+        "SELECT embedding FROM face_labels fl JOIN faces f ON f.id = fl.face_id "
+        "WHERE fl.person_id = ?",
+        (person_id,),
+    ).fetchall()
+    enrollment = (
+        _normalize(np.stack([blob_to_embedding(r["embedding"]) for r in row]))
+        if row else None
+    )
+
+    cursor = conn.execute(
+        """SELECT f.id, f.embedding FROM faces f
+           JOIN face_labels fl ON fl.face_id = f.id
+           WHERE fl.person_id IS NULL"""
+    )
+
+    # rematch_all과 동일하게 계산은 트랜잭션 밖에서 — 대량 무시 얼굴 스캔 동안
+    # face_labels 쓰기 락을 잡지 않기 위해 배치 스트리밍.
+    candidates = []
+    if enrollment is not None:
+        while True:
+            batch = cursor.fetchmany(_REMATCH_FETCH_BATCH)
+            if not batch:
+                break
+            for r in batch:
+                vec = np.asarray(blob_to_embedding(r["embedding"]), dtype=np.float32)
+                norm = np.linalg.norm(vec)
+                if norm == 0:
+                    continue
+                score = float((enrollment @ (vec / norm)).max())
+                if score >= threshold:
+                    candidates.append((r["id"], person_id, score))
+
+    conn.execute("DELETE FROM ignored_review_candidates WHERE person_id = ?", (person_id,))
+    conn.executemany(
+        "INSERT INTO ignored_review_candidates (face_id, person_id, score) VALUES (?, ?, ?)",
+        candidates,
+    )
+    conn.commit()
+    return len(candidates)
