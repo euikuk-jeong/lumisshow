@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.10.0] - 2026-07-22
+
+### Added
+- **무시된 얼굴 재검토 기능**: 인물 상세 페이지에서 "무시 얼굴에서 이 인물 찾기"
+  버튼으로 해당 인물 1명만 대상으로 '무시' 라벨된 얼굴을 재매칭하는 비동기
+  job(`review_ignored`)을 큐잉. 기존 전체 재매칭(`rematch_all`)과 분리된 경량
+  경로로, 후보는 확정(기존 batch-label API 재사용)/숨기기(클라이언트 로컬)로
+  처리 (`ai_worker/matcher.py`의 `match_ignored_for_person()`, 신규 API
+  `GET /people/{id}/ignored-candidates`, `GET /people/{id}/review-ignored-status`,
+  `admin-person-detail.js`)
+
 ## [1.9.2] - 2026-07-19
 
 ### Added
@@ -745,7 +756,8 @@ Phase 2 — AI 얼굴 인식 스마트 앨범. NAS 로컬 AI(InsightFace)로 사
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v1.9.2...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v1.10.0...HEAD
+[1.10.0]: https://github.com/euikuk-jeong/lumisshow/compare/v1.9.2...v1.10.0
 [1.9.2]: https://github.com/euikuk-jeong/lumisshow/compare/v1.9.1...v1.9.2
 [1.9.1]: https://github.com/euikuk-jeong/lumisshow/compare/v1.9.0...v1.9.1
 [1.9.0]: https://github.com/euikuk-jeong/lumisshow/compare/v1.8.7...v1.9.0
