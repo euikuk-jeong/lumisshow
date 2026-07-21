@@ -231,37 +231,47 @@ async def repair_people_paths(
 
     fixed, ambiguous, not_found = [], [], []
 
-    for old_path in broken:
-        basename = os.path.basename(old_path).lower()
+    # basename별로 묶는다 — orphan 쪽도 동명(카메라 IMG_0001.jpg류)이 2개 이상이면
+    # 어느 old_path를 새 경로에 매칭해야 할지 알 수 없어 ambiguous로 남겨야 한다.
+    # (candidate 쪽만 보고 1개씩 순차 UPDATE하면 두 번째 old_path가 이미 첫 번째가
+    # 선점한 path로 다시 UPDATE를 시도해 PRIMARY KEY 충돌이 난다.)
+    broken_by_basename: dict[str, list[str]] = {}
+    for p in broken:
+        broken_by_basename.setdefault(os.path.basename(p).lower(), []).append(p)
+
+    for basename, old_paths in broken_by_basename.items():
         # 이미 photos_analyzed에 등록된 경로는 후보에서 제외 — 아니면 UPDATE 시
         # path(PRIMARY KEY) 중복으로 충돌한다.
         candidates = [c for c in index.get(basename, []) if c not in analyzed_set]
 
-        if len(candidates) == 1:
-            new_path = candidates[0]
-            try:
-                new_mtime = os.path.getmtime(os.path.join(photo_root, new_path))
-            except OSError:
-                new_mtime = None
-            if new_mtime is not None:
-                await db.execute(
-                    "UPDATE photos_analyzed SET path = ?, mtime = ? WHERE path = ?",
-                    (new_path, new_mtime, old_path),
-                )
-            else:
-                await db.execute(
-                    "UPDATE photos_analyzed SET path = ? WHERE path = ?",
-                    (new_path, old_path),
-                )
+        if not candidates:
+            not_found.extend(old_paths)
+            continue
+        if len(old_paths) > 1 or len(candidates) > 1:
+            for old_path in old_paths:
+                ambiguous.append({"old_path": old_path, "candidates": sorted(candidates)})
+            continue
+
+        old_path, new_path = old_paths[0], candidates[0]
+        try:
+            new_mtime = os.path.getmtime(os.path.join(photo_root, new_path))
+        except OSError:
+            new_mtime = None
+        if new_mtime is not None:
             await db.execute(
-                "UPDATE faces SET photo_path = ? WHERE photo_path = ?",
+                "UPDATE photos_analyzed SET path = ?, mtime = ? WHERE path = ?",
+                (new_path, new_mtime, old_path),
+            )
+        else:
+            await db.execute(
+                "UPDATE photos_analyzed SET path = ? WHERE path = ?",
                 (new_path, old_path),
             )
-            fixed.append({"old_path": old_path, "new_path": new_path})
-        elif len(candidates) > 1:
-            ambiguous.append({"old_path": old_path, "candidates": sorted(candidates)})
-        else:
-            not_found.append(old_path)
+        await db.execute(
+            "UPDATE faces SET photo_path = ? WHERE photo_path = ?",
+            (new_path, old_path),
+        )
+        fixed.append({"old_path": old_path, "new_path": new_path})
 
     await db.commit()
     return {

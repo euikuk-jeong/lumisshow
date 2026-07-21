@@ -231,6 +231,33 @@ async def test_people_repair_not_found_leaves_row_intact(admin_client):
     assert [r[0] for r in rows] == ["ghost/missing.jpg"]  # 변경 없음
 
 
+async def test_people_repair_duplicate_orphan_basenames_no_pk_collision(admin_client):
+    """orphan 쪽에 동명 basename이 2개면(카메라 IMG_0001.jpg류) 후보가 1개뿐이라도
+    자동 매칭하지 않고 ambiguous 처리해야 한다 — 순차 UPDATE 시 두 번째 old_path가
+    이미 선점된 path로 UPDATE를 시도해 PRIMARY KEY 충돌(500)이 나는 걸 막기 위함."""
+    photo_root = Path(os.getenv("PHOTO_ROOT"))
+    (photo_root / "archive").mkdir()
+    (photo_root / "archive" / "IMG_0001.jpg").write_bytes(b"fake")
+    await _seed_analyzed("2023/IMG_0001.jpg")
+    await _seed_analyzed("backup/IMG_0001.jpg")
+
+    r = await admin_client.post("/api/admin/people/repair-paths")
+    assert r.status_code == 200
+    data = r.json()
+    assert data["fixed"] == []
+    assert {a["old_path"] for a in data["ambiguous"]} == {
+        "2023/IMG_0001.jpg", "backup/IMG_0001.jpg",
+    }
+    assert all(a["candidates"] == ["archive/IMG_0001.jpg"] for a in data["ambiguous"])
+
+    from backend.models.ai_database import _ai_db_path
+
+    async with aiosqlite.connect(_ai_db_path()) as db:
+        async with db.execute("SELECT path FROM photos_analyzed ORDER BY path") as cur:
+            rows = await cur.fetchall()
+    assert [r[0] for r in rows] == ["2023/IMG_0001.jpg", "backup/IMG_0001.jpg"]  # 변경 없음
+
+
 async def test_people_repair_requires_auth(client):
     r = await client.post("/api/admin/people/repair-paths")
     assert r.status_code in (401, 403)
