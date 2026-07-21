@@ -3,6 +3,12 @@
 쓰기 주체 분리 규칙 — LumisShow는 persons·face_labels·jobs·ai_settings만 쓴다.
 photos_analyzed·faces·face_matches는 AI 워커(ai_worker/) 전용 쓰기 테이블.
 
+예외: routers/admin_people.py의 POST /api/admin/people/repair-paths는 사진/폴더명
+변경으로 생긴 orphan 경로를 즉시 복구하려고 photos_analyzed.path/faces.photo_path를
+직접 UPDATE한다 — on-demand·저빈도 관리자 액션이라 WAL+busy_timeout(15s)이 워커와의
+동시 쓰기를 안전하게 직렬화한다 (ai_worker/scanner.py의 야간 자동 복구와 같은 로직,
+즉시 실행 + ambiguous/not_found 보고가 필요해 잡 큐 대신 동기 엔드포인트로 구현).
+
 !! 스키마는 ai_worker/db.py의 _DDL과 동일하게 유지할 것 (컨테이너가 분리되어
    코드를 공유할 수 없어 복제함). 한쪽을 변경하면 반드시 다른 쪽도 변경한다.
 """

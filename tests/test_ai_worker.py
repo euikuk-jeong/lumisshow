@@ -111,6 +111,66 @@ def test_scanner_skips_analyzed_and_detects_mtime_change(conn, tmp_path):
     assert [p for p, _ in scanner.pending_photos(conn, root)] == ["a.jpg"]
 
 
+def test_scanner_repairs_renamed_photo_and_preserves_labels(conn, tmp_path):
+    root = str(tmp_path / "photos")
+    old_path = _make_photo(root, "2024/a.jpg")
+    mtime = os.path.getmtime(old_path)
+    conn.execute(
+        "INSERT INTO photos_analyzed (path, mtime, face_count) VALUES ('2024/a.jpg', ?, 1)",
+        (mtime,),
+    )
+    face_id = _insert_face(conn, "2024/a.jpg", _unit_vec(0))
+    conn.execute("INSERT INTO persons (name) VALUES ('테스트')")
+    conn.execute("INSERT INTO face_labels (face_id, person_id) VALUES (?, 1)", (face_id,))
+    conn.commit()
+
+    os.makedirs(os.path.join(root, "2025"), exist_ok=True)
+    os.rename(old_path, os.path.join(root, "2025", "a.jpg"))  # 폴더 이동, 파일명(basename)은 유지
+
+    pending = scanner.pending_photos(conn, root)
+    assert pending == []  # rename만 있었던 것으로 간주 → 재분석 대상 아님
+
+    row = conn.execute("SELECT path FROM photos_analyzed").fetchone()
+    assert row["path"] == "2025/a.jpg"
+    face_row = conn.execute("SELECT id, photo_path FROM faces").fetchone()
+    assert face_row["id"] == face_id  # face_id 유지 → 라벨 보존
+    assert face_row["photo_path"] == "2025/a.jpg"
+    assert conn.execute(
+        "SELECT person_id FROM face_labels WHERE face_id = ?", (face_id,)
+    ).fetchone()["person_id"] == 1
+
+
+def test_scanner_ambiguous_rename_not_auto_fixed(conn, tmp_path):
+    root = str(tmp_path / "photos")
+    _make_photo(root, "new1/a.jpg")
+    _make_photo(root, "new2/a.jpg")
+    conn.execute(
+        "INSERT INTO photos_analyzed (path, mtime, face_count) VALUES ('old/a.jpg', 123.0, 0)"
+    )
+    conn.commit()
+
+    pending = scanner.pending_photos(conn, root)
+    assert sorted(p for p, _ in pending) == ["new1/a.jpg", "new2/a.jpg"]
+    # 후보가 2개라 자동 복구되지 않고 old 행이 그대로 남아 orphan 유지
+    assert conn.execute(
+        "SELECT COUNT(*) FROM photos_analyzed WHERE path = 'old/a.jpg'"
+    ).fetchone()[0] == 1
+
+
+def test_scanner_aborts_when_root_unreachable(conn, tmp_path):
+    root = str(tmp_path / "photos")
+    conn.execute(
+        "INSERT INTO photos_analyzed (path, mtime, face_count) VALUES ('a.jpg', 123.0, 0)"
+    )
+    conn.commit()
+
+    # root는 존재하지만 비어 있음(마운트 해제 등으로 walk 결과가 없는 상황 재현)
+    assert scanner.pending_photos(conn, root) == []
+    assert conn.execute(
+        "SELECT COUNT(*) FROM photos_analyzed"
+    ).fetchone()[0] == 1  # 오인 삭제/변경 없이 그대로 유지
+
+
 # ── matcher ───────────────────────────────────────────────────────────
 
 

@@ -4,6 +4,7 @@
 유효 인물 판정: face_labels가 있으면 그 값이 우선, 없으면 face_matches.
 """
 
+import asyncio
 import os
 import secrets
 import sqlite3
@@ -30,6 +31,7 @@ from backend.models.schemas import (
     build_slideshow_defaults,
 )
 from backend.services.auth import admin_image_auth, get_current_admin
+from backend.services.paths import build_filename_index
 from backend.services.photo_meta import load_photo_meta
 from backend.services.settings import get_settings
 
@@ -192,6 +194,82 @@ async def delete_person(
     await db.execute("DELETE FROM face_labels WHERE person_id = ?", (person_id,))
     await db.execute("DELETE FROM persons WHERE id = ?", (person_id,))
     await db.commit()
+
+
+# ── 경로 복구 ─────────────────────────────────────────────────────────
+#
+# photos_analyzed/faces는 원래 AI 워커 전용 쓰기 테이블이다(파일 상단 주석 참조).
+# 이 엔드포인트는 예외적으로 LumisShow가 직접 UPDATE한다 — 사진/폴더명 변경으로
+# 생긴 orphan 경로를 다음 야간 스캔(ai_worker/scanner.py의 자동 1:1 복구)까지
+# 기다리지 않고 즉시 정리하고 ambiguous/not_found 현황을 보고 싶을 때 쓰는
+# on-demand·저빈도 관리자 액션이라 WAL+busy_timeout(15s)으로 워커와의 동시
+# 쓰기가 안전하게 직렬화된다. face_labels/face_matches는 FK(face_id)라
+# 건드리지 않아도 라벨이 그대로 유지된다.
+
+
+@router.post("/people/repair-paths")
+async def repair_people_paths(
+    _: str = Depends(get_current_admin), db=Depends(get_ai_db)
+):
+    """실제 파일이 없는(orphan) photos_analyzed 경로를 파일명 기반으로 자동 복구.
+    후보가 1개(유일 매칭)면 photos_analyzed.path/faces.photo_path를 새 경로로
+    갱신, 2개 이상(ambiguous)이거나 0개(not_found)면 보고만 하고 자동 처리하지
+    않는다(admin_albums.repair_album_paths와 동일 패턴, 자동 삭제 없음)."""
+    photo_root = os.path.realpath(os.getenv("PHOTO_ROOT", "./testdata/photos"))
+
+    async with db.execute("SELECT path FROM photos_analyzed") as cur:
+        all_paths = [row["path"] for row in await cur.fetchall()]
+    analyzed_set = set(all_paths)
+
+    broken = [p for p in all_paths if not os.path.isfile(os.path.join(photo_root, p))]
+    total_checked = len(all_paths)
+
+    if not broken:
+        return {"total_checked": total_checked, "fixed": [], "ambiguous": [], "not_found": []}
+
+    index = await asyncio.to_thread(build_filename_index, photo_root)
+
+    fixed, ambiguous, not_found = [], [], []
+
+    for old_path in broken:
+        basename = os.path.basename(old_path).lower()
+        # 이미 photos_analyzed에 등록된 경로는 후보에서 제외 — 아니면 UPDATE 시
+        # path(PRIMARY KEY) 중복으로 충돌한다.
+        candidates = [c for c in index.get(basename, []) if c not in analyzed_set]
+
+        if len(candidates) == 1:
+            new_path = candidates[0]
+            try:
+                new_mtime = os.path.getmtime(os.path.join(photo_root, new_path))
+            except OSError:
+                new_mtime = None
+            if new_mtime is not None:
+                await db.execute(
+                    "UPDATE photos_analyzed SET path = ?, mtime = ? WHERE path = ?",
+                    (new_path, new_mtime, old_path),
+                )
+            else:
+                await db.execute(
+                    "UPDATE photos_analyzed SET path = ? WHERE path = ?",
+                    (new_path, old_path),
+                )
+            await db.execute(
+                "UPDATE faces SET photo_path = ? WHERE photo_path = ?",
+                (new_path, old_path),
+            )
+            fixed.append({"old_path": old_path, "new_path": new_path})
+        elif len(candidates) > 1:
+            ambiguous.append({"old_path": old_path, "candidates": sorted(candidates)})
+        else:
+            not_found.append(old_path)
+
+    await db.commit()
+    return {
+        "total_checked": total_checked,
+        "fixed": fixed,
+        "ambiguous": ambiguous,
+        "not_found": not_found,
+    }
 
 
 # ── 얼굴 조회/교정 ────────────────────────────────────────────────────
