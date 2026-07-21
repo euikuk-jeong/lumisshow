@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.10.1] - 2026-07-22
+
+### Fixed
+- **미분류 얼굴 페이지에 인물 목록 복귀 버튼 누락**: 무시된 얼굴 페이지와
+  동일하게 "← 인물 목록" 버튼 추가 (`admin-people.js`)
+
 ## [1.10.0] - 2026-07-22
 
 ### Added
@@ -756,7 +762,8 @@ Phase 2 — AI 얼굴 인식 스마트 앨범. NAS 로컬 AI(InsightFace)로 사
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v1.10.0...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v1.10.1...HEAD
+[1.10.1]: https://github.com/euikuk-jeong/lumisshow/compare/v1.10.0...v1.10.1
 [1.10.0]: https://github.com/euikuk-jeong/lumisshow/compare/v1.9.2...v1.10.0
 [1.9.2]: https://github.com/euikuk-jeong/lumisshow/compare/v1.9.1...v1.9.2
 [1.9.1]: https://github.com/euikuk-jeong/lumisshow/compare/v1.9.0...v1.9.1

@@ -159,6 +159,7 @@ export async function renderUnassignedFaces() {
         <select id="assign-person" class="form-input" style="width:auto;max-width:200px"></select>
         <button class="btn btn-primary" id="btn-assign" disabled>선택 지정</button>
         <button class="btn btn-ghost" id="btn-ignore" disabled>선택 무시</button>
+        <a href="/admin/people" class="btn btn-ghost" data-link>← 인물 목록</a>
       </div>
     </div>
     <div id="similar-banner" style="display:none;margin-bottom:10px"></div>
