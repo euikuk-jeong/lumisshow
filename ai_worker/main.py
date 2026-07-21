@@ -58,6 +58,12 @@ def run_rematch() -> None:
     log.info("재매칭 완료: %d개 얼굴 매칭됨", count)
 
 
+def run_review_ignored(target_person_id: int) -> None:
+    conn = db.connect()
+    count = matcher.match_ignored_for_person(conn, target_person_id, config.match_threshold())
+    log.info("무시 얼굴 재검토 완료 (인물 #%d): 후보 %d개", target_person_id, count)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(prog="ai_worker")
     parser.add_argument("command", choices=["scan", "rematch", "daemon"])

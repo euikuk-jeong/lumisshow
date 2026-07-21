@@ -57,17 +57,27 @@ CREATE TABLE IF NOT EXISTS face_labels (
 CREATE INDEX IF NOT EXISTS idx_face_labels_person ON face_labels(person_id);
 
 CREATE TABLE IF NOT EXISTS jobs (
-    id           INTEGER PRIMARY KEY AUTOINCREMENT,
-    type         TEXT NOT NULL,
-    status       TEXT NOT NULL DEFAULT 'pending',
-    requested_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    finished_at  DATETIME
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    type              TEXT NOT NULL,
+    status            TEXT NOT NULL DEFAULT 'pending',
+    requested_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+    finished_at       DATETIME,
+    target_person_id  INTEGER
 );
 
 CREATE TABLE IF NOT EXISTS ai_settings (
     key   TEXT PRIMARY KEY,
     value TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS ignored_review_candidates (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    face_id    INTEGER NOT NULL REFERENCES faces(id) ON DELETE CASCADE,
+    person_id  INTEGER NOT NULL REFERENCES persons(id) ON DELETE CASCADE,
+    score      REAL NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_ignored_review_person ON ignored_review_candidates(person_id);
 """
 
 
@@ -100,6 +110,13 @@ async def init_ai_db() -> None:
                 "persons.name UNIQUE 인덱스 생성 실패 — 중복된 이름이 있는지 확인 필요: "
                 "SELECT name, COUNT(*) FROM persons GROUP BY name HAVING COUNT(*) > 1;"
             )
+        # 기존 DB의 jobs 테이블에는 target_person_id 컬럼이 없을 수 있음
+        # (CREATE TABLE IF NOT EXISTS는 이미 존재하는 테이블을 변경하지 않음).
+        try:
+            await db.execute("ALTER TABLE jobs ADD COLUMN target_person_id INTEGER")
+            await db.commit()
+        except sqlite3.OperationalError:
+            pass  # 컬럼이 이미 존재함
 
 
 async def get_ai_db():

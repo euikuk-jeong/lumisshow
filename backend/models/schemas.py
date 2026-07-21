@@ -289,7 +289,8 @@ class ConfirmByScore(BaseModel):
     min_score: float = Field(ge=0.0, le=1.0)
 
 class JobCreate(BaseModel):
-    type: str                          # scan | rematch
+    type: str                          # scan | rematch | review_ignored
+    target_person_id: Optional[int] = None   # review_ignored 전용
 
 class AiSettingsUpdate(BaseModel):
     scan_hour: int = Field(ge=0, le=23)  # 야간 자동 스캔 시각 (로컬 TZ)
