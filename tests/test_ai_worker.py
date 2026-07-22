@@ -43,7 +43,7 @@ def test_db_creates_tables(conn):
         for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")
     }
     assert {"photos_analyzed", "faces", "face_matches", "persons", "face_labels",
-            "jobs", "ignored_review_candidates"} <= tables
+            "jobs", "ignored_review_candidates", "pending_path_repairs"} <= tables
 
 
 def test_db_creates_person_indexes(conn):
@@ -111,7 +111,7 @@ def test_scanner_skips_analyzed_and_detects_mtime_change(conn, tmp_path):
     assert [p for p, _ in scanner.pending_photos(conn, root)] == ["a.jpg"]
 
 
-def test_scanner_repairs_renamed_photo_and_preserves_labels(conn, tmp_path):
+def test_scanner_queues_renamed_photo_proposal_without_applying(conn, tmp_path):
     root = str(tmp_path / "photos")
     old_path = _make_photo(root, "2024/a.jpg")
     mtime = os.path.getmtime(old_path)
@@ -128,19 +128,43 @@ def test_scanner_repairs_renamed_photo_and_preserves_labels(conn, tmp_path):
     os.rename(old_path, os.path.join(root, "2025", "a.jpg"))  # 폴더 이동, 파일명(basename)은 유지
 
     pending = scanner.pending_photos(conn, root)
-    assert pending == []  # rename만 있었던 것으로 간주 → 재분석 대상 아님
+    assert pending == []  # 승인 대기 중인 new_path는 재분석 대상 아님
 
+    # 승인 전이므로 photos_analyzed/faces는 아직 old_path 그대로 — 즉시 UPDATE 안 함
     row = conn.execute("SELECT path FROM photos_analyzed").fetchone()
-    assert row["path"] == "2025/a.jpg"
+    assert row["path"] == "2024/a.jpg"
     face_row = conn.execute("SELECT id, photo_path FROM faces").fetchone()
-    assert face_row["id"] == face_id  # face_id 유지 → 라벨 보존
-    assert face_row["photo_path"] == "2025/a.jpg"
-    assert conn.execute(
-        "SELECT person_id FROM face_labels WHERE face_id = ?", (face_id,)
-    ).fetchone()["person_id"] == 1
+    assert face_row["id"] == face_id
+    assert face_row["photo_path"] == "2024/a.jpg"
+
+    proposal = conn.execute(
+        "SELECT old_path, new_path, source, status FROM pending_path_repairs"
+    ).fetchone()
+    assert proposal["old_path"] == "2024/a.jpg"
+    assert proposal["new_path"] == "2025/a.jpg"
+    assert proposal["source"] == "scan"
+    assert proposal["status"] == "pending"
 
 
-def test_scanner_ambiguous_rename_not_auto_fixed(conn, tmp_path):
+def test_scanner_rescan_does_not_duplicate_proposal(conn, tmp_path):
+    root = str(tmp_path / "photos")
+    old_path = _make_photo(root, "2024/a.jpg")
+    mtime = os.path.getmtime(old_path)
+    conn.execute(
+        "INSERT INTO photos_analyzed (path, mtime, face_count) VALUES ('2024/a.jpg', ?, 0)",
+        (mtime,),
+    )
+    conn.commit()
+    os.makedirs(os.path.join(root, "2025"), exist_ok=True)
+    os.rename(old_path, os.path.join(root, "2025", "a.jpg"))
+
+    scanner.pending_photos(conn, root)
+    scanner.pending_photos(conn, root)  # 재스캔해도 제안이 중복으로 쌓이지 않아야 함
+
+    assert conn.execute("SELECT COUNT(*) FROM pending_path_repairs").fetchone()[0] == 1
+
+
+def test_scanner_ambiguous_rename_not_proposed(conn, tmp_path):
     root = str(tmp_path / "photos")
     _make_photo(root, "new1/a.jpg")
     _make_photo(root, "new2/a.jpg")
@@ -151,10 +175,11 @@ def test_scanner_ambiguous_rename_not_auto_fixed(conn, tmp_path):
 
     pending = scanner.pending_photos(conn, root)
     assert sorted(p for p, _ in pending) == ["new1/a.jpg", "new2/a.jpg"]
-    # 후보가 2개라 자동 복구되지 않고 old 행이 그대로 남아 orphan 유지
+    # 후보가 2개라 제안조차 쌓이지 않고 old 행이 그대로 남아 orphan 유지
     assert conn.execute(
         "SELECT COUNT(*) FROM photos_analyzed WHERE path = 'old/a.jpg'"
     ).fetchone()[0] == 1
+    assert conn.execute("SELECT COUNT(*) FROM pending_path_repairs").fetchone()[0] == 0
 
 
 def test_scanner_aborts_when_root_unreachable(conn, tmp_path):

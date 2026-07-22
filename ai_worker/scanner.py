@@ -34,17 +34,14 @@ def _basename_index(paths) -> dict[str, list[str]]:
     return index
 
 
-def repair_renamed_paths(
-    conn: sqlite3.Connection,
+def detect_renamed_paths(
     current: dict[str, float],
     analyzed: dict[str, float],
 ) -> dict[str, str]:
-    """rename/move로 사라진 photos_analyzed 경로를 basename 1:1 매칭만 자동 복구.
+    """rename/move로 사라진 photos_analyzed 경로를 basename 1:1 매칭만 탐지.
 
-    photos_analyzed.path/faces.photo_path를 새 경로로 UPDATE해 face_id를 그대로
-    유지한다 — face_id가 바뀌면 face_labels/face_matches가 FK CASCADE로 삭제되어
-    사람이 확정한 라벨이 소실되기 때문. 동명 파일 등 후보가 2개 이상(ambiguous)이면
-    자동 처리하지 않고 기존처럼 orphan으로 남긴다. 반환값은 실제 반영된 {old: new}."""
+    동명 파일 등 후보가 2개 이상(ambiguous)이면 대상에서 제외한다.
+    DB를 건드리지 않는 순수 함수 — 반환값은 {old: new} 매칭 후보."""
     disappeared = set(analyzed) - set(current)
     new = set(current) - set(analyzed)
     if not disappeared or not new:
@@ -61,26 +58,37 @@ def repair_renamed_paths(
         if len(new_candidates) != 1:
             continue
         renamed[old_candidates[0]] = new_candidates[0]
-
-    for old_path, new_path in renamed.items():
-        conn.execute(
-            "UPDATE photos_analyzed SET path = ?, mtime = ? WHERE path = ?",
-            (new_path, current[new_path], old_path),
-        )
-        conn.execute(
-            "UPDATE faces SET photo_path = ? WHERE photo_path = ?",
-            (new_path, old_path),
-        )
-    if renamed:
-        conn.commit()
     return renamed
+
+
+def queue_rename_proposals(
+    conn: sqlite3.Connection,
+    current: dict[str, float],
+    analyzed: dict[str, float],
+) -> dict[str, str]:
+    """탐지된 rename 후보를 pending_path_repairs에 제안으로 쌓는다(즉시 UPDATE 안 함).
+
+    실제 photos_analyzed/faces UPDATE는 admin이 승인해야 일어난다
+    (backend/routers/admin_people.py의 path-repairs 승인 엔드포인트).
+    old_path UNIQUE 제약이라 이미 제안된 건은 재스캔해도 중복으로 쌓이지 않는다."""
+    proposed = detect_renamed_paths(current, analyzed)
+    for old_path, new_path in proposed.items():
+        conn.execute(
+            "INSERT OR IGNORE INTO pending_path_repairs (old_path, new_path, source) "
+            "VALUES (?, ?, 'scan')",
+            (old_path, new_path),
+        )
+    if proposed:
+        conn.commit()
+    return proposed
 
 
 def pending_photos(conn: sqlite3.Connection, root: str) -> list[tuple[str, float]]:
     """분석이 필요한 (상대 경로, mtime) 목록 — 신규 또는 mtime 변경분.
 
-    같은 walk 결과를 재사용해 rename/move 자동 복구(repair_renamed_paths)도 함께
-    수행한다(추가 walk 없음)."""
+    같은 walk 결과를 재사용해 rename/move 후보 제안(queue_rename_proposals)도 함께
+    수행한다(추가 walk 없음). 제안된 new_path는 admin이 승인/거부하기 전까지 "신규
+    사진"으로 오분석되지 않도록 분석 대상에서 제외한다."""
     current = dict(walk_photos(root))
     analyzed = {
         row["path"]: row["mtime"]
@@ -96,11 +104,15 @@ def pending_photos(conn: sqlite3.Connection, root: str) -> list[tuple[str, float
         )
         return []
 
-    renamed = repair_renamed_paths(conn, current, analyzed)
-    for old_path, new_path in renamed.items():
-        analyzed.pop(old_path, None)
-        analyzed[new_path] = current[new_path]  # 재분석 대상에서 제외(rename만으로 간주)
+    queue_rename_proposals(conn, current, analyzed)
+    pending_new_paths = {
+        row["new_path"]
+        for row in conn.execute(
+            "SELECT new_path FROM pending_path_repairs WHERE status = 'pending'"
+        )
+    }
 
     return [
-        (rel, mtime) for rel, mtime in current.items() if analyzed.get(rel) != mtime
+        (rel, mtime) for rel, mtime in current.items()
+        if analyzed.get(rel) != mtime and rel not in pending_new_paths
     ]

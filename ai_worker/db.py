@@ -76,6 +76,18 @@ CREATE TABLE IF NOT EXISTS ignored_review_candidates (
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS idx_ignored_review_person ON ignored_review_candidates(person_id);
+
+-- rename/move 자동 감지 후보(basename 1:1 매칭) — 즉시 적용하지 않고 admin 승인 대기.
+-- scanner가 INSERT만 함(source='scan'), 승인/거부는 backend가 처리(admin_people.py).
+CREATE TABLE IF NOT EXISTS pending_path_repairs (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    old_path    TEXT NOT NULL UNIQUE,
+    new_path    TEXT NOT NULL,
+    source      TEXT NOT NULL,                     -- scan | manual
+    status      TEXT NOT NULL DEFAULT 'pending',    -- pending | rejected
+    detected_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_pending_path_repairs_status ON pending_path_repairs(status);
 """
 
 

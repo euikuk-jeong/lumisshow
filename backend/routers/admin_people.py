@@ -118,6 +118,182 @@ async def list_people(_: str = Depends(get_current_admin), db=Depends(get_ai_db)
     return [dict(r) for r in rows]
 
 
+# ── 경로 복구 ─────────────────────────────────────────────────────────
+#
+# photos_analyzed/faces는 원래 AI 워커 전용 쓰기 테이블이다(파일 상단 주석 참조).
+# rename/move 후보는 이 스캔 엔드포인트와 ai_worker/scanner.py(야간 자동 스캔)
+# 양쪽이 pending_path_repairs에 제안만 쌓는다 — 실제 UPDATE는 admin이 아래
+# path-repairs 승인 엔드포인트를 호출해야만 일어난다. 그 승인 엔드포인트가
+# 예외적으로 LumisShow가 photos_analyzed.path/faces.photo_path를 직접 UPDATE하는
+# 지점이다 — on-demand·저빈도 관리자 액션이라 WAL+busy_timeout(15s)으로 워커와의
+# 동시 쓰기가 안전하게 직렬화된다. face_labels/face_matches는 FK(face_id)라
+# 건드리지 않아도 라벨이 그대로 유지된다.
+
+
+@router.post("/people/repair-paths")
+async def repair_people_paths(
+    _: str = Depends(get_current_admin), db=Depends(get_ai_db)
+):
+    """실제 파일이 없는(orphan) photos_analyzed 경로를 파일명 기반으로 스캔.
+    후보가 1개(유일 매칭)면 pending_path_repairs에 승인 대기로 제안(proposed),
+    2개 이상(ambiguous)이거나 0개(not_found)면 보고만 한다(admin_albums의
+    repair_album_paths와 동일 패턴, 자동 삭제 없음). 실제 반영은 admin이
+    /people/path-repairs/{id}/approve(-all)로 승인해야 일어난다."""
+    photo_root = os.path.realpath(os.getenv("PHOTO_ROOT", "./testdata/photos"))
+
+    async with db.execute("SELECT path FROM photos_analyzed") as cur:
+        all_paths = [row["path"] for row in await cur.fetchall()]
+    analyzed_set = set(all_paths)
+
+    broken = [p for p in all_paths if not os.path.isfile(os.path.join(photo_root, p))]
+    total_checked = len(all_paths)
+
+    if not broken:
+        return {"total_checked": total_checked, "proposed": [], "ambiguous": [], "not_found": []}
+
+    index = await asyncio.to_thread(build_filename_index, photo_root)
+
+    proposed, ambiguous, not_found = [], [], []
+
+    # basename별로 묶는다 — orphan 쪽도 동명(카메라 IMG_0001.jpg류)이 2개 이상이면
+    # 어느 old_path를 새 경로에 매칭해야 할지 알 수 없어 ambiguous로 남겨야 한다.
+    broken_by_basename: dict[str, list[str]] = {}
+    for p in broken:
+        broken_by_basename.setdefault(os.path.basename(p).lower(), []).append(p)
+
+    for basename, old_paths in broken_by_basename.items():
+        # 이미 photos_analyzed에 등록된 경로는 후보에서 제외 — 아니면 승인 시
+        # path(PRIMARY KEY) 중복으로 충돌한다.
+        candidates = [c for c in index.get(basename, []) if c not in analyzed_set]
+
+        if not candidates:
+            not_found.extend(old_paths)
+            continue
+        if len(old_paths) > 1 or len(candidates) > 1:
+            for old_path in old_paths:
+                ambiguous.append({"old_path": old_path, "candidates": sorted(candidates)})
+            continue
+
+        old_path, new_path = old_paths[0], candidates[0]
+        cur = await db.execute(
+            "INSERT OR IGNORE INTO pending_path_repairs (old_path, new_path, source) "
+            "VALUES (?, ?, 'manual')",
+            (old_path, new_path),
+        )
+        if cur.rowcount:
+            proposed.append({"id": cur.lastrowid, "old_path": old_path, "new_path": new_path})
+
+    await db.commit()
+    return {
+        "total_checked": total_checked,
+        "proposed": proposed,
+        "ambiguous": ambiguous,
+        "not_found": not_found,
+    }
+
+
+async def _apply_path_repair(db, photo_root: str, old_path: str, new_path: str) -> None:
+    """photos_analyzed.path/faces.photo_path를 new_path로 갱신(face_id 유지).
+    new_path가 이미 photos_analyzed에 있으면(레이스) sqlite3.IntegrityError."""
+    try:
+        new_mtime = os.path.getmtime(os.path.join(photo_root, new_path))
+    except OSError:
+        new_mtime = None
+    if new_mtime is not None:
+        await db.execute(
+            "UPDATE photos_analyzed SET path = ?, mtime = ? WHERE path = ?",
+            (new_path, new_mtime, old_path),
+        )
+    else:
+        await db.execute(
+            "UPDATE photos_analyzed SET path = ? WHERE path = ?",
+            (new_path, old_path),
+        )
+    await db.execute(
+        "UPDATE faces SET photo_path = ? WHERE photo_path = ?",
+        (new_path, old_path),
+    )
+
+
+@router.get("/people/path-repairs")
+async def list_path_repairs(
+    _: str = Depends(get_current_admin), db=Depends(get_ai_db)
+):
+    """승인 대기 중(pending) 경로 복구 제안 목록."""
+    async with db.execute(
+        "SELECT id, old_path, new_path, source, detected_at FROM pending_path_repairs "
+        "WHERE status = 'pending' ORDER BY detected_at"
+    ) as cur:
+        rows = await cur.fetchall()
+    return {"repairs": [dict(r) for r in rows]}
+
+
+@router.post("/people/path-repairs/{repair_id}/approve")
+async def approve_path_repair(
+    repair_id: int, _: str = Depends(get_current_admin), db=Depends(get_ai_db)
+):
+    """제안 1건을 승인 — photos_analyzed/faces를 new_path로 UPDATE하고 제안을 삭제."""
+    photo_root = os.path.realpath(os.getenv("PHOTO_ROOT", "./testdata/photos"))
+    async with db.execute(
+        "SELECT old_path, new_path FROM pending_path_repairs WHERE id = ? AND status = 'pending'",
+        (repair_id,),
+    ) as cur:
+        row = await cur.fetchone()
+    if row is None:
+        raise HTTPException(status_code=404, detail="대기 중인 제안을 찾을 수 없습니다")
+
+    try:
+        await _apply_path_repair(db, photo_root, row["old_path"], row["new_path"])
+    except sqlite3.IntegrityError:
+        raise HTTPException(
+            status_code=409,
+            detail=f"{row['new_path']}가 이미 분석된 경로입니다 — 제안을 거부해 주세요",
+        )
+    await db.execute("DELETE FROM pending_path_repairs WHERE id = ?", (repair_id,))
+    await db.commit()
+    return {"old_path": row["old_path"], "new_path": row["new_path"]}
+
+
+@router.post("/people/path-repairs/{repair_id}/reject")
+async def reject_path_repair(
+    repair_id: int, _: str = Depends(get_current_admin), db=Depends(get_ai_db)
+):
+    """제안 1건을 거부 — status만 'rejected'로 바꿔 재제안을 막는다(적용 없음)."""
+    cur = await db.execute(
+        "UPDATE pending_path_repairs SET status = 'rejected' WHERE id = ? AND status = 'pending'",
+        (repair_id,),
+    )
+    await db.commit()
+    if not cur.rowcount:
+        raise HTTPException(status_code=404, detail="대기 중인 제안을 찾을 수 없습니다")
+    return {"id": repair_id, "status": "rejected"}
+
+
+@router.post("/people/path-repairs/approve-all")
+async def approve_all_path_repairs(
+    _: str = Depends(get_current_admin), db=Depends(get_ai_db)
+):
+    """대기 중인 제안 전체를 순회 승인."""
+    photo_root = os.path.realpath(os.getenv("PHOTO_ROOT", "./testdata/photos"))
+    async with db.execute(
+        "SELECT id, old_path, new_path FROM pending_path_repairs WHERE status = 'pending'"
+    ) as cur:
+        rows = await cur.fetchall()
+
+    applied, failed = [], []
+    for row in rows:
+        try:
+            await _apply_path_repair(db, photo_root, row["old_path"], row["new_path"])
+        except sqlite3.IntegrityError:
+            failed.append({"old_path": row["old_path"], "new_path": row["new_path"]})
+            continue
+        await db.execute("DELETE FROM pending_path_repairs WHERE id = ?", (row["id"],))
+        applied.append({"old_path": row["old_path"], "new_path": row["new_path"]})
+
+    await db.commit()
+    return {"applied": applied, "failed": failed}
+
+
 @router.get("/people/{person_id}")
 async def get_person(
     person_id: int, _: str = Depends(get_current_admin), db=Depends(get_ai_db)
@@ -194,92 +370,6 @@ async def delete_person(
     await db.execute("DELETE FROM face_labels WHERE person_id = ?", (person_id,))
     await db.execute("DELETE FROM persons WHERE id = ?", (person_id,))
     await db.commit()
-
-
-# ── 경로 복구 ─────────────────────────────────────────────────────────
-#
-# photos_analyzed/faces는 원래 AI 워커 전용 쓰기 테이블이다(파일 상단 주석 참조).
-# 이 엔드포인트는 예외적으로 LumisShow가 직접 UPDATE한다 — 사진/폴더명 변경으로
-# 생긴 orphan 경로를 다음 야간 스캔(ai_worker/scanner.py의 자동 1:1 복구)까지
-# 기다리지 않고 즉시 정리하고 ambiguous/not_found 현황을 보고 싶을 때 쓰는
-# on-demand·저빈도 관리자 액션이라 WAL+busy_timeout(15s)으로 워커와의 동시
-# 쓰기가 안전하게 직렬화된다. face_labels/face_matches는 FK(face_id)라
-# 건드리지 않아도 라벨이 그대로 유지된다.
-
-
-@router.post("/people/repair-paths")
-async def repair_people_paths(
-    _: str = Depends(get_current_admin), db=Depends(get_ai_db)
-):
-    """실제 파일이 없는(orphan) photos_analyzed 경로를 파일명 기반으로 자동 복구.
-    후보가 1개(유일 매칭)면 photos_analyzed.path/faces.photo_path를 새 경로로
-    갱신, 2개 이상(ambiguous)이거나 0개(not_found)면 보고만 하고 자동 처리하지
-    않는다(admin_albums.repair_album_paths와 동일 패턴, 자동 삭제 없음)."""
-    photo_root = os.path.realpath(os.getenv("PHOTO_ROOT", "./testdata/photos"))
-
-    async with db.execute("SELECT path FROM photos_analyzed") as cur:
-        all_paths = [row["path"] for row in await cur.fetchall()]
-    analyzed_set = set(all_paths)
-
-    broken = [p for p in all_paths if not os.path.isfile(os.path.join(photo_root, p))]
-    total_checked = len(all_paths)
-
-    if not broken:
-        return {"total_checked": total_checked, "fixed": [], "ambiguous": [], "not_found": []}
-
-    index = await asyncio.to_thread(build_filename_index, photo_root)
-
-    fixed, ambiguous, not_found = [], [], []
-
-    # basename별로 묶는다 — orphan 쪽도 동명(카메라 IMG_0001.jpg류)이 2개 이상이면
-    # 어느 old_path를 새 경로에 매칭해야 할지 알 수 없어 ambiguous로 남겨야 한다.
-    # (candidate 쪽만 보고 1개씩 순차 UPDATE하면 두 번째 old_path가 이미 첫 번째가
-    # 선점한 path로 다시 UPDATE를 시도해 PRIMARY KEY 충돌이 난다.)
-    broken_by_basename: dict[str, list[str]] = {}
-    for p in broken:
-        broken_by_basename.setdefault(os.path.basename(p).lower(), []).append(p)
-
-    for basename, old_paths in broken_by_basename.items():
-        # 이미 photos_analyzed에 등록된 경로는 후보에서 제외 — 아니면 UPDATE 시
-        # path(PRIMARY KEY) 중복으로 충돌한다.
-        candidates = [c for c in index.get(basename, []) if c not in analyzed_set]
-
-        if not candidates:
-            not_found.extend(old_paths)
-            continue
-        if len(old_paths) > 1 or len(candidates) > 1:
-            for old_path in old_paths:
-                ambiguous.append({"old_path": old_path, "candidates": sorted(candidates)})
-            continue
-
-        old_path, new_path = old_paths[0], candidates[0]
-        try:
-            new_mtime = os.path.getmtime(os.path.join(photo_root, new_path))
-        except OSError:
-            new_mtime = None
-        if new_mtime is not None:
-            await db.execute(
-                "UPDATE photos_analyzed SET path = ?, mtime = ? WHERE path = ?",
-                (new_path, new_mtime, old_path),
-            )
-        else:
-            await db.execute(
-                "UPDATE photos_analyzed SET path = ? WHERE path = ?",
-                (new_path, old_path),
-            )
-        await db.execute(
-            "UPDATE faces SET photo_path = ? WHERE photo_path = ?",
-            (new_path, old_path),
-        )
-        fixed.append({"old_path": old_path, "new_path": new_path})
-
-    await db.commit()
-    return {
-        "total_checked": total_checked,
-        "fixed": fixed,
-        "ambiguous": ambiguous,
-        "not_found": not_found,
-    }
 
 
 # ── 얼굴 조회/교정 ────────────────────────────────────────────────────
