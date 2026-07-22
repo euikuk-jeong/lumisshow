@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.11.0] - 2026-07-22
+
+### Added
+- **AI 얼굴 인식 경로 rename/move 자동 복구 (admin 승인 큐)**: 사진 폴더명 변경 시
+  `ai.db`의 `photos_analyzed`/`faces` 경로가 orphan(404)으로 남고 라벨이 소실되던
+  문제 해결. 야간 자동 스캔(`ai_worker/scanner.py`)과 수동 스캔
+  (`POST /api/admin/people/repair-paths`) 둘 다 basename 1:1 유일 매칭 후보를
+  `pending_path_repairs` 큐에 제안만 쌓고, admin이 Admin People 화면(또는
+  `GET/POST /api/admin/people/path-repairs*`)에서 승인해야 실제 반영됨(face_id
+  유지 → 기존 확정 라벨 보존). 승인 대기 중인 사진은 재분석 대상에서 제외
+
 ## [1.10.1] - 2026-07-22
 
 ### Fixed
@@ -762,7 +773,8 @@ Phase 2 — AI 얼굴 인식 스마트 앨범. NAS 로컬 AI(InsightFace)로 사
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v1.10.1...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v1.11.0...HEAD
+[1.11.0]: https://github.com/euikuk-jeong/lumisshow/compare/v1.10.1...v1.11.0
 [1.10.1]: https://github.com/euikuk-jeong/lumisshow/compare/v1.10.0...v1.10.1
 [1.10.0]: https://github.com/euikuk-jeong/lumisshow/compare/v1.9.2...v1.10.0
 [1.9.2]: https://github.com/euikuk-jeong/lumisshow/compare/v1.9.1...v1.9.2
