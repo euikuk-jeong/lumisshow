@@ -54,7 +54,7 @@ routers/
   admin_browse.py    # GET /api/admin/browse|search|music
   admin_albums.py    # CRUD /api/admin/albums/*
   admin_links.py     # CRUD /api/admin/albums/{id}/links
-  admin_people.py    # Phase 2: 인물 CRUD, 얼굴 라벨/교정, 인물 사진 상세(슬라이드쇼용), 크롭 서빙, AI 잡 트리거
+  admin_people.py    # Phase 2: 인물 CRUD, 얼굴 라벨/교정, 인물 사진 상세(슬라이드쇼용), 크롭 서빙, AI 잡 트리거, 경로 복구 승인
   share.py           # GET|POST /api/share/{token}/*
   media.py           # /thumb/, /media/, /music/{token}?index=N 서빙
 models/

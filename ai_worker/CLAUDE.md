@@ -50,6 +50,24 @@ tools/       # label_helper.py (CSV 라벨링), eval.py (precision/recall)
 - **LumisShow가 쓰는 테이블**: `persons`, `face_labels`, `jobs`, `ai_settings`
 - 유효 인물 판정: `face_labels` 있으면 그 값(사람 확정), 없으면 `face_matches`
 - `face_labels.person_id = NULL`은 "등록 인물 아님(무시)" 라벨
+- **예외**: `backend/routers/admin_people.py`의
+  `POST /api/admin/people/path-repairs/{id}/approve`(-all)는 on-demand·저빈도 관리자
+  액션이라 예외적으로 `photos_analyzed.path`/`faces.photo_path`를 직접 UPDATE한다
+  (admin이 승인한 rename/move 제안 반영, WAL+busy_timeout으로 워커와의 동시 쓰기 직렬화)
+
+### 경로 rename/move 복구 — 제안 후 admin 승인
+`scanner.pending_photos()`가 매 스캔(야간/수동)마다 같은 walk 결과로
+`queue_rename_proposals()`를 실행해 사라진 경로를 basename 1:1 매칭만 탐지, `pending_path_repairs`
+테이블에 제안으로 쌓는다(`source='scan'`). **즉시 UPDATE하지 않는다** — admin이
+Admin People 화면(또는 `GET/POST /api/admin/people/path-repairs*`)에서 승인해야
+`photos_analyzed.path`/`faces.photo_path`가 실제로 바뀐다(face_id 유지 → `face_labels` 보존).
+승인 대기 중인 new_path는 `pending_photos()`가 분석 대상에서 제외해 "신규 사진"으로
+오분석되지 않도록 막는다. PHOTO_ROOT가 언마운트 등으로 완전히 비어 보이면(walk 결과
+0건 + 기존 분석 데이터 있음) 전체 삭제로 오인하지 않도록 그 스캔 자체를 스킵한다.
+동명 파일 등 후보가 2개 이상이면 제안하지 않고 orphan으로 남기며, 이 경우 admin이
+`POST /api/admin/people/repair-paths`로 즉시 재스캔하거나 not_found/ambiguous 현황을
+확인할 수 있다. 제안 거부는 `pending_path_repairs.status='rejected'`로 남아 같은
+rename을 다시 제안하지 않는다.
 
 ### 경로 규약
 `faces.photo_path`, `photos_analyzed.path`는 **PHOTO_ROOT 상대 경로 + `/` 구분자**

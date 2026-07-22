@@ -2,7 +2,6 @@ import asyncio
 import json
 import os
 from datetime import datetime
-from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException
 
@@ -18,11 +17,9 @@ from backend.models.schemas import (
     parse_music_paths,
 )
 from backend.services.auth import get_current_admin
+from backend.services.paths import build_filename_index
 from backend.services.photo_meta import load_photo_meta
 from backend.services.settings import get_settings
-from backend.services.thumbnail import IMAGE_EXTENSIONS
-
-_PHOTO_SKIP_PREFIXES = (".", "@", "#")
 
 router = APIRouter(prefix="/api/admin/albums", tags=["admin-albums"])
 
@@ -392,21 +389,6 @@ async def reorder_photos(
 
 # ── 경로 복구 ──────────────────────────────────────────────────────────────────
 
-def _build_filename_index(photo_root: str) -> dict[str, list[str]]:
-    """PHOTO_ROOT 전체를 스캔해 {파일명(소문자) -> [상대경로]} 인덱스 반환."""
-    index: dict[str, list[str]] = {}
-    for dirpath, dirnames, filenames in os.walk(photo_root):
-        dirnames[:] = [d for d in dirnames if not d.startswith(_PHOTO_SKIP_PREFIXES)]
-        for fname in filenames:
-            if fname.startswith(_PHOTO_SKIP_PREFIXES):
-                continue
-            if Path(fname).suffix.lower() not in IMAGE_EXTENSIONS:
-                continue
-            rel = os.path.relpath(os.path.join(dirpath, fname), photo_root).replace("\\", "/")
-            index.setdefault(fname.lower(), []).append(rel)
-    return index
-
-
 @router.post("/{album_id}/repair-paths")
 async def repair_album_paths(
     album_id: int,
@@ -428,7 +410,7 @@ async def repair_album_paths(
     if not broken:
         return {"total_checked": total_checked, "fixed": [], "ambiguous": [], "not_found": []}
 
-    index = await asyncio.to_thread(_build_filename_index, photo_root)
+    index = await asyncio.to_thread(build_filename_index, photo_root)
 
     fixed, ambiguous, not_found = [], [], []
 

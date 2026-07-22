@@ -19,6 +19,7 @@ export async function renderAdminPeople() {
         <button class="btn btn-primary" id="btn-new-person">+ 새 인물</button>
       </div>
     </div>
+    <div id="path-repair-section" style="display:none;margin-bottom:14px"></div>
     <div id="people-content"><div class="loading"></div></div>
   `, '/admin/people');
 
@@ -33,7 +34,59 @@ export async function renderAdminPeople() {
   document.getElementById('btn-scan').addEventListener('click', () => triggerJob('scan'));
   document.getElementById('btn-rematch').addEventListener('click', () => triggerJob('rematch'));
 
-  await Promise.all([loadPeople(), loadAiStatus()]);
+  await Promise.all([loadPeople(), loadAiStatus(), loadPathRepairs()]);
+}
+
+// ── 경로 복구 승인 대기열 ────────────────────────────────────────────
+
+async function loadPathRepairs() {
+  const el = document.getElementById('path-repair-section');
+  if (!el) return;
+  try {
+    const { repairs } = await api.get('/api/admin/people/path-repairs');
+    if (!repairs.length) { el.style.display = 'none'; el.innerHTML = ''; return; }
+    el.style.display = '';
+    el.innerHTML = `
+      <div class="alert" style="display:flex;flex-direction:column;gap:8px">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+          <strong>경로 복구 대기 ${repairs.length}건</strong>
+          <button class="btn btn-primary btn-sm" id="btn-repair-approve-all">전체 승인</button>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:4px">
+          ${repairs.map(r => `
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:13px">
+              <span class="text-muted" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(r.old_path)} → ${esc(r.new_path)}">
+                ${esc(r.old_path)} → ${esc(r.new_path)}
+              </span>
+              <span style="display:flex;gap:4px;flex-shrink:0">
+                <button class="btn btn-ghost btn-sm" data-act="approve" data-id="${r.id}">승인</button>
+                <button class="btn btn-ghost btn-sm" data-act="reject" data-id="${r.id}">거부</button>
+              </span>
+            </div>`).join('')}
+        </div>
+      </div>`;
+
+    el.querySelectorAll('[data-act]').forEach(btn => {
+      btn.addEventListener('click', () => resolvePathRepair(btn.dataset.id, btn.dataset.act));
+    });
+    document.getElementById('btn-repair-approve-all').addEventListener('click', approveAllPathRepairs);
+  } catch (e) {
+    el.style.display = 'none';
+  }
+}
+
+async function resolvePathRepair(id, action) {
+  try {
+    await api.post(`/api/admin/people/path-repairs/${id}/${action}`);
+    await loadPathRepairs();
+  } catch (e) { alert(e.message); }
+}
+
+async function approveAllPathRepairs() {
+  try {
+    await api.post('/api/admin/people/path-repairs/approve-all');
+    await loadPathRepairs();
+  } catch (e) { alert(e.message); }
 }
 
 async function triggerJob(type) {
