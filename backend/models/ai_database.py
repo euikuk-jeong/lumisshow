@@ -8,7 +8,11 @@ photos_analyzed·faces·face_matches는 AI 워커(ai_worker/) 전용 쓰기 테�
 직접 UPDATE한다 — on-demand·저빈도 관리자 액션이라 WAL+busy_timeout(15s)이 워커와의
 동시 쓰기를 안전하게 직렬화한다. rename 후보 자체는 ai_worker/scanner.py(야간 자동 스캔)와
 POST /api/admin/people/repair-paths(수동 스캔) 양쪽이 pending_path_repairs에 제안만 쌓고,
-실제 UPDATE는 admin이 승인해야만 일어난다.
+실제 UPDATE는 admin이 승인해야만 일어난다. 같은 패턴으로 rename 후보가 전혀 없는(파일이
+진짜로 사라진) 경로는 pending_orphan_cleanups에 삭제 제안으로 쌓이고,
+POST /api/admin/people/orphan-cleanups/{id}/approve(-all) 승인 시에만
+photos_analyzed/faces(→FK CASCADE로 face_labels/face_matches)와 photo_meta_cache(app.db)를
+함께 삭제한다.
 
 !! 스키마는 ai_worker/db.py의 _DDL과 동일하게 유지할 것 (컨테이너가 분리되어
    코드를 공유할 수 없어 복제함). 한쪽을 변경하면 반드시 다른 쪽도 변경한다.
@@ -97,6 +101,17 @@ CREATE TABLE IF NOT EXISTS pending_path_repairs (
     detected_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS idx_pending_path_repairs_status ON pending_path_repairs(status);
+
+-- 파일이 정말로 사라진(rename 후보를 찾지 못한) 경로 — 즉시 삭제하지 않고 admin 승인 대기.
+-- scanner가 INSERT만 함(source='scan'), 승인/거부는 backend가 처리(admin_people.py).
+CREATE TABLE IF NOT EXISTS pending_orphan_cleanups (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    path        TEXT NOT NULL UNIQUE,
+    source      TEXT NOT NULL,                     -- scan | manual
+    status      TEXT NOT NULL DEFAULT 'pending',    -- pending | rejected
+    detected_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_pending_orphan_cleanups_status ON pending_orphan_cleanups(status);
 """
 
 

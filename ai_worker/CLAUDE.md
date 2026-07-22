@@ -69,6 +69,20 @@ Admin People 화면(또는 `GET/POST /api/admin/people/path-repairs*`)에서 승
 확인할 수 있다. 제안 거부는 `pending_path_repairs.status='rejected'`로 남아 같은
 rename을 다시 제안하지 않는다.
 
+### 완전 삭제(orphan) 정리 — 제안 후 admin 승인
+rename 후보가 전혀 없는(basename이 현재 PHOTO_ROOT 어디에도 없는) 경로는 "파일이 진짜로
+사라졌다"고 보고 `scanner.queue_orphan_proposals()`(야간 스캔) 또는 수동 `repair-paths`
+스캔이 `pending_orphan_cleanups`에 삭제 제안으로 쌓는다(`old_path`/`new_path` 개념이
+없어 `pending_path_repairs`와는 별도 테이블). rename과 동일하게 **즉시 삭제하지 않는다**
+— admin이 `GET/POST /api/admin/people/orphan-cleanups*`에서 승인해야
+`photos_analyzed`/`faces`(ai.db, `faces` 삭제는 FK CASCADE로 `face_labels`/`face_matches`도
+함께 삭제)와 `photo_meta_cache`(app.db, EXIF 캐시)가 함께 삭제된다. 승인 시점에 파일이
+다시 나타났으면(레이스) 409로 거부하고 제안을 그대로 남긴다. 후보가 2개 이상(ambiguous)인
+경로는 orphan 삭제 제안 대상이 아니다 — 어디로 옮겨갔는지 불확실한 상태에서 삭제를
+제안하면 안 되기 때문. 이 기능은 EXIF를 별도 파일(사본)로 저장하는 외부 앱을 쓰다가
+그 사본을 지운 경우처럼, AI가 사본을 별개 사진으로 분석해버려 인물 사진 목록에
+중복 항목이 남는 상황을 정리하기 위해 추가됐다.
+
 ### 경로 규약
 `faces.photo_path`, `photos_analyzed.path`는 **PHOTO_ROOT 상대 경로 + `/` 구분자**
 (backend의 `photo_meta_cache.file_path` 관례와 동일).

@@ -135,10 +135,12 @@ async def repair_people_paths(
     _: str = Depends(get_current_admin), db=Depends(get_ai_db)
 ):
     """실제 파일이 없는(orphan) photos_analyzed 경로를 파일명 기반으로 스캔.
-    후보가 1개(유일 매칭)면 pending_path_repairs에 승인 대기로 제안(proposed),
-    2개 이상(ambiguous)이거나 0개(not_found)면 보고만 한다(admin_albums의
-    repair_album_paths와 동일 패턴, 자동 삭제 없음). 실제 반영은 admin이
-    /people/path-repairs/{id}/approve(-all)로 승인해야 일어난다."""
+    후보가 1개(유일 매칭)면 pending_path_repairs에 rename 승인 대기로 제안(proposed).
+    2개 이상(ambiguous)이면 보고만 한다(admin_albums의 repair_album_paths와 동일
+    패턴, 자동 삭제 없음). 0개(not_found) — 진짜로 파일이 사라진 경우 —는
+    pending_orphan_cleanups에 삭제 승인 대기로도 함께 쌓는다. 실제 반영은 admin이
+    /people/path-repairs/{id}/approve(-all) 또는
+    /people/orphan-cleanups/{id}/approve(-all)로 승인해야 일어난다."""
     photo_root = os.path.realpath(os.getenv("PHOTO_ROOT", "./testdata/photos"))
 
     async with db.execute("SELECT path FROM photos_analyzed") as cur:
@@ -168,6 +170,12 @@ async def repair_people_paths(
 
         if not candidates:
             not_found.extend(old_paths)
+            for old_path in old_paths:
+                await db.execute(
+                    "INSERT OR IGNORE INTO pending_orphan_cleanups (path, source) "
+                    "VALUES (?, 'manual')",
+                    (old_path,),
+                )
             continue
         if len(old_paths) > 1 or len(candidates) > 1:
             for old_path in old_paths:
@@ -292,6 +300,104 @@ async def approve_all_path_repairs(
 
     await db.commit()
     return {"applied": applied, "failed": failed}
+
+
+# ── 완전 삭제(orphan) 정리 ────────────────────────────────────────────
+#
+# rename 후보를 찾지 못해 pending_orphan_cleanups에 쌓인 경로 — 파일이 진짜로
+# 없어졌다고 admin이 승인해야만 photos_analyzed/faces(ai.db)와 photo_meta_cache
+# (app.db, EXIF 캐시)를 함께 삭제한다. faces 삭제는 FK CASCADE로 face_labels/
+# face_matches까지 함께 지운다 — 즉 이 인물에게 연결된 라벨도 함께 사라진다
+# (파일이 실제로 없으므로 되돌릴 수 없는 삭제).
+
+
+async def _apply_orphan_cleanup(db, app_db, path: str) -> None:
+    """path의 photos_analyzed/faces(ai.db) 행을 삭제하고, photo_meta_cache(app.db)에
+    같은 경로 캐시가 있으면 함께 삭제한다(없어도 무방 — best-effort)."""
+    await db.execute("DELETE FROM faces WHERE photo_path = ?", (path,))
+    await db.execute("DELETE FROM photos_analyzed WHERE path = ?", (path,))
+    await app_db.execute("DELETE FROM photo_meta_cache WHERE file_path = ?", (path,))
+    await app_db.commit()
+
+
+@router.get("/people/orphan-cleanups")
+async def list_orphan_cleanups(
+    _: str = Depends(get_current_admin), db=Depends(get_ai_db)
+):
+    """승인 대기 중(pending) 완전 삭제 제안 목록."""
+    async with db.execute(
+        "SELECT id, path, source, detected_at FROM pending_orphan_cleanups "
+        "WHERE status = 'pending' ORDER BY detected_at"
+    ) as cur:
+        rows = await cur.fetchall()
+    return {"cleanups": [dict(r) for r in rows]}
+
+
+@router.post("/people/orphan-cleanups/{cleanup_id}/approve")
+async def approve_orphan_cleanup(
+    cleanup_id: int, _: str = Depends(get_current_admin),
+    db=Depends(get_ai_db), app_db=Depends(get_db),
+):
+    """제안 1건을 승인 — 파일이 여전히 없는지 재확인 후 삭제하고 제안을 지운다."""
+    photo_root = os.path.realpath(os.getenv("PHOTO_ROOT", "./testdata/photos"))
+    async with db.execute(
+        "SELECT path FROM pending_orphan_cleanups WHERE id = ? AND status = 'pending'",
+        (cleanup_id,),
+    ) as cur:
+        row = await cur.fetchone()
+    if row is None:
+        raise HTTPException(status_code=404, detail="대기 중인 제안을 찾을 수 없습니다")
+
+    path = row["path"]
+    if os.path.isfile(os.path.join(photo_root, path)):
+        raise HTTPException(
+            status_code=409,
+            detail=f"{path} 파일이 다시 존재합니다 — 제안을 거부하고 다시 스캔해 주세요",
+        )
+
+    await _apply_orphan_cleanup(db, app_db, path)
+    await db.execute("DELETE FROM pending_orphan_cleanups WHERE id = ?", (cleanup_id,))
+    await db.commit()
+    return {"path": path}
+
+
+@router.post("/people/orphan-cleanups/{cleanup_id}/reject")
+async def reject_orphan_cleanup(
+    cleanup_id: int, _: str = Depends(get_current_admin), db=Depends(get_ai_db)
+):
+    """제안 1건을 거부 — status만 'rejected'로 바꿔 재제안을 막는다(삭제 없음)."""
+    cur = await db.execute(
+        "UPDATE pending_orphan_cleanups SET status = 'rejected' WHERE id = ? AND status = 'pending'",
+        (cleanup_id,),
+    )
+    await db.commit()
+    if not cur.rowcount:
+        raise HTTPException(status_code=404, detail="대기 중인 제안을 찾을 수 없습니다")
+    return {"id": cleanup_id, "status": "rejected"}
+
+
+@router.post("/people/orphan-cleanups/approve-all")
+async def approve_all_orphan_cleanups(
+    _: str = Depends(get_current_admin), db=Depends(get_ai_db), app_db=Depends(get_db),
+):
+    """대기 중인 제안 전체를 순회 승인 — 그 사이 파일이 다시 생긴 건 건너뛴다."""
+    photo_root = os.path.realpath(os.getenv("PHOTO_ROOT", "./testdata/photos"))
+    async with db.execute(
+        "SELECT id, path FROM pending_orphan_cleanups WHERE status = 'pending'"
+    ) as cur:
+        rows = await cur.fetchall()
+
+    applied, skipped = [], []
+    for row in rows:
+        if os.path.isfile(os.path.join(photo_root, row["path"])):
+            skipped.append(row["path"])
+            continue
+        await _apply_orphan_cleanup(db, app_db, row["path"])
+        await db.execute("DELETE FROM pending_orphan_cleanups WHERE id = ?", (row["id"],))
+        applied.append(row["path"])
+
+    await db.commit()
+    return {"applied": applied, "skipped": skipped}
 
 
 @router.get("/people/{person_id}")

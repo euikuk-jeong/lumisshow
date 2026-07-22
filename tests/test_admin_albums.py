@@ -1,4 +1,5 @@
 import os
+import time
 
 import pytest
 import pytest_asyncio
@@ -496,6 +497,9 @@ async def dated_admin_client(tmp_path, monkeypatch):
         c.headers["Authorization"] = f"Bearer {r.json()['access_token']}"
         yield c
 
+    from backend.models.database import close_db_pool
+    await close_db_pool()
+
 
 async def test_photo_sort_taken_at_uses_exif(dated_admin_client):
     """taken_at 오름차순 정렬이 EXIF 날짜 순서를 따라야 한다."""
@@ -562,6 +566,32 @@ async def test_photo_sort_taken_at_uses_meta_cache(dated_admin_client, tmp_path)
     photos = (await dated_admin_client.get(f"/api/admin/albums/{album_id}")).json()["photos"]
     names = [os.path.basename(p["file_path"]) for p in photos]
     assert names == ["new.jpg", "mid.jpg", "old.jpg"], f"캐시 기반 정렬 실패: {names}"
+
+
+async def test_photo_meta_cache_self_heals_when_file_mtime_changes(dated_admin_client, tmp_path):
+    """캐시된 파일의 EXIF가 외부 앱 등으로 바뀌면(mtime도 함께 변함) 다음 조회 시
+    캐시를 그대로 믿지 않고 다시 읽어야 한다."""
+    r = await dated_admin_client.post(
+        "/api/admin/albums",
+        json={"name": "Refresh", "photo_paths": ["old.jpg"]},
+    )
+    album_id = r.json()["id"]
+
+    # 첫 조회 — 캐시 미스 → EXIF 읽어 photo_meta_cache에 저장(2022-01-15)
+    photos = (await dated_admin_client.get(f"/api/admin/albums/{album_id}")).json()["photos"]
+    assert photos[0]["taken_at"].startswith("2022-01-15")
+
+    # 외부 앱으로 EXIF를 고쳤다고 가정 — 파일을 새로 써서 mtime도 함께 바뀜
+    # (파일시스템 mtime 해상도에 좌우되지 않도록 명시적으로 미래 시각으로 설정)
+    photo_root = tmp_path / "photos"
+    photo_path = photo_root / "old.jpg"
+    _make_jpg_with_exif(photo_path, "2025:01:11 09:00:00")
+    future = time.time() + 100
+    os.utime(photo_path, (future, future))
+
+    photos = (await dated_admin_client.get(f"/api/admin/albums/{album_id}")).json()["photos"]
+    assert photos[0]["taken_at"].startswith("2025-01-11"), \
+        f"mtime 변경을 감지하지 못해 캐시된 옛 날짜를 그대로 반환함: {photos[0]['taken_at']}"
 
 
 async def test_photo_sort_taken_at_desc_uses_exif(dated_admin_client):

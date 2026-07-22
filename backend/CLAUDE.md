@@ -117,5 +117,17 @@ services/
 - SELECT 쿼리는 `cache_version >= ?`를 사용하며 `_PHOTO_META_CACHE_VERSION`을 파라미터로 전달한다 — 단일 경로: `services/photo_meta.py`의 `load_photo_meta()` (`admin_browse.py`의 `_enrich_photos`·`admin_albums.py`·`admin_people.py`·`share.py`가 이를 호출).
 - EXIF 읽기 실패(`width is None`)는 캐시에 저장하지 않아 NAS 재접근 시 자동 재시도된다.
 
+#### mtime 기반 캐시 무효화 (v4~)
+
+`photo_meta_cache.mtime`에 캐시 적재 시점의 파일 mtime을 저장해둔다. `load_photo_meta()`는
+캐시 히트여도 파일의 **현재** mtime을 조회해 캐시된 mtime과 비교하고, 다르면(외부 앱으로
+EXIF를 직접 수정한 경우 등 파일 내용이 캐시 이후 바뀐 경우) 캐시 미스로 취급해 다시 읽는다
+— `cache_version`만으로는 파일 내용이 바뀐 걸 감지할 수 없어서(버전은 스키마/추출 로직
+변경에만 반응하는 전역 값) 별도로 필요한 검증이다. mtime 조회도 `EXIF_READ_CONCURRENCY`
+세마포어로 동시 실행을 제한한다(캐시 히트마다 NAS에 stat 호출이 하나씩 더 나가는 트레이드오프,
+단 전체 EXIF 재읽기보다는 훨씬 저렴). 파일이 아예 없어졌으면(mtime 조회 실패) 무효화하지
+않고 캐시를 그대로 반환한다 — 원본 삭제 후에도 캐시로 정렬 등을 계속할 수 있어야 하기 때문
+(`test_photo_sort_taken_at_uses_meta_cache`).
+
 ### ZIP 다운로드
 `StreamingResponse` + `zipstream-ng` 청크 스트리밍으로 서버 메모리에 전체 파일을 올리지 않음. 응답 헤더에 `Content-Disposition: attachment` 설정.

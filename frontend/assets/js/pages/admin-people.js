@@ -20,6 +20,7 @@ export async function renderAdminPeople() {
       </div>
     </div>
     <div id="path-repair-section" style="display:none;margin-bottom:14px"></div>
+    <div id="orphan-cleanup-section" style="display:none;margin-bottom:14px"></div>
     <div id="people-content"><div class="loading"></div></div>
   `, '/admin/people');
 
@@ -34,7 +35,7 @@ export async function renderAdminPeople() {
   document.getElementById('btn-scan').addEventListener('click', () => triggerJob('scan'));
   document.getElementById('btn-rematch').addEventListener('click', () => triggerJob('rematch'));
 
-  await Promise.all([loadPeople(), loadAiStatus(), loadPathRepairs()]);
+  await Promise.all([loadPeople(), loadAiStatus(), loadPathRepairs(), loadOrphanCleanups()]);
 }
 
 // ── 경로 복구 승인 대기열 ────────────────────────────────────────────
@@ -86,6 +87,61 @@ async function approveAllPathRepairs() {
   try {
     await api.post('/api/admin/people/path-repairs/approve-all');
     await loadPathRepairs();
+  } catch (e) { alert(e.message); }
+}
+
+// ── 완전 삭제(orphan) 정리 승인 대기열 ──────────────────────────────────
+
+async function loadOrphanCleanups() {
+  const el = document.getElementById('orphan-cleanup-section');
+  if (!el) return;
+  try {
+    const { cleanups } = await api.get('/api/admin/people/orphan-cleanups');
+    if (!cleanups.length) { el.style.display = 'none'; el.innerHTML = ''; return; }
+    el.style.display = '';
+    el.innerHTML = `
+      <div class="alert alert-error" style="display:flex;flex-direction:column;gap:8px">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+          <strong>파일이 없어진 사진 정리 대기 ${cleanups.length}건</strong>
+          <button class="btn btn-primary btn-sm" id="btn-orphan-approve-all">전체 삭제 승인</button>
+        </div>
+        <p class="text-muted" style="margin:0;font-size:13px">
+          승인하면 해당 사진의 얼굴 인식 데이터(라벨 포함)와 EXIF 캐시가 삭제됩니다. 되돌릴 수 없습니다.
+        </p>
+        <div style="display:flex;flex-direction:column;gap:4px">
+          ${cleanups.map(c => `
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:13px">
+              <span class="text-muted" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(c.path)}">
+                ${esc(c.path)}
+              </span>
+              <span style="display:flex;gap:4px;flex-shrink:0">
+                <button class="btn btn-ghost btn-sm" data-act="approve" data-id="${c.id}">삭제 승인</button>
+                <button class="btn btn-ghost btn-sm" data-act="reject" data-id="${c.id}">거부</button>
+              </span>
+            </div>`).join('')}
+        </div>
+      </div>`;
+
+    el.querySelectorAll('[data-act]').forEach(btn => {
+      btn.addEventListener('click', () => resolveOrphanCleanup(btn.dataset.id, btn.dataset.act));
+    });
+    document.getElementById('btn-orphan-approve-all').addEventListener('click', approveAllOrphanCleanups);
+  } catch (e) {
+    el.style.display = 'none';
+  }
+}
+
+async function resolveOrphanCleanup(id, action) {
+  try {
+    await api.post(`/api/admin/people/orphan-cleanups/${id}/${action}`);
+    await loadOrphanCleanups();
+  } catch (e) { alert(e.message); }
+}
+
+async function approveAllOrphanCleanups() {
+  try {
+    await api.post('/api/admin/people/orphan-cleanups/approve-all');
+    await loadOrphanCleanups();
   } catch (e) { alert(e.message); }
 }
 

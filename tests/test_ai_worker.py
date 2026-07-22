@@ -43,7 +43,8 @@ def test_db_creates_tables(conn):
         for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")
     }
     assert {"photos_analyzed", "faces", "face_matches", "persons", "face_labels",
-            "jobs", "ignored_review_candidates", "pending_path_repairs"} <= tables
+            "jobs", "ignored_review_candidates", "pending_path_repairs",
+            "pending_orphan_cleanups"} <= tables
 
 
 def test_db_creates_person_indexes(conn):
@@ -180,6 +181,64 @@ def test_scanner_ambiguous_rename_not_proposed(conn, tmp_path):
         "SELECT COUNT(*) FROM photos_analyzed WHERE path = 'old/a.jpg'"
     ).fetchone()[0] == 1
     assert conn.execute("SELECT COUNT(*) FROM pending_path_repairs").fetchone()[0] == 0
+
+
+def test_scanner_queues_orphan_cleanup_when_no_rename_candidate(conn, tmp_path):
+    root = str(tmp_path / "photos")
+    still_here = _make_photo(root, "still/here.jpg")  # walk 결과가 비어 abort되지 않도록
+    conn.execute(
+        "INSERT INTO photos_analyzed (path, mtime, face_count) VALUES ('still/here.jpg', ?, 0)",
+        (os.path.getmtime(still_here),),
+    )
+    conn.execute(
+        "INSERT INTO photos_analyzed (path, mtime, face_count) VALUES ('gone/a.jpg', 123.0, 0)"
+    )
+    conn.commit()
+
+    pending = scanner.pending_photos(conn, root)
+    assert pending == []  # 삭제된 파일은 분석 대상이 아니고, still/here.jpg는 이미 분석됨
+
+    proposal = conn.execute(
+        "SELECT path, source, status FROM pending_orphan_cleanups"
+    ).fetchone()
+    assert proposal["path"] == "gone/a.jpg"
+    assert proposal["source"] == "scan"
+    assert proposal["status"] == "pending"
+
+    # rename 제안 쪽엔 쌓이지 않아야 한다
+    assert conn.execute("SELECT COUNT(*) FROM pending_path_repairs").fetchone()[0] == 0
+
+
+def test_scanner_ambiguous_rename_not_queued_as_orphan(conn, tmp_path):
+    """rename 후보가 2개 이상(ambiguous)인 경로는 orphan 삭제 제안에도 안 쌓인다."""
+    root = str(tmp_path / "photos")
+    _make_photo(root, "new1/a.jpg")
+    _make_photo(root, "new2/a.jpg")
+    conn.execute(
+        "INSERT INTO photos_analyzed (path, mtime, face_count) VALUES ('old/a.jpg', 123.0, 0)"
+    )
+    conn.commit()
+
+    scanner.pending_photos(conn, root)
+    assert conn.execute("SELECT COUNT(*) FROM pending_orphan_cleanups").fetchone()[0] == 0
+
+
+def test_scanner_rescan_does_not_duplicate_orphan_proposal(conn, tmp_path):
+    root = str(tmp_path / "photos")
+    still_here = _make_photo(root, "still/here.jpg")  # walk 결과가 비어 abort되지 않도록
+    conn.execute(
+        "INSERT INTO photos_analyzed (path, mtime, face_count) VALUES ('still/here.jpg', ?, 0)",
+        (os.path.getmtime(still_here),),
+    )
+    conn.execute(
+        "INSERT INTO photos_analyzed (path, mtime, face_count) VALUES ('gone/a.jpg', 123.0, 0)"
+    )
+    conn.commit()
+
+    scanner.pending_photos(conn, root)
+    scanner.pending_photos(conn, root)
+
+    assert conn.execute("SELECT COUNT(*) FROM pending_orphan_cleanups").fetchone()[0] == 1
 
 
 def test_scanner_aborts_when_root_unreachable(conn, tmp_path):
