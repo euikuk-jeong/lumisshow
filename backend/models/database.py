@@ -58,7 +58,8 @@ CREATE TABLE IF NOT EXISTS photo_meta_cache (
     flash         TEXT,
     metering      TEXT,
     exposure_mode TEXT,
-    cache_version INTEGER NOT NULL DEFAULT 0
+    cache_version INTEGER NOT NULL DEFAULT 0,
+    mtime         REAL
 );
 
 CREATE TABLE IF NOT EXISTS share_link_failures (
@@ -86,7 +87,9 @@ CREATE TABLE IF NOT EXISTS public_rate_limit (
 # v1: 전체 EXIF 컬럼(make/camera 등) 추가
 # v2: 실패 읽기(width=None) 캐시 저장 금지 → 기존 빈 캐시 행 일괄 삭제
 # v3: EXIF 촬영일 없으면 파일 mtime으로 taken_at 대체
-_PHOTO_META_CACHE_VERSION = 3
+# v4: mtime 컬럼 추가 — 캐시 이후 파일이 변경되면(외부 앱으로 EXIF 수정 등) 미스로
+#     취급해 다시 읽도록 함 (load_photo_meta). 기존 캐시엔 mtime이 없어 전부 재구축 필요
+_PHOTO_META_CACHE_VERSION = 4
 
 # 기존 DB에 컬럼이 없을 때만 추가 (SQLite는 IF NOT EXISTS 미지원)
 _META_CACHE_MIGRATIONS = [
@@ -102,6 +105,7 @@ _META_CACHE_MIGRATIONS = [
     "ALTER TABLE photo_meta_cache ADD COLUMN metering TEXT",
     "ALTER TABLE photo_meta_cache ADD COLUMN exposure_mode TEXT",
     "ALTER TABLE photo_meta_cache ADD COLUMN cache_version INTEGER NOT NULL DEFAULT 0",
+    "ALTER TABLE photo_meta_cache ADD COLUMN mtime REAL",
 ]
 
 _ALBUM_MIGRATIONS = [

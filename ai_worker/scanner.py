@@ -83,12 +83,50 @@ def queue_rename_proposals(
     return proposed
 
 
+def detect_orphaned_paths(
+    current: dict[str, float],
+    analyzed: dict[str, float],
+) -> list[str]:
+    """rename 후보(basename 일치)가 전혀 없는, 진짜로 사라진 photos_analyzed 경로만 추출.
+
+    후보가 2개 이상(ambiguous)인 경우는 orphan으로 보지 않는다 — 어느 파일로
+    옮겨갔는지 불확실한 상태에서 삭제 후보로 제안하면 안 되기 때문."""
+    disappeared = set(analyzed) - set(current)
+    if not disappeared:
+        return []
+    new = set(current) - set(analyzed)
+    new_idx = _basename_index(new)
+    return sorted(p for p in disappeared if not new_idx.get(os.path.basename(p).lower()))
+
+
+def queue_orphan_proposals(
+    conn: sqlite3.Connection,
+    current: dict[str, float],
+    analyzed: dict[str, float],
+) -> list[str]:
+    """탐지된 orphan 후보를 pending_orphan_cleanups에 제안으로 쌓는다(즉시 삭제 안 함).
+
+    실제 photos_analyzed/faces 삭제는 admin이 승인해야 일어난다
+    (backend/routers/admin_people.py의 orphan-cleanups 승인 엔드포인트).
+    path UNIQUE 제약이라 이미 제안된 건(거부 포함)은 재스캔해도 중복으로 쌓이지 않는다."""
+    orphaned = detect_orphaned_paths(current, analyzed)
+    for path in orphaned:
+        conn.execute(
+            "INSERT OR IGNORE INTO pending_orphan_cleanups (path, source) VALUES (?, 'scan')",
+            (path,),
+        )
+    if orphaned:
+        conn.commit()
+    return orphaned
+
+
 def pending_photos(conn: sqlite3.Connection, root: str) -> list[tuple[str, float]]:
     """분석이 필요한 (상대 경로, mtime) 목록 — 신규 또는 mtime 변경분.
 
-    같은 walk 결과를 재사용해 rename/move 후보 제안(queue_rename_proposals)도 함께
-    수행한다(추가 walk 없음). 제안된 new_path는 admin이 승인/거부하기 전까지 "신규
-    사진"으로 오분석되지 않도록 분석 대상에서 제외한다."""
+    같은 walk 결과를 재사용해 rename/move 후보 제안(queue_rename_proposals)과
+    완전 삭제 후보 제안(queue_orphan_proposals)을 함께 수행한다(추가 walk 없음).
+    제안된 new_path는 admin이 승인/거부하기 전까지 "신규 사진"으로 오분석되지
+    않도록 분석 대상에서 제외한다."""
     current = dict(walk_photos(root))
     analyzed = {
         row["path"]: row["mtime"]
@@ -105,6 +143,7 @@ def pending_photos(conn: sqlite3.Connection, root: str) -> list[tuple[str, float
         return []
 
     queue_rename_proposals(conn, current, analyzed)
+    queue_orphan_proposals(conn, current, analyzed)
     pending_new_paths = {
         row["new_path"]
         for row in conn.execute(

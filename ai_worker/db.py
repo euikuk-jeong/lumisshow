@@ -88,6 +88,17 @@ CREATE TABLE IF NOT EXISTS pending_path_repairs (
     detected_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS idx_pending_path_repairs_status ON pending_path_repairs(status);
+
+-- 파일이 정말로 사라진(rename 후보를 찾지 못한) 경로 — 즉시 삭제하지 않고 admin 승인 대기.
+-- scanner가 INSERT만 함(source='scan'), 승인/거부는 backend가 처리(admin_people.py).
+CREATE TABLE IF NOT EXISTS pending_orphan_cleanups (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    path        TEXT NOT NULL UNIQUE,
+    source      TEXT NOT NULL,                     -- scan | manual
+    status      TEXT NOT NULL DEFAULT 'pending',    -- pending | rejected
+    detected_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_pending_orphan_cleanups_status ON pending_orphan_cleanups(status);
 """
 
 

@@ -267,6 +267,164 @@ async def test_people_repair_not_found_leaves_row_intact(admin_client):
     assert [r[0] for r in rows] == ["ghost/missing.jpg"]  # 변경 없음
 
 
+# ── orphan-cleanups 승인 대기열 ─────────────────────────────────────────
+
+
+async def _seed_photo_meta_cache(file_path: str, taken_at: str = "2022-03-07T00:00:00") -> None:
+    from backend.models.database import _db_path, _PHOTO_META_CACHE_VERSION
+
+    async with aiosqlite.connect(_db_path()) as db:
+        await db.execute(
+            "INSERT INTO photo_meta_cache (file_path, taken_at, width, height, cache_version) "
+            "VALUES (?, ?, 100, 100, ?)",
+            (file_path, taken_at, _PHOTO_META_CACHE_VERSION),
+        )
+        await db.commit()
+
+
+async def test_people_repair_not_found_queues_orphan_cleanup(admin_client):
+    await _seed_analyzed("ghost/missing.jpg")
+
+    r = await admin_client.post("/api/admin/people/repair-paths")
+    assert r.status_code == 200
+    assert r.json()["not_found"] == ["ghost/missing.jpg"]
+
+    r = await admin_client.get("/api/admin/people/orphan-cleanups")
+    assert r.status_code == 200
+    cleanups = r.json()["cleanups"]
+    assert len(cleanups) == 1
+    assert cleanups[0]["path"] == "ghost/missing.jpg"
+    assert cleanups[0]["source"] == "manual"
+
+
+async def test_people_repair_ambiguous_not_queued_as_orphan(admin_client):
+    photo_root = Path(os.getenv("PHOTO_ROOT"))
+    for d in ["dir1", "dir2"]:
+        (photo_root / d).mkdir()
+        (photo_root / d / "same.jpg").write_bytes(b"fake")
+    await _seed_analyzed("old/same.jpg")
+
+    await admin_client.post("/api/admin/people/repair-paths")
+
+    r = await admin_client.get("/api/admin/people/orphan-cleanups")
+    assert r.json()["cleanups"] == []
+
+
+async def test_orphan_cleanup_approve_deletes_ai_and_cache_rows(admin_client):
+    """승인 시 faces(→face_labels/face_matches 캐스케이드)·photos_analyzed·
+    photo_meta_cache가 모두 삭제돼야 한다."""
+    await _seed_analyzed("ghost/missing.jpg")
+    face_id = await _seed_face_row("ghost/missing.jpg")
+    await _seed_photo_meta_cache("ghost/missing.jpg")
+
+    r = await admin_client.post("/api/admin/people", json={"name": "지우"})
+    person_id = r.json()["id"]
+    await admin_client.post(f"/api/admin/faces/{face_id}/label", json={"person_id": person_id})
+
+    await admin_client.post("/api/admin/people/repair-paths")
+
+    r = await admin_client.get("/api/admin/people/orphan-cleanups")
+    cleanup_id = r.json()["cleanups"][0]["id"]
+
+    r = await admin_client.post(f"/api/admin/people/orphan-cleanups/{cleanup_id}/approve")
+    assert r.status_code == 200
+    assert r.json() == {"path": "ghost/missing.jpg"}
+
+    from backend.models.ai_database import _ai_db_path
+    from backend.models.database import _db_path
+
+    async with aiosqlite.connect(_ai_db_path()) as db:
+        async with db.execute("SELECT COUNT(*) FROM photos_analyzed") as cur:
+            assert (await cur.fetchone())[0] == 0
+        async with db.execute("SELECT COUNT(*) FROM faces") as cur:
+            assert (await cur.fetchone())[0] == 0
+        async with db.execute("SELECT COUNT(*) FROM face_labels") as cur:
+            assert (await cur.fetchone())[0] == 0
+        async with db.execute("SELECT COUNT(*) FROM pending_orphan_cleanups") as cur:
+            assert (await cur.fetchone())[0] == 0
+
+    async with aiosqlite.connect(_db_path()) as db:
+        async with db.execute("SELECT COUNT(*) FROM photo_meta_cache") as cur:
+            assert (await cur.fetchone())[0] == 0
+
+
+async def test_orphan_cleanup_approve_409_when_file_reappeared(admin_client):
+    await _seed_analyzed("back/again.jpg")
+    await admin_client.post("/api/admin/people/repair-paths")
+    cleanup_id = (await admin_client.get("/api/admin/people/orphan-cleanups")).json()["cleanups"][0]["id"]
+
+    # 승인 전 파일이 다시 나타난 상황 재현
+    photo_root = Path(os.getenv("PHOTO_ROOT"))
+    (photo_root / "back").mkdir()
+    (photo_root / "back" / "again.jpg").write_bytes(b"fake")
+
+    r = await admin_client.post(f"/api/admin/people/orphan-cleanups/{cleanup_id}/approve")
+    assert r.status_code == 409
+
+    r = await admin_client.get("/api/admin/people/orphan-cleanups")
+    assert len(r.json()["cleanups"]) == 1  # 제안은 그대로 남아 있어야 함
+
+
+async def test_orphan_cleanup_reject(admin_client):
+    await _seed_analyzed("ghost/missing.jpg")
+    await admin_client.post("/api/admin/people/repair-paths")
+    cleanup_id = (await admin_client.get("/api/admin/people/orphan-cleanups")).json()["cleanups"][0]["id"]
+
+    r = await admin_client.post(f"/api/admin/people/orphan-cleanups/{cleanup_id}/reject")
+    assert r.status_code == 200
+    assert r.json() == {"id": cleanup_id, "status": "rejected"}
+
+    r = await admin_client.get("/api/admin/people/orphan-cleanups")
+    assert r.json()["cleanups"] == []
+
+    # 거부 후 재스캔해도 다시 제안되지 않아야 함
+    await admin_client.post("/api/admin/people/repair-paths")
+    r = await admin_client.get("/api/admin/people/orphan-cleanups")
+    assert r.json()["cleanups"] == []
+
+
+async def test_orphan_cleanup_approve_all_skips_reappeared_file(admin_client):
+    await _seed_analyzed("gone1/a.jpg")
+    await _seed_analyzed("gone2/b.jpg")
+    await admin_client.post("/api/admin/people/repair-paths")
+
+    # gone2/b.jpg만 다시 생김
+    photo_root = Path(os.getenv("PHOTO_ROOT"))
+    (photo_root / "gone2").mkdir()
+    (photo_root / "gone2" / "b.jpg").write_bytes(b"fake")
+
+    r = await admin_client.post("/api/admin/people/orphan-cleanups/approve-all")
+    assert r.status_code == 200
+    data = r.json()
+    assert data["applied"] == ["gone1/a.jpg"]
+    assert data["skipped"] == ["gone2/b.jpg"]
+
+    r = await admin_client.get("/api/admin/people/orphan-cleanups")
+    remaining = [c["path"] for c in r.json()["cleanups"]]
+    assert remaining == ["gone2/b.jpg"]
+
+
+async def test_orphan_cleanups_requires_auth(client):
+    r = await client.get("/api/admin/people/orphan-cleanups")
+    assert r.status_code in (401, 403)
+    r = await client.post("/api/admin/people/orphan-cleanups/1/approve")
+    assert r.status_code in (401, 403)
+    r = await client.post("/api/admin/people/orphan-cleanups/1/reject")
+    assert r.status_code in (401, 403)
+    r = await client.post("/api/admin/people/orphan-cleanups/approve-all")
+    assert r.status_code in (401, 403)
+
+
+async def test_orphan_cleanup_approve_404_unknown_id(admin_client):
+    r = await admin_client.post("/api/admin/people/orphan-cleanups/9999/approve")
+    assert r.status_code == 404
+
+
+async def test_orphan_cleanup_reject_404_unknown_id(admin_client):
+    r = await admin_client.post("/api/admin/people/orphan-cleanups/9999/reject")
+    assert r.status_code == 404
+
+
 async def test_people_repair_duplicate_orphan_basenames_no_pk_collision(admin_client):
     """orphan 쪽에 동명 basename이 2개면(카메라 IMG_0001.jpg류) 후보가 1개뿐이라도
     자동 매칭하지 않고 ambiguous 처리해야 한다 — 순차 승인 시 두 번째 old_path가
