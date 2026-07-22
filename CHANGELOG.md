@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.11.1] - 2026-07-23
+
+### Fixed
+- **`photo_meta_cache` mtime 무효화 부재로 EXIF 수정 후에도 옛 날짜가 표시되던 문제**:
+  외부 앱으로 사진 촬영일(EXIF)을 고쳐도 캐시가 파일 변경을 감지하지 못해 옛 날짜가
+  영구히 반환되던 버그 수정. `photo_meta_cache`에 `mtime` 컬럼을 추가하고
+  `load_photo_meta()`가 캐시 히트여도 파일의 현재 mtime을 비교해 다르면 다시 읽도록
+  변경(`cache_version` 3→4, 기존 캐시 전체 재구축)
+- **`dated_admin_client` 테스트 픽스처의 DB 커넥션 풀 미정리**: `close_db_pool()` 누락으로
+  해당 픽스처 기반 테스트를 단독 실행하면 프로세스가 종료되지 않던 문제 수정
+
+### Added
+- **완전 삭제(orphan) 정리 승인 대기열**: 파일이 실제로 사라졌고 rename 후보도 없는
+  사진을 `pending_orphan_cleanups` 큐에 제안(야간 자동 스캔/수동 스캔 공통), admin이
+  Admin People 화면(또는 `GET/POST /api/admin/people/orphan-cleanups*`)에서 승인해야
+  `ai.db`(`photos_analyzed`/`faces`, FK로 `face_labels`/`face_matches`도 연쇄 삭제)와
+  `photo_meta_cache`를 함께 정리 — EXIF 수정 시 원본 대신 별도 사본을 만들었다가
+  지우는 경우처럼 중복 데이터가 남는 상황을 위해 추가
+
 ## [1.11.0] - 2026-07-22
 
 ### Added
@@ -773,7 +792,8 @@ Phase 2 — AI 얼굴 인식 스마트 앨범. NAS 로컬 AI(InsightFace)로 사
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v1.11.0...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v1.11.1...HEAD
+[1.11.1]: https://github.com/euikuk-jeong/lumisshow/compare/v1.11.0...v1.11.1
 [1.11.0]: https://github.com/euikuk-jeong/lumisshow/compare/v1.10.1...v1.11.0
 [1.10.1]: https://github.com/euikuk-jeong/lumisshow/compare/v1.10.0...v1.10.1
 [1.10.0]: https://github.com/euikuk-jeong/lumisshow/compare/v1.9.2...v1.10.0
