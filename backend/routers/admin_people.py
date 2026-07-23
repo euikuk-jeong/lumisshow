@@ -266,15 +266,20 @@ async def approve_path_repair(
 async def reject_path_repair(
     repair_id: int, _: str = Depends(get_current_admin), db=Depends(get_ai_db)
 ):
-    """제안 1건을 거부 — status만 'rejected'로 바꿔 재제안을 막는다(적용 없음)."""
+    """제안 1건을 무시(dismiss) — row 자체를 삭제해 적용하지 않는다. status를
+    'rejected'로 영구 고정하면 old_path UNIQUE 제약 때문에 다음 스캔이 같은 rename을
+    재제안할 수 없고, 그 사이 new_path가 일반 스캔으로 별개 사진으로 분석돼버리면
+    영영 되돌릴 수 없었다(승인 시도해도 409). row를 지우면 다음 스캔에서 조건이
+    같으면(둘 다 아직 미확정) 다시 제안되거나, new_path가 이미 분석돼버렸으면
+    old_path는 not_found로 재분류돼 orphan-cleanup 제안으로 넘어간다."""
     cur = await db.execute(
-        "UPDATE pending_path_repairs SET status = 'rejected' WHERE id = ? AND status = 'pending'",
+        "DELETE FROM pending_path_repairs WHERE id = ? AND status = 'pending'",
         (repair_id,),
     )
     await db.commit()
     if not cur.rowcount:
         raise HTTPException(status_code=404, detail="대기 중인 제안을 찾을 수 없습니다")
-    return {"id": repair_id, "status": "rejected"}
+    return {"id": repair_id, "status": "dismissed"}
 
 
 @router.post("/people/path-repairs/approve-all")

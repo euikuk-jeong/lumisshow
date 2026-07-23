@@ -66,8 +66,12 @@ Admin People 화면(또는 `GET/POST /api/admin/people/path-repairs*`)에서 승
 0건 + 기존 분석 데이터 있음) 전체 삭제로 오인하지 않도록 그 스캔 자체를 스킵한다.
 동명 파일 등 후보가 2개 이상이면 제안하지 않고 orphan으로 남기며, 이 경우 admin이
 `POST /api/admin/people/repair-paths`로 즉시 재스캔하거나 not_found/ambiguous 현황을
-확인할 수 있다. 제안 거부는 `pending_path_repairs.status='rejected'`로 남아 같은
-rename을 다시 제안하지 않는다.
+확인할 수 있다. 제안 거부(dismiss)는 `pending_path_repairs` row 자체를 삭제한다 —
+`status='rejected'`로 영구 고정하면 `old_path` UNIQUE 제약 때문에 다음 스캔이 같은
+rename을 재제안할 수 없고, 그 사이 new_path가 일반 스캔으로 별개 사진 분석돼버리면
+승인 시도해도 409(이미 분석됨)로 되돌릴 방법이 없었다. row를 지우면 다음 스캔에서
+조건이 같으면 다시 제안되거나, new_path가 이미 분석돼버렸으면 old_path는 not_found로
+재분류돼 orphan-cleanup 제안으로 넘어간다.
 
 ### 완전 삭제(orphan) 정리 — 제안 후 admin 승인
 rename 후보가 전혀 없는(basename이 현재 PHOTO_ROOT 어디에도 없는) 경로는 "파일이 진짜로

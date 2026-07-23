@@ -494,10 +494,48 @@ async def test_path_repairs_list_and_reject(admin_client):
 
     r = await admin_client.post(f"/api/admin/people/path-repairs/{repair_id}/reject")
     assert r.status_code == 200
-    assert r.json() == {"id": repair_id, "status": "rejected"}
+    assert r.json() == {"id": repair_id, "status": "dismissed"}
 
     r = await admin_client.get("/api/admin/people/path-repairs")
     assert r.json()["repairs"] == []  # 거부된 건 목록에 안 보임
+
+
+async def test_path_repairs_reject_allows_reproposal_on_rescan(admin_client):
+    """거부(dismiss)는 영구 차단이 아니어야 한다 — 조건이 그대로면 재스캔 시
+    다시 제안돼야 한다(과거엔 status='rejected'가 old_path UNIQUE에 걸려 재제안 불가)."""
+    repair_id = await _propose_rename(admin_client, "old", "new")
+    await admin_client.post(f"/api/admin/people/path-repairs/{repair_id}/reject")
+
+    r = await admin_client.post("/api/admin/people/repair-paths")
+    assert r.status_code == 200
+    assert len(r.json()["proposed"]) == 1
+    assert r.json()["proposed"][0] == {
+        "id": r.json()["proposed"][0]["id"],
+        "old_path": "old/photo.jpg",
+        "new_path": "new/photo.jpg",
+    }
+
+    r = await admin_client.get("/api/admin/people/path-repairs")
+    assert len(r.json()["repairs"]) == 1
+
+
+async def test_path_repairs_reject_then_new_path_analyzed_elsewhere_becomes_orphan(admin_client):
+    """거부 후 new_path가 일반 스캔으로 별개 사진 분석돼버리면, old_path는 더 이상
+    rename 후보가 없으므로 not_found(orphan-cleanup 제안)로 재분류돼야 한다 —
+    승인 불가(409)로 영영 막히는 상태가 되면 안 된다."""
+    repair_id = await _propose_rename(admin_client, "old", "new")
+    await admin_client.post(f"/api/admin/people/path-repairs/{repair_id}/reject")
+
+    # new_path가 그 사이 별개 사진으로 이미 분석된 상황 재현
+    await _seed_analyzed("new/photo.jpg")
+
+    r = await admin_client.post("/api/admin/people/repair-paths")
+    assert r.status_code == 200
+    assert r.json()["proposed"] == []
+    assert r.json()["not_found"] == ["old/photo.jpg"]
+
+    r = await admin_client.get("/api/admin/people/orphan-cleanups")
+    assert [c["path"] for c in r.json()["cleanups"]] == ["old/photo.jpg"]
 
 
 async def test_path_repairs_approve_all(admin_client):
