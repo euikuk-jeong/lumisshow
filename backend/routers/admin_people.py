@@ -25,6 +25,7 @@ from backend.models.schemas import (
     ConfirmByScore,
     FaceLabelSet,
     JobCreate,
+    PersonCoverSet,
     PersonCreate,
     SharePhotosResponse,
     build_share_photo_item,
@@ -109,8 +110,12 @@ async def list_people(_: str = Depends(get_current_admin), db=Depends(get_ai_db)
                (SELECT COUNT(*) FROM face_matches fm
                  WHERE fm.person_id = p.id
                    AND fm.face_id NOT IN (SELECT face_id FROM face_labels)) AS matched_count,
-               (SELECT fl.face_id FROM face_labels fl
-                 WHERE fl.person_id = p.id ORDER BY fl.labeled_at LIMIT 1) AS cover_face_id
+               COALESCE(
+                 (SELECT fl.face_id FROM face_labels fl
+                   WHERE fl.face_id = p.cover_face_id AND fl.person_id = p.id),
+                 (SELECT fl.face_id FROM face_labels fl
+                   WHERE fl.person_id = p.id ORDER BY fl.labeled_at LIMIT 1)
+               ) AS cover_face_id
         FROM persons p ORDER BY labeled_count + matched_count DESC, p.name
         """
     ) as cur:
@@ -431,8 +436,12 @@ async def get_person(
                (SELECT COUNT(*) FROM face_matches fm
                  WHERE fm.person_id = p.id
                    AND fm.face_id NOT IN (SELECT face_id FROM face_labels)) AS matched_count,
-               (SELECT fl.face_id FROM face_labels fl
-                 WHERE fl.person_id = p.id ORDER BY fl.labeled_at LIMIT 1) AS cover_face_id
+               COALESCE(
+                 (SELECT fl.face_id FROM face_labels fl
+                   WHERE fl.face_id = p.cover_face_id AND fl.person_id = p.id),
+                 (SELECT fl.face_id FROM face_labels fl
+                   WHERE fl.person_id = p.id ORDER BY fl.labeled_at LIMIT 1)
+               ) AS cover_face_id
         FROM persons p WHERE p.id = ?
         """,
         (person_id,),
@@ -483,6 +492,29 @@ async def rename_person(
     except sqlite3.IntegrityError:
         raise HTTPException(status_code=400, detail="이미 존재하는 인물입니다")
     return {"id": person_id, "name": name}
+
+
+@router.put("/people/{person_id}/cover")
+async def set_person_cover(
+    person_id: int, body: PersonCoverSet,
+    _: str = Depends(get_current_admin), db=Depends(get_ai_db),
+):
+    """인물 커버를 확정 얼굴 중 하나로 지정. face_id=None이면 자동(가장 먼저
+    확정된 얼굴)으로 되돌린다. 지정한 face_id는 이 인물의 확정(face_labels) 얼굴
+    이어야 한다 — 그래야 커버 조회 SQL(COALESCE)의 유효성 검사와 일치한다."""
+    await _person_or_404(person_id, db)
+    if body.face_id is not None:
+        async with db.execute(
+            "SELECT 1 FROM face_labels WHERE face_id = ? AND person_id = ?",
+            (body.face_id, person_id),
+        ) as cur:
+            if await cur.fetchone() is None:
+                raise HTTPException(status_code=400, detail="해당 인물의 확정 얼굴이 아닙니다")
+    await db.execute(
+        "UPDATE persons SET cover_face_id = ? WHERE id = ?", (body.face_id, person_id)
+    )
+    await db.commit()
+    return {"id": person_id, "cover_face_id": body.face_id}
 
 
 @router.delete("/people/{person_id}", status_code=204)

@@ -54,10 +54,14 @@ CREATE TABLE IF NOT EXISTS face_matches (
 );
 CREATE INDEX IF NOT EXISTS idx_face_matches_person ON face_matches(person_id);
 
+-- cover_face_id: admin이 명시적으로 지정한 커버 얼굴(face_labels.face_id). NULL이면
+-- 자동(가장 먼저 확정된 얼굴)으로 표시한다. FK를 걸지 않는다 — face_labels.person_id와
+-- 같은 이유로, 얼굴이 삭제/재라벨돼도 조회 시점에 유효성만 확인하고 자동 폴백한다.
 CREATE TABLE IF NOT EXISTS persons (
-    id         INTEGER PRIMARY KEY AUTOINCREMENT,
-    name       TEXT NOT NULL,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    name           TEXT NOT NULL,
+    created_at     DATETIME DEFAULT CURRENT_TIMESTAMP,
+    cover_face_id  INTEGER
 );
 
 CREATE TABLE IF NOT EXISTS face_labels (
@@ -151,6 +155,12 @@ async def init_ai_db() -> None:
         # (CREATE TABLE IF NOT EXISTS는 이미 존재하는 테이블을 변경하지 않음).
         try:
             await db.execute("ALTER TABLE jobs ADD COLUMN target_person_id INTEGER")
+            await db.commit()
+        except sqlite3.OperationalError:
+            pass  # 컬럼이 이미 존재함
+        # 기존 DB의 persons 테이블에는 cover_face_id 컬럼이 없을 수 있음
+        try:
+            await db.execute("ALTER TABLE persons ADD COLUMN cover_face_id INTEGER")
             await db.commit()
         except sqlite3.OperationalError:
             pass  # 컬럼이 이미 존재함

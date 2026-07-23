@@ -122,6 +122,79 @@ async def test_get_person(admin_client, client):
     assert r.status_code in (401, 403)
 
 
+# ── 인물 커버 ─────────────────────────────────────────────────────────
+
+
+async def test_person_cover_defaults_to_earliest_labeled(admin_client):
+    face_ids = await _seed_faces(2)
+    pid = (await admin_client.post("/api/admin/people", json={"name": "지우"})).json()["id"]
+    await admin_client.post(f"/api/admin/faces/{face_ids[0]}/label", json={"person_id": pid})
+    await admin_client.post(f"/api/admin/faces/{face_ids[1]}/label", json={"person_id": pid})
+
+    r = await admin_client.get(f"/api/admin/people/{pid}")
+    assert r.json()["cover_face_id"] == face_ids[0]  # 먼저 확정된 얼굴
+
+
+async def test_person_cover_set_and_reset(admin_client):
+    face_ids = await _seed_faces(2)
+    pid = (await admin_client.post("/api/admin/people", json={"name": "지우"})).json()["id"]
+    await admin_client.post(f"/api/admin/faces/{face_ids[0]}/label", json={"person_id": pid})
+    await admin_client.post(f"/api/admin/faces/{face_ids[1]}/label", json={"person_id": pid})
+
+    r = await admin_client.put(f"/api/admin/people/{pid}/cover", json={"face_id": face_ids[1]})
+    assert r.status_code == 200
+    assert r.json() == {"id": pid, "cover_face_id": face_ids[1]}
+
+    r = await admin_client.get(f"/api/admin/people/{pid}")
+    assert r.json()["cover_face_id"] == face_ids[1]
+
+    # list_people도 동일하게 반영돼야 한다
+    r = await admin_client.get("/api/admin/people")
+    assert next(p for p in r.json() if p["id"] == pid)["cover_face_id"] == face_ids[1]
+
+    # None으로 되돌리면 자동(가장 먼저 확정된 얼굴)으로 복귀
+    r = await admin_client.put(f"/api/admin/people/{pid}/cover", json={"face_id": None})
+    assert r.status_code == 200
+    r = await admin_client.get(f"/api/admin/people/{pid}")
+    assert r.json()["cover_face_id"] == face_ids[0]
+
+
+async def test_person_cover_rejects_face_not_labeled_to_person(admin_client):
+    face_ids = await _seed_faces(2)
+    pid = (await admin_client.post("/api/admin/people", json={"name": "지우"})).json()["id"]
+    other_pid = (await admin_client.post("/api/admin/people", json={"name": "철수"})).json()["id"]
+    await admin_client.post(f"/api/admin/faces/{face_ids[0]}/label", json={"person_id": other_pid})
+
+    r = await admin_client.put(f"/api/admin/people/{pid}/cover", json={"face_id": face_ids[0]})
+    assert r.status_code == 400
+
+
+async def test_person_cover_404_unknown_person(admin_client):
+    r = await admin_client.put("/api/admin/people/9999/cover", json={"face_id": 1})
+    assert r.status_code == 404
+
+
+async def test_person_cover_requires_auth(client):
+    r = await client.put("/api/admin/people/1/cover", json={"face_id": 1})
+    assert r.status_code in (401, 403)
+
+
+async def test_person_cover_falls_back_when_unlabeled(admin_client):
+    """명시적으로 지정한 커버 얼굴의 라벨이 해제되면(재라벨 포함) 자동으로
+    폴백해야 한다 — cover_face_id는 FK 없이 조회 시점에만 유효성을 검사한다."""
+    face_ids = await _seed_faces(2)
+    pid = (await admin_client.post("/api/admin/people", json={"name": "지우"})).json()["id"]
+    await admin_client.post(f"/api/admin/faces/{face_ids[0]}/label", json={"person_id": pid})
+    await admin_client.post(f"/api/admin/faces/{face_ids[1]}/label", json={"person_id": pid})
+    await admin_client.put(f"/api/admin/people/{pid}/cover", json={"face_id": face_ids[1]})
+
+    r = await admin_client.delete(f"/api/admin/faces/{face_ids[1]}/label")
+    assert r.status_code == 204
+
+    r = await admin_client.get(f"/api/admin/people/{pid}")
+    assert r.json()["cover_face_id"] == face_ids[0]  # 남은 얼굴로 자동 폴백
+
+
 # ── 얼굴 라벨/조회 ────────────────────────────────────────────────────
 
 
