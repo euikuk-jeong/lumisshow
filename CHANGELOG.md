@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.12.0] - 2026-07-24
+
+### Added
+- **인물 커버 사진 직접 지정**: 인물 상세의 확정 얼굴 그리드/리스트에서 ★ 버튼으로
+  커버 사진을 지정할 수 있음(`PUT /api/admin/people/{id}/cover`). 지정하지 않으면
+  기존처럼 가장 먼저 확정된 얼굴을 자동 커버로 사용. `persons.cover_face_id`는
+  FK 없이 조회 시점에 유효성(그 얼굴이 여전히 이 인물의 확정 얼굴인지)을 검사해
+  재라벨/라벨 해제 시 자동으로 원래 방식(자동 선택)으로 되돌아감
+
+### Changed
+- **인물 상세 얼굴 그리드 터치 사용성 개선**: 얼굴 타일 크기를 일반 앨범 사진
+  그리드와 동일하게 확대(90px→120px). 확정 해제 버튼이 `opacity:0`으로만
+  숨겨져 있어 터치 기기에서 이미지를 탭하려다 보이지 않는 버튼이 눌리던 문제를
+  `display:none`(앨범 커버 버튼과 동일 패턴)으로 교체해 수정
+
 ## [1.11.3] - 2026-07-23
 
 ### Fixed
@@ -811,7 +826,8 @@ Phase 2 — AI 얼굴 인식 스마트 앨범. NAS 로컬 AI(InsightFace)로 사
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v1.11.3...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v1.12.0...HEAD
+[1.12.0]: https://github.com/euikuk-jeong/lumisshow/compare/v1.11.3...v1.12.0
 [1.11.3]: https://github.com/euikuk-jeong/lumisshow/compare/v1.11.2...v1.11.3
 [1.11.2]: https://github.com/euikuk-jeong/lumisshow/compare/v1.11.1...v1.11.2
 [1.11.1]: https://github.com/euikuk-jeong/lumisshow/compare/v1.11.0...v1.11.1
