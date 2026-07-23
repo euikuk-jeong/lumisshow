@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.11.2] - 2026-07-23
+
+### Fixed
+- **경로 복구 제안 거부(reject) 시 되돌릴 수 없던 문제**: `status='rejected'`로
+  영구 고정하던 방식이 `old_path` UNIQUE 제약에 걸려 다음 스캔이 같은 rename을
+  재제안하지 못했고, 그 사이 `new_path`가 일반 스캔으로 별개 사진 분석돼버리면
+  승인 시도해도 409로 영영 되돌릴 수 없었다. 거부를 dismiss(제안 row 삭제)로
+  바꿔 재스캔 시 조건이 같으면 다시 제안되거나, `new_path`가 이미 소진됐으면
+  `old_path`가 not_found(orphan-cleanup 제안)로 재분류되도록 수정. 과거 버전에서
+  쌓인 rejected row 정리 마이그레이션 포함
+
 ## [1.11.1] - 2026-07-23
 
 ### Fixed
@@ -792,7 +803,8 @@ Phase 2 — AI 얼굴 인식 스마트 앨범. NAS 로컬 AI(InsightFace)로 사
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v1.11.1...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v1.11.2...HEAD
+[1.11.2]: https://github.com/euikuk-jeong/lumisshow/compare/v1.11.1...v1.11.2
 [1.11.1]: https://github.com/euikuk-jeong/lumisshow/compare/v1.11.0...v1.11.1
 [1.11.0]: https://github.com/euikuk-jeong/lumisshow/compare/v1.10.1...v1.11.0
 [1.10.1]: https://github.com/euikuk-jeong/lumisshow/compare/v1.10.0...v1.10.1
