@@ -79,12 +79,15 @@ CREATE INDEX IF NOT EXISTS idx_ignored_review_person ON ignored_review_candidate
 
 -- rename/move 자동 감지 후보(basename 1:1 매칭) — 즉시 적용하지 않고 admin 승인 대기.
 -- scanner가 INSERT만 함(source='scan'), 승인/거부는 backend가 처리(admin_people.py).
+-- status는 'pending'만 쓴다 — approve/reject(dismiss) 둘 다 row를 지운다(status를
+-- 'rejected'로 영구 고정하면 old_path UNIQUE 제약 때문에 다음 스캔이 재제안할 수
+-- 없어 되돌리기 불가능한 상태가 됐었다).
 CREATE TABLE IF NOT EXISTS pending_path_repairs (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     old_path    TEXT NOT NULL UNIQUE,
     new_path    TEXT NOT NULL,
     source      TEXT NOT NULL,                     -- scan | manual
-    status      TEXT NOT NULL DEFAULT 'pending',    -- pending | rejected
+    status      TEXT NOT NULL DEFAULT 'pending',
     detected_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS idx_pending_path_repairs_status ON pending_path_repairs(status);
@@ -127,4 +130,8 @@ def connect(db_path: str | None = None) -> sqlite3.Connection:
         conn.commit()
     except sqlite3.OperationalError:
         pass  # 컬럼이 이미 존재함
+    # 과거(reject를 status='rejected'로 영구 고정하던 버전)에 쌓인 row 정리 —
+    # 그대로 두면 old_path UNIQUE 제약에 걸려 다음 스캔이 재제안하지 못한다.
+    conn.execute("DELETE FROM pending_path_repairs WHERE status = 'rejected'")
+    conn.commit()
     return conn
