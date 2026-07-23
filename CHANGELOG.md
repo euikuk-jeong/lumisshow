@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.11.3] - 2026-07-23
+
+### Fixed
+- **`repair-paths` 재실행 시 이미 대기 중인 제안이 응답에서 누락되던 문제**:
+  `old_path` UNIQUE 충돌로 `INSERT OR IGNORE`가 조용히 무시되면 `proposed`
+  배열에서 빠져 admin이 "못 찾았다"로 오해할 수 있었다. 충돌 시 기존 pending
+  row를 조회해 실제 대기 중인 id/new_path로 응답에 포함하도록 수정
+
 ## [1.11.2] - 2026-07-23
 
 ### Fixed
@@ -803,7 +811,8 @@ Phase 2 — AI 얼굴 인식 스마트 앨범. NAS 로컬 AI(InsightFace)로 사
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v1.11.2...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v1.11.3...HEAD
+[1.11.3]: https://github.com/euikuk-jeong/lumisshow/compare/v1.11.2...v1.11.3
 [1.11.2]: https://github.com/euikuk-jeong/lumisshow/compare/v1.11.1...v1.11.2
 [1.11.1]: https://github.com/euikuk-jeong/lumisshow/compare/v1.11.0...v1.11.1
 [1.11.0]: https://github.com/euikuk-jeong/lumisshow/compare/v1.10.1...v1.11.0
