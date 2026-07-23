@@ -190,6 +190,20 @@ async def repair_people_paths(
         )
         if cur.rowcount:
             proposed.append({"id": cur.lastrowid, "old_path": old_path, "new_path": new_path})
+        else:
+            # old_path UNIQUE 충돌 — 이미 대기 중인 제안이 있다는 뜻(rejected는 더 이상
+            # row로 남지 않으므로 pending만 가능). 재실행에서도 응답에 포함해 admin이
+            # "못 찾았다"로 오해하지 않게 한다. new_path는 최근 재계산 값이 아니라
+            # 실제로 대기 중인 값을 반환한다.
+            async with db.execute(
+                "SELECT id, new_path FROM pending_path_repairs WHERE old_path = ? AND status = 'pending'",
+                (old_path,),
+            ) as existing_cur:
+                existing = await existing_cur.fetchone()
+            if existing:
+                proposed.append(
+                    {"id": existing["id"], "old_path": old_path, "new_path": existing["new_path"]}
+                )
 
     await db.commit()
     return {

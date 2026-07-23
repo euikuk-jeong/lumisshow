@@ -200,6 +200,34 @@ async def test_people_repair_proposes_without_applying(admin_client):
     assert r.json()["faces"][0]["photo_path"] == "old_dir/photo.jpg"
 
 
+async def test_people_repair_rerun_includes_already_proposed(admin_client):
+    """이미 pending_path_repairs에 쌓인 제안을 재스캔해도 proposed에 포함돼야 한다
+    (INSERT OR IGNORE로 rowcount=0이 돼도 응답이 빈 배열이면 admin이 "못 찾았다"로
+    오해할 수 있음 — 기존 대기 중인 id/new_path를 그대로 반환)."""
+    photo_root = Path(os.getenv("PHOTO_ROOT"))
+    (photo_root / "old_dir").mkdir()
+    (photo_root / "old_dir" / "photo.jpg").write_bytes(b"fake")
+    await _seed_analyzed("old_dir/photo.jpg")
+
+    (photo_root / "new_dir").mkdir()
+    (photo_root / "old_dir" / "photo.jpg").rename(photo_root / "new_dir" / "photo.jpg")
+    (photo_root / "old_dir").rmdir()
+
+    r1 = await admin_client.post("/api/admin/people/repair-paths")
+    first_id = r1.json()["proposed"][0]["id"]
+
+    r2 = await admin_client.post("/api/admin/people/repair-paths")
+    assert r2.status_code == 200
+    data = r2.json()
+    assert data["proposed"] == [
+        {"id": first_id, "old_path": "old_dir/photo.jpg", "new_path": "new_dir/photo.jpg"}
+    ]
+
+    # 대기열에도 여전히 1건만 있어야 한다(중복 생성 안 됨)
+    r = await admin_client.get("/api/admin/people/path-repairs")
+    assert len(r.json()["repairs"]) == 1
+
+
 async def test_people_repair_approve_applies_and_preserves_label(admin_client):
     """제안을 승인해야 실제 UPDATE가 일어나고 face_id 유지로 라벨이 보존된다."""
     photo_root = Path(os.getenv("PHOTO_ROOT"))
@@ -479,7 +507,8 @@ async def _propose_rename(admin_client, old_dir: str, new_dir: str, filename: st
     (photo_root / old_dir).rmdir()
 
     r = await admin_client.post("/api/admin/people/repair-paths")
-    return r.json()["proposed"][0]["id"]
+    old_path = f"{old_dir}/{filename}"
+    return next(p["id"] for p in r.json()["proposed"] if p["old_path"] == old_path)
 
 
 async def test_path_repairs_list_and_reject(admin_client):
