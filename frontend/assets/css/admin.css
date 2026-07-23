@@ -951,12 +951,8 @@
 }
 .face-actions {
   position: absolute; bottom: 0; left: 0; right: 0;
-  display: none; justify-content: center; gap: 8px;
-  padding: 6px;
+  display: none; justify-content: center; gap: 4px;
+  padding: 4px;
   background: linear-gradient(transparent, rgba(0,0,0,0.65));
 }
 .face-card:hover .face-actions { display: flex; }
-.face-actions .btn {
-  padding: 10px 12px;
-  font-size: 14px;
-}
