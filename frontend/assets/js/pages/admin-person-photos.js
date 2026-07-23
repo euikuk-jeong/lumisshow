@@ -2,6 +2,7 @@ import { api } from '../api.js';
 import { renderAdminShell } from '../layout.js';
 import { esc } from '../utils.js';
 import { openLightbox } from '../lightbox.js';
+import { initDateScrollIndicator } from '../date-scroll-indicator.js';
 
 const PAGE_SIZE = 500;
 
@@ -53,6 +54,7 @@ export async function renderAdminPersonPhotos(personId) {
       </div>
     </div>
     <div id="photos-content"><div class="loading"></div></div>
+    <div class="date-scroll-indicator" id="date-scroll-indicator"></div>
   `, '/admin/people');
 
   document.getElementById('btn-slideshow').addEventListener('click', () => {
@@ -61,6 +63,9 @@ export async function renderAdminPersonPhotos(personId) {
 
   const state = { viewMode: 'grid', sortBy: 'filename', sortDir: 'asc', photos: [] };
   let displayed = [];
+  const recomputeDateOffsets = initDateScrollIndicator(
+    'date-scroll-indicator', '#photos-content', () => state.viewMode === 'date'
+  );
 
   // ── 확정 사진 전체 로드 (페이지네이션 순회) ──────────────────────────
   const subtitle = document.getElementById('photos-subtitle');
@@ -161,7 +166,7 @@ export async function renderAdminPersonPhotos(personId) {
       let idx = 0;
       el.innerHTML = groupByDate(displayed).map(g => `
         <div class="date-group">
-          <div class="date-group-header">${esc(g.label)} <span class="text-muted text-sm">(${g.photos.length}장)</span></div>
+          <div class="date-group-header" data-key="${esc(g.key)}">${esc(g.label)} <span class="text-muted text-sm">(${g.photos.length}장)</span></div>
           <div class="photo-grid">${g.photos.map(p => photoCard(p, idx++)).join('')}</div>
         </div>`).join('');
     } else {
@@ -169,6 +174,7 @@ export async function renderAdminPersonPhotos(personId) {
         state.viewMode === 'list' ? photoListItem(p, i) : photoCard(p, i)
       ).join('');
     }
+    recomputeDateOffsets();
   }
 
   // ── 보기 모드 ────────────────────────────────────────────────────────

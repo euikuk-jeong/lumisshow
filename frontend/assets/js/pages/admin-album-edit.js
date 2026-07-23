@@ -4,6 +4,7 @@ import { esc } from '../utils.js';
 import { openLightbox } from '../lightbox.js';
 import { THEMES } from '../theme.js';
 import { EFFECTS, EFFECT_LABELS } from '../slideshow-config.js';
+import { initDateScrollIndicator } from '../date-scroll-indicator.js';
 
 export async function renderAdminAlbumEdit(albumId) {
   const isNew = !albumId;
@@ -227,6 +228,7 @@ function renderEditForm(album, links, tzOffset, serverTheme = 'dark') {
           <div id="photo-grid" class="photo-grid">
             ${album.photos.map(p => photoThumb(p, album.cover_path)).join('') || '<p class="text-muted text-sm">사진이 없습니다</p>'}
           </div>
+          <div class="date-scroll-indicator" id="date-scroll-indicator"></div>
       </div>
 
       <!-- Share links -->
@@ -323,6 +325,9 @@ function renderEditForm(album, links, tzOffset, serverTheme = 'dark') {
   });
 
   const photoState = { viewMode: 'grid', coverPath: album.cover_path, photos: [...album.photos], removeMode: false, removeSelected: new Set() };
+  photoState.recomputeDateOffsets = initDateScrollIndicator(
+    'date-scroll-indicator', '#photo-grid', () => photoState.viewMode === 'date'
+  );
   let brokenDetected = false;
 
   function onPhotoLoadError() {
@@ -351,7 +356,7 @@ function renderEditForm(album, links, tzOffset, serverTheme = 'dark') {
     } else if (photoState.viewMode === 'date') {
       el.innerHTML = groupPhotosByDate(photoState.photos).map(g => `
         <div class="date-group">
-          <div class="date-group-header">${esc(g.label)} <span class="text-muted text-sm">(${g.photos.length}장)</span></div>
+          <div class="date-group-header" data-key="${esc(g.key)}">${esc(g.label)} <span class="text-muted text-sm">(${g.photos.length}장)</span></div>
           <div class="photo-grid">${g.photos.map(p =>
             photoThumb(p, photoState.coverPath, photoState.removeMode, photoState.removeSelected.has(p.file_path))
           ).join('')}</div>
@@ -364,6 +369,7 @@ function renderEditForm(album, links, tzOffset, serverTheme = 'dark') {
       ).join('');
     }
     attachImageErrorTracking();
+    photoState.recomputeDateOffsets();
     const countEl = document.getElementById('photo-count-label');
     if (countEl) countEl.textContent = photoState.photos.length;
   }
