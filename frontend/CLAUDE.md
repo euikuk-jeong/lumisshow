@@ -20,6 +20,7 @@ assets/js/
   auth.js                         # JWT 로컬스토리지, 쿠키 관리
   layout.js                       # admin shell 렌더 헬퍼
   utils.js                        # esc() HTML 이스케이프 등
+  date-scroll-indicator.js        # 날짜별 보기 스크롤 중 년/월/일 배지 표시 (browse/album-edit/person-photos 공용)
   pages/
     admin-login.js                # 로그인 폼
     admin-albums.js               # 앨범 목록

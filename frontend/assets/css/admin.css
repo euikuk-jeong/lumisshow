@@ -342,6 +342,24 @@
   padding-bottom: 4px;
   border-bottom: 1px solid var(--border);
 }
+.date-scroll-indicator {
+  position: fixed;
+  right: 14px;
+  z-index: 150;
+  padding: 6px 14px;
+  border-radius: var(--radius);
+  background: var(--elevated);
+  border: 1px solid var(--glass-border);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+  text-align: center;
+  line-height: 1.3;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s;
+}
+.date-scroll-indicator.visible { opacity: 1; }
+.date-scroll-indicator .dsi-year { font-size: 11px; color: var(--muted); }
+.date-scroll-indicator .dsi-day { font-size: 14px; font-weight: 600; color: var(--text); white-space: nowrap; }
 .breadcrumb {
   display: flex;
   align-items: center;

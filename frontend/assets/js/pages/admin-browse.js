@@ -2,6 +2,7 @@ import { api } from '../api.js';
 import { renderAdminShell } from '../layout.js';
 import { esc } from '../utils.js';
 import { openLightbox } from '../lightbox.js';
+import { initDateScrollIndicator } from '../date-scroll-indicator.js';
 
 export async function renderAdminBrowse() {
   const params  = new URLSearchParams(location.search);
@@ -32,6 +33,7 @@ export async function renderAdminBrowse() {
       </div>
     </div>
     <div id="browse-content"><div class="loading"></div></div>
+    <div class="date-scroll-indicator" id="date-scroll-indicator"></div>
     <div class="browse-selection-bar" id="selection-bar">
       <span id="selection-count">0개 선택됨</span>
       <button class="btn btn-primary" id="btn-add-selected" ${!albumId ? 'disabled' : ''}>
@@ -49,6 +51,9 @@ export async function renderAdminBrowse() {
     lastPhotos: [],
     lastPath: null,
   };
+  state.recomputeDateOffsets = initDateScrollIndicator(
+    'date-scroll-indicator', '#browse-content', () => state.viewMode === 'date'
+  );
 
   // 폴더/브레드크럼/사진 이벤트 위임
   document.getElementById('browse-content').addEventListener('click', e => {
@@ -199,7 +204,7 @@ function groupByDate(photos) {
 function renderDateGroups(groups, selected) {
   return groups.map(g => `
     <div class="date-group">
-      <div class="date-group-header">${esc(g.label)} <span class="text-muted text-sm">(${g.photos.length}장)</span></div>
+      <div class="date-group-header" data-key="${esc(g.key)}">${esc(g.label)} <span class="text-muted text-sm">(${g.photos.length}장)</span></div>
       <div class="photo-grid">${g.photos.map(p => selectableThumb(p, selected.has(p.path))).join('')}</div>
     </div>`).join('');
 }
@@ -244,6 +249,7 @@ function renderBrowseResult(state) {
     ${headerHTML}
     ${photosHTML}
   `;
+  state.recomputeDateOffsets();
 }
 
 function selectAll(state) {
