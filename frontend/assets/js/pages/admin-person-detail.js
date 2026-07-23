@@ -13,6 +13,7 @@ let _matchedFaces = [];        // 로드된 추정 얼굴 누적 — 리스트 �
 let _labeledOffset = 0;
 let _labeledFaces = [];        // 로드된 확정 얼굴 누적 — 라이트박스 인덱스·리스트 보기 재렌더용
 let _labeledSelected = new Set();
+let _coverFaceId = null;       // 현재 인물 커버로 지정된 face_id(자동 폴백 포함, GET 응답 그대로)
 let _viewMode = 'grid';        // 'grid' | 'list' — 추정·확정 얼굴 공통 보기 모드
 let _reviewCandidates = [];    // 무시 얼굴 재검토 후보 — 클라이언트 로컬 숨기기 반영용
 let _reviewDismissed = new Set();
@@ -32,6 +33,7 @@ export async function renderAdminPersonDetail(personId) {
   _labeledFaces = [];
   _labeledSelected = new Set();
   _viewMode = 'grid';
+  _coverFaceId = null;
   _reviewCandidates = [];
   _reviewDismissed = new Set();
   stopReviewPoll();
@@ -44,6 +46,7 @@ export async function renderAdminPersonDetail(personId) {
     window.navigate('/admin/people', true);
     return;
   }
+  _coverFaceId = person.cover_face_id ?? null;
   const people = await api.get('/api/admin/people');
 
   renderAdminShell(`
@@ -387,7 +390,7 @@ function renderLabeledContent(personId) {
   grid.querySelectorAll('[data-face]').forEach(card => {
     const faceId = Number(card.dataset.face);
     card.addEventListener('click', (e) => {
-      if (e.target.closest('[data-act="undo"]')) return;
+      if (e.target.closest('[data-act="undo"]') || e.target.closest('[data-act="set-cover"]')) return;
       if (e.target.matches('input[type=checkbox]')) {
         if (_labeledSelected.has(faceId)) { _labeledSelected.delete(faceId); card.classList.remove('selected'); }
         else                              { _labeledSelected.add(faceId);    card.classList.add('selected'); }
@@ -401,28 +404,42 @@ function renderLabeledContent(personId) {
       try { await api.delete(`/api/admin/faces/${faceId}/label`); } catch (err) { alert(err.message); return; }
       renderAdminPersonDetail(personId);
     });
+    const coverBtn = card.querySelector('[data-act="set-cover"]');
+    if (coverBtn) {
+      coverBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        try { await api.put(`/api/admin/people/${personId}/cover`, { face_id: faceId }); } catch (err) { alert(err.message); return; }
+        _coverFaceId = faceId;
+        renderLabeledContent(personId);
+      });
+    }
   });
   updateLabeledToolbar();
 }
 
 function labeledFaceCard(f, idx) {
+  const isCover = f.face_id === _coverFaceId;
   return `
     <div class="face-card" data-face="${f.face_id}" data-idx="${idx}" title="${esc(f.photo_path)}">
       <img src="/api/admin/faces/${f.face_id}/crop" alt="" loading="lazy">
+      ${isCover ? '<span class="cover-badge">커버</span>' : ''}
       <div class="face-actions">
+        ${isCover ? '' : '<button class="btn btn-sm btn-ghost" data-act="set-cover" title="커버로 설정">★</button>'}
         <button class="btn btn-sm btn-ghost" data-act="undo" title="확정 해제">↩</button>
       </div>
     </div>`;
 }
 
 function labeledFaceListItem(f, idx, isSelected) {
+  const isCover = f.face_id === _coverFaceId;
   return `
     <div class="photo-list-item${isSelected ? ' selected' : ''}" data-face="${f.face_id}" data-idx="${idx}" title="${esc(f.photo_path)}">
       <input type="checkbox" ${isSelected ? 'checked' : ''}>
       <div class="photo-list-thumb"><img src="/api/admin/faces/${f.face_id}/crop" alt="" loading="lazy"></div>
       <span class="photo-list-name">${esc(f.photo_path)}</span>
-      <div class="photo-list-meta"><span>확정</span></div>
+      <div class="photo-list-meta"><span>${isCover ? '확정 · 커버' : '확정'}</span></div>
       <div class="photo-list-actions">
+        ${isCover ? '' : '<button class="btn btn-sm btn-ghost" data-act="set-cover" title="커버로 설정">★</button>'}
         <button class="btn btn-sm btn-ghost" data-act="undo" title="확정 해제">↩</button>
       </div>
     </div>`;

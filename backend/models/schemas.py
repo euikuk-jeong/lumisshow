@@ -275,6 +275,9 @@ def build_slideshow_defaults(overrides: dict, sv: dict) -> dict:
 class PersonCreate(BaseModel):
     name: str
 
+class PersonCoverSet(BaseModel):
+    face_id: Optional[int] = None   # None = 자동(가장 먼저 확정된 얼굴)으로 되돌림
+
 class FaceLabelSet(BaseModel):
     person_id: Optional[int] = None   # None = 등록 인물 아님(무시)
 
