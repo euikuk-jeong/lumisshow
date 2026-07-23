@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.13.0] - 2026-07-24
+
+### Added
+- **날짜별 보기 스크롤 위치 인디케이터**: 인물 전체 사진 / 사진 탐색기 / 앨범 편집,
+  세 화면의 날짜별 보기(📅)에서 스크롤 중 우측에 년/월/일 배지가 잠깐 나타났다
+  사라짐(스크롤 정지 후 자동 페이드아웃). 배지 세로 위치도 전체 스크롤 진행률에
+  비례해 이동. 공통 로직은 `date-scroll-indicator.js`로 분리해 세 화면에서 재사용
+
 ## [1.12.0] - 2026-07-24
 
 ### Added
@@ -826,7 +834,8 @@ Phase 2 — AI 얼굴 인식 스마트 앨범. NAS 로컬 AI(InsightFace)로 사
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v1.12.0...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v1.13.0...HEAD
+[1.13.0]: https://github.com/euikuk-jeong/lumisshow/compare/v1.12.0...v1.13.0
 [1.12.0]: https://github.com/euikuk-jeong/lumisshow/compare/v1.11.3...v1.12.0
 [1.11.3]: https://github.com/euikuk-jeong/lumisshow/compare/v1.11.2...v1.11.3
 [1.11.2]: https://github.com/euikuk-jeong/lumisshow/compare/v1.11.1...v1.11.2
