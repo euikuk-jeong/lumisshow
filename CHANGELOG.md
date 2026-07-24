@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.14.0] - 2026-07-25
+
+### Added
+- **AI 스캔/재매칭 완료 Discord webhook 알림**: daemon 모드(jobs 트리거 + 야간 자동 스캔)에서
+  scan/rematch 완료 후 `AI_DISCORD_WEBHOOK_URL`로 결과 요약(사진/얼굴/에러 수, 경로 변경·삭제
+  승인 대기 총 건수, `BASE_URL` 기반 `/admin/people` 링크)을 전송. 미설정 시 알림 스킵,
+  전송 실패는 최대 3회 재시도 후 로그만 남기고 daemon 루프에 영향 없음. urllib 기본
+  User-Agent를 Discord(Cloudflare)가 403으로 차단하는 문제를 발견해 커스텀 헤더로 우회
+  (`ai_worker/notify.py`, `ai_worker/config.py`, `ai_worker/main.py`, `ai_worker/daemon.py`)
+
 ## [1.13.0] - 2026-07-24
 
 ### Added
@@ -834,7 +844,8 @@ Phase 2 — AI 얼굴 인식 스마트 앨범. NAS 로컬 AI(InsightFace)로 사
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v1.13.0...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v1.14.0...HEAD
+[1.14.0]: https://github.com/euikuk-jeong/lumisshow/compare/v1.13.0...v1.14.0
 [1.13.0]: https://github.com/euikuk-jeong/lumisshow/compare/v1.12.0...v1.13.0
 [1.12.0]: https://github.com/euikuk-jeong/lumisshow/compare/v1.11.3...v1.12.0
 [1.11.3]: https://github.com/euikuk-jeong/lumisshow/compare/v1.11.2...v1.11.3
