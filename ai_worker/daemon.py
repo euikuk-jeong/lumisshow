@@ -11,7 +11,7 @@ import sqlite3
 import time
 from datetime import datetime, timedelta
 
-from ai_worker import config, db
+from ai_worker import config, db, notify
 
 log = logging.getLogger("ai_worker")
 
@@ -91,9 +91,9 @@ def run_daemon() -> None:
             log.info("잡 #%d (%s) 실행", job_id, job_type)
             try:
                 if job_type == "scan":
-                    run_scan()
+                    notify.notify_scan_result(run_scan())
                 elif job_type == "rematch":
-                    run_rematch()
+                    notify.notify_rematch_result(run_rematch())
                 elif job_type == "review_ignored":
                     run_review_ignored(target_person_id)
                 else:
@@ -107,7 +107,7 @@ def run_daemon() -> None:
         if datetime.now() >= nxt:
             log.info("야간 자동 스캔 시작")
             try:
-                run_scan()
+                notify.notify_scan_result(run_scan())
             except Exception:
                 log.exception("자동 스캔 실패 — 다음 주기에 재시도")
             nxt = next_scan_time(datetime.now(), hour)

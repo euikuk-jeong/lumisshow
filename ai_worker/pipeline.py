@@ -93,11 +93,11 @@ def analyze_and_store(
     mtime: float,
     enrollment: dict[int, np.ndarray],
     threshold: float,
-) -> int:
+) -> tuple[int, bool]:
     """사진 1장 분석 → faces/face_matches/photos_analyzed 기록 (1장 = 1커밋, resumable).
 
     재분석(mtime 변경) 시 기존 얼굴 행은 삭제 후 새로 기록.
-    검출된 얼굴 수를 반환, 실패 시 status='error'로 기록하고 0 반환.
+    (검출된 얼굴 수, 성공 여부)를 반환. 실패 시 status='error'로 기록하고 (0, False) 반환.
     """
     abs_path = os.path.join(config.photo_root(), rel_path)
     try:
@@ -112,7 +112,7 @@ def analyze_and_store(
             (rel_path, mtime),
         )
         conn.commit()
-        return 0
+        return 0, False
 
     conn.execute("DELETE FROM faces WHERE photo_path = ?", (rel_path,))
     for face in faces:
@@ -143,4 +143,4 @@ def analyze_and_store(
         (rel_path, mtime, len(faces)),
     )
     conn.commit()
-    return len(faces)
+    return len(faces), True

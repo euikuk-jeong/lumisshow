@@ -29,8 +29,10 @@ services:
     environment:
       - PHOTO_ROOT=/mnt/photos
       - DATA_DIR=/data
+      - BASE_URL=${BASE_URL:-http://localhost:8080}  # Discord 알림에 붙는 admin 링크
       - TZ=${TZ:-Asia/Seoul}                 # AI_SCAN_HOUR가 이 TZ 기준으로 동작
       - AI_SCAN_HOUR=${AI_SCAN_HOUR:-2}
       - AI_MATCH_THRESHOLD=${AI_MATCH_THRESHOLD:-0.45}
+      - AI_DISCORD_WEBHOOK_URL=${AI_DISCORD_WEBHOOK_URL:-}
       - PUID=${PUID:-}                       # lumisshow와 동일 값이어야 함 (아래 참고)
       - PGID=${PGID:-}

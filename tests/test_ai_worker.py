@@ -518,3 +518,111 @@ def test_label_import_creates_person_and_null_label(conn, tmp_path, monkeypatch)
     }
     assert labels == {face_a: 1, face_b: None}  # 빈칸(face_c)은 건너뜀
     assert check.execute("SELECT name FROM persons").fetchone()["name"] == "지우"
+
+
+# ── main.run_scan (Discord 알림용 요약) ──────────────────────────────
+
+
+def test_run_scan_reports_total_pending_repairs_and_orphans(conn):
+    """renamed/orphaned는 이번 스캔에서 새로 쌓인 건수가 아니라, admin이 아직
+    승인/거부하지 않은 전체 누적 건수여야 한다 (과거 스캔에서 쌓인 것 포함)."""
+    from ai_worker import main
+
+    conn.execute(
+        "INSERT INTO pending_path_repairs (old_path, new_path, source) "
+        "VALUES ('old/a.jpg', 'new/a.jpg', 'scan')"
+    )
+    conn.execute(
+        "INSERT INTO pending_orphan_cleanups (path, source) VALUES ('gone/b.jpg', 'scan')"
+    )
+    conn.commit()
+
+    summary = main.run_scan()
+
+    assert summary["photos"] == 0  # 빈 PHOTO_ROOT → 분석 대상 없음, insightface 로딩 없이 종료
+    assert summary["renamed"] == 1
+    assert summary["orphaned"] == 1
+
+
+def test_run_scan_empty_pending_skips_pipeline(conn):
+    """분석 대상이 없으면 FacePipeline(insightface) 로딩 없이 바로 요약을 반환해야 한다."""
+    from ai_worker import main
+
+    summary = main.run_scan()
+    assert summary == {
+        "photos": 0, "faces": 0, "errors": 0,
+        "renamed": 0, "orphaned": 0, "elapsed": 0.0,
+    }
+
+
+# ── notify ────────────────────────────────────────────────────────────
+
+
+def test_notify_send_skips_when_webhook_unset(monkeypatch):
+    from ai_worker import notify
+
+    monkeypatch.delenv("AI_DISCORD_WEBHOOK_URL", raising=False)
+    calls = []
+    monkeypatch.setattr(notify.urllib.request, "urlopen", lambda *a, **k: calls.append(1))
+
+    notify.notify_rematch_result({"matched": 3})
+
+    assert calls == []
+
+
+def test_notify_send_retries_up_to_three_times_then_gives_up(monkeypatch):
+    from ai_worker import notify
+
+    monkeypatch.setenv("AI_DISCORD_WEBHOOK_URL", "https://example.invalid/webhook")
+    monkeypatch.setattr(notify.time, "sleep", lambda s: None)  # 재시도 대기 스킵
+
+    attempts = []
+
+    def failing_urlopen(*a, **k):
+        attempts.append(1)
+        raise OSError("network down")
+
+    monkeypatch.setattr(notify.urllib.request, "urlopen", failing_urlopen)
+
+    notify.notify_rematch_result({"matched": 1})  # 예외를 밖으로 던지지 않아야 함
+
+    assert len(attempts) == 3
+
+
+def test_notify_send_succeeds_on_first_try_without_retry(monkeypatch):
+    from ai_worker import notify
+
+    monkeypatch.setenv("AI_DISCORD_WEBHOOK_URL", "https://example.invalid/webhook")
+    slept = []
+    monkeypatch.setattr(notify.time, "sleep", lambda s: slept.append(s))
+
+    attempts = []
+    monkeypatch.setattr(
+        notify.urllib.request, "urlopen", lambda *a, **k: attempts.append(1)
+    )
+
+    notify.notify_rematch_result({"matched": 1})
+
+    assert len(attempts) == 1
+    assert slept == []
+
+
+def test_notify_scan_result_includes_admin_people_link(monkeypatch):
+    from ai_worker import notify
+
+    monkeypatch.setenv("AI_DISCORD_WEBHOOK_URL", "https://example.invalid/webhook")
+    monkeypatch.setenv("BASE_URL", "http://example.test:9999")
+
+    sent = {}
+
+    def fake_urlopen(req, timeout=None):
+        import json
+        sent["content"] = json.loads(req.data)["content"]
+
+    monkeypatch.setattr(notify.urllib.request, "urlopen", fake_urlopen)
+
+    notify.notify_scan_result(
+        {"photos": 3, "faces": 2, "errors": 0, "renamed": 1, "orphaned": 0, "elapsed": 1.5}
+    )
+
+    assert "http://example.test:9999/admin/people" in sent["content"]

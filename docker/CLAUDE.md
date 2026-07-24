@@ -56,6 +56,8 @@ docker compose -f docker/docker-compose.yml restart
 | `AI_DET_SIZE` | SCRFD 검출 입력 크기 (RAM 부족 시 480으로 축소) | `640` |
 | `AI_POLL_INTERVAL` | jobs 큐 폴링 간격(초) | `30` |
 | `AI_MODEL_ROOT` | InsightFace 가중치 저장 경로 | `$DATA_DIR/models` |
+| `AI_DISCORD_WEBHOOK_URL` | scan/rematch 완료 알림용 Discord webhook URL (미설정 시 알림 스킵) | (없음) |
+| `BASE_URL` | Discord 알림에 붙는 `/admin/people` 링크의 기준 URL (lumisshow와 동일 값 사용) | `http://localhost:8080` |
 
 - 모델 가중치(buffalo_l, 약 300MB)는 non-commercial 라이선스라 이미지에 포함하지 않으며,
   첫 스캔 시 `$DATA_DIR/models/`로 자동 다운로드된다 (볼륨 영속 → 재시작 시 재다운로드 없음).
