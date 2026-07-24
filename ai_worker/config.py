@@ -49,3 +49,14 @@ def scan_hour() -> int:
 def poll_interval() -> int:
     """데몬 모드 jobs 큐 폴링 간격 (초)."""
     return int(os.getenv("AI_POLL_INTERVAL", "30"))
+
+
+def discord_webhook_url() -> str:
+    """스캔/재매칭 완료 알림용 Discord webhook URL. 미설정이면 알림 스킵."""
+    return os.getenv("AI_DISCORD_WEBHOOK_URL", "")
+
+
+def base_url() -> str:
+    """LumisShow 접속 URL. Discord 알림에 Admin People 페이지 링크를 붙이는 데 사용
+    (backend의 admin_links.py와 동일 기본값/규약 공유)."""
+    return os.getenv("BASE_URL", "http://localhost:8080").rstrip("/")

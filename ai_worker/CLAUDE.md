@@ -39,6 +39,7 @@ db.py        # ai.db 스키마/연결 (sqlite3 동기, WAL)
 scanner.py   # PHOTO_ROOT 증분 스캔 (path+mtime, @eaDir 제외)
 pipeline.py  # InsightFace lazy 로드, 사진 1장 분석→기록 (1장=1커밋, resumable)
 matcher.py   # cosine 매칭 (numpy brute-force), 임베딩 BLOB 변환
+notify.py    # Discord webhook 알림 (AI_DISCORD_WEBHOOK_URL)
 main.py      # CLI: scan(--limit) | rematch | daemon
 tools/       # label_helper.py (CSV 라벨링), eval.py (precision/recall)
 ```
@@ -86,6 +87,24 @@ rename 후보가 전혀 없는(basename이 현재 PHOTO_ROOT 어디에도 없는
 제안하면 안 되기 때문. 이 기능은 EXIF를 별도 파일(사본)로 저장하는 외부 앱을 쓰다가
 그 사본을 지운 경우처럼, AI가 사본을 별개 사진으로 분석해버려 인물 사진 목록에
 중복 항목이 남는 상황을 정리하기 위해 추가됐다.
+
+### Discord 알림 (daemon 모드 전용)
+`AI_DISCORD_WEBHOOK_URL` 설정 시 scan/rematch 완료 후 `notify.py`가 webhook으로 요약을
+전송한다(사진 수/얼굴 수/에러 수/경로 변경·삭제 승인 대기 건수/소요시간 + `BASE_URL`로
+만든 `/admin/people` 링크). daemon.py의 jobs 트리거 처리와 야간 자동 스캔 양쪽에서
+호출되며, `python -m ai_worker.main scan` CLI 직접 실행은 알림 대상이 아니다
+(터미널로 직접 결과를 보는 상황이라 불필요). 전송 실패는 로그만 남기고 삼켜 daemon
+루프에 영향 주지 않는다. `run_scan()`이 리포트하는 경로 변경/삭제 건수는 "이번 스캔의
+신규 발생분"이 아니라 `pending_path_repairs`/`pending_orphan_cleanups`의
+`status='pending'` **전체 누적 건수**다 — 두 테이블 모두 admin이 승인/거부하기 전까지
+ai.db에 영구 보관되므로 별도 이력 저장 없이 그대로 조회하면 된다(과거 스캔에서 쌓이고
+아직 처리 안 된 것도 포함).
+Discord 일반 메시지 본문은 `[텍스트](url)` 마크다운 링크를 렌더링하지 않음(임베드 전용) —
+raw URL을 그대로 붙여 자동 링크화에 의존한다.
+urllib 기본 User-Agent(`Python-urllib/x.x`)는 Discord(Cloudflare)가 403으로 차단하므로
+`notify.py`에서 커스텀 User-Agent 헤더를 명시한다.
+전송 실패 시 최대 3회 시도(2초 간격 고정 딜레이), 3회 모두 실패하면 로그만 남기고
+포기한다(daemon 루프를 막지 않기 위해 예외를 밖으로 던지지 않음).
 
 ### 경로 규약
 `faces.photo_path`, `photos_analyzed.path`는 **PHOTO_ROOT 상대 경로 + `/` 구분자**
