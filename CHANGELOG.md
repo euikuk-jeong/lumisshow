@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.15.0] - 2026-07-29
+
+### Added
+- **슬라이드쇼 저사양 모드**: 옛날/저사양 TV 등에서 재생이 버벅이는 문제 대응. 툴바에
+  "저사양" 토글 추가(기기별 `localStorage` 저장, 앨범·공유링크와 무관) — 평소엔 원본
+  화질을 유지하고, 켰을 때만 원본 대신 large(1920×1080) 썸네일을 쓰고 Ken Burns 확대
+  애니메이션·전체화면 blur 배경 레이어를 생략하며 전환 효과를 fade로 고정
+  (`slideshow.js`, `slideshow.css`, `thumbnail.py`, `schemas.py`, `share.py`,
+  `admin_people.py`, `admin_browse.py`)
+
+### Fixed
+- **방향키 입력 시 슬라이드쇼 툴바 자동 숨김 타이머가 리셋되지 않던 문제**: 리모컨
+  (방향키)만 쓰는 기기에서 3초 후 툴바가 숨으면 다시 꺼낼 방법이 없어 저사양 버튼
+  등에 접근할 수 없었다. `handleKeydown`에서 `showUI()` 호출 추가
+- **large 썸네일 생성 시 원본 대비 크기차가 작으면 JPEG draft가 축소 스케일을 못
+  찾아 풀해상도로 디코딩되던 문제**: draft 마진을 large만 1배로 낮춰 수정
+  (실측 3배 개선)
+
 ## [1.14.0] - 2026-07-25
 
 ### Added
@@ -844,7 +862,8 @@ Phase 2 — AI 얼굴 인식 스마트 앨범. NAS 로컬 AI(InsightFace)로 사
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v1.14.0...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v1.15.0...HEAD
+[1.15.0]: https://github.com/euikuk-jeong/lumisshow/compare/v1.14.0...v1.15.0
 [1.14.0]: https://github.com/euikuk-jeong/lumisshow/compare/v1.13.0...v1.14.0
 [1.13.0]: https://github.com/euikuk-jeong/lumisshow/compare/v1.12.0...v1.13.0
 [1.12.0]: https://github.com/euikuk-jeong/lumisshow/compare/v1.11.3...v1.12.0
