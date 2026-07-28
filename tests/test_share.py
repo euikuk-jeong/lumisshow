@@ -201,8 +201,10 @@ async def test_get_photos_urls_format(admin_client):
         assert p["url"].startswith("/media/")
         assert p["thumb_small_url"].startswith("/thumb/")
         assert p["thumb_medium_url"].startswith("/thumb/")
+        assert p["thumb_large_url"].startswith("/thumb/")
         assert "size=small" in p["thumb_small_url"]
         assert "size=medium" in p["thumb_medium_url"]
+        assert "size=large" in p["thumb_large_url"]
         assert p["file_path"] is None  # 공유 링크에 원본 경로 미노출
 
 

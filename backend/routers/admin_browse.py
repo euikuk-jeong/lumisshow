@@ -267,8 +267,8 @@ async def admin_thumb(
     size: str = Query(default="small"),
     _: str = Depends(admin_image_auth),
 ):
-    if size not in ("small", "medium"):
-        raise HTTPException(status_code=400, detail="size must be 'small' or 'medium'")
+    if size not in ("small", "medium", "large"):
+        raise HTTPException(status_code=400, detail="size must be 'small', 'medium', or 'large'")
     root = _photo_root()
     if os.path.isabs(path):
         full_path = os.path.realpath(path)

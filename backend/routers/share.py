@@ -347,6 +347,7 @@ async def get_photos(
             url=f"/media/{quote(r['file_path'])}",
             thumb_small_url=f"/thumb/{quote(r['file_path'])}?size=small",
             thumb_medium_url=f"/thumb/{quote(r['file_path'])}?size=medium",
+            thumb_large_url=f"/thumb/{quote(r['file_path'])}?size=large",
             meta=cached.get(r["file_path"], {}),
         )
         for r in rows

@@ -4,6 +4,7 @@ import { EFFECTS, DEFAULT_SETTINGS, loadSlideshowSettings, saveSlideshowSettings
 
 const TRANS_MS = 700;
 const KB_CLASSES = ['kb-tl','kb-tr','kb-bl','kb-br','kb-t','kb-b','kb-l','kb-r'];
+const LOW_POWER_KEY = 'slideshow_low_power'; // 기기(브라우저)별 저장 — 앨범/토큰과 무관, 옛날 TV 등에서 수동 고정용
 
 function buildOrder(total, order, startIdx) {
   const seq = Array.from({ length: total }, (_, i) => i);
@@ -144,6 +145,7 @@ async function runSlideshow(src) {
   let transTimer = null;
   let hideTimer = null;
   const preloadCache = {};
+  let lowPower = localStorage.getItem(LOW_POWER_KEY) === '1';
 
   // ── Audio ────────────────────────────────────────────────────
   const musicCount = album.music_count || 0;
@@ -190,7 +192,7 @@ async function runSlideshow(src) {
   ` : '<div class="ss-music-group"></div>';
 
   app.innerHTML = `
-    <div class="ss-wrap" id="ss-wrap">
+    <div class="ss-wrap${lowPower ? ' ss-low-power' : ''}" id="ss-wrap">
       <div class="ss-slot" id="ss-slot-a">
         <img class="ss-img" id="ss-img-a" alt="">
       </div>
@@ -213,6 +215,7 @@ async function runSlideshow(src) {
         <button class="ss-tb-btn" id="ss-next-btn" title="다음">&#9654;</button>
         <a class="ss-tb-btn" id="ss-dl-btn" title="현재 사진 다운로드" download>&#8595;</a>
         <button class="ss-tb-btn ss-info-btn-icon" id="ss-info-btn" title="정보">i</button>
+        <button class="ss-tb-btn" id="ss-lp-btn" title="저사양 모드: 배경 흐림·Ken Burns 효과 끄기 (느린 기기용)">저사양</button>
         <button class="ss-tb-btn" id="ss-fs-btn" title="전체화면">&#x26F6;</button>
         <button class="ss-tb-btn" id="ss-close-btn" title="닫기">&#215;</button>
       </div>
@@ -239,12 +242,18 @@ async function runSlideshow(src) {
     return photos[displayOrder[((p % totalPhotos) + totalPhotos) % totalPhotos]];
   }
 
+  // 저사양 모드: 원본 대신 large(1920x1080) 썸네일 — 디코딩 비용 절감.
+  // 평소엔 원본 화질 유지(과거 썸네일로 낮췄다가 화질 불만으로 원본으로 되돌린 이력 있음).
+  function photoSrc(photo) {
+    return lowPower ? photo.thumb_large_url : photo.url;
+  }
+
   function preload(p) {
     const idx = displayOrder[((p % totalPhotos) + totalPhotos) % totalPhotos];
     const photo = photos[idx];
     if (photo && !preloadCache[idx]) {
       const img = new Image();
-      img.src = photo.url;
+      img.src = photoSrc(photo);
       preloadCache[idx] = img;
     }
   }
@@ -257,6 +266,7 @@ async function runSlideshow(src) {
   function startKenBurns(slot) {
     const el = slotEls[slot];
     el.classList.remove(...KB_CLASSES);
+    if (lowPower) return; // 저사양 모드: 확대/이동 애니메이션(rasterize 비용) 생략
     void el.offsetWidth; // force reflow to restart animation
     const cls = KB_CLASSES[Math.floor(Math.random() * KB_CLASSES.length)];
     el.style.setProperty('--kb-dur', cfg.interval + 's');
@@ -369,13 +379,15 @@ async function runSlideshow(src) {
       return;
     }
 
-    // Pick effect
-    let eff = cfg.effect === 'random'
-      ? EFFECTS[Math.floor(Math.random() * EFFECTS.length)]
-      : cfg.effect;
+    // Pick effect — 저사양 모드는 항상 fade(opacity만 변경, 가장 저비용)로 고정
+    let eff = lowPower
+      ? 'fade'
+      : cfg.effect === 'random'
+        ? EFFECTS[Math.floor(Math.random() * EFFECTS.length)]
+        : cfg.effect;
 
     // Set next image in incoming slot
-    imgEls[incoming].src = nextPhoto.url;
+    imgEls[incoming].src = photoSrc(nextPhoto);
     slotEls[incoming].style.setProperty('--ss-bg-img', `url("${nextPhoto.thumb_medium_url}")`);
 
     // incoming on top
@@ -457,7 +469,7 @@ async function runSlideshow(src) {
   window._pageCleanup = cleanup;
 
   // ── Initial display ──────────────────────────────────────────
-  imgEls.a.src = photoAt(0).url;
+  imgEls.a.src = photoSrc(photoAt(0));
   slotEls.a.style.setProperty('--ss-bg-img', `url("${photoAt(0).thumb_medium_url}")`);
   startKenBurns('a');
   preload(1);
@@ -513,6 +525,20 @@ async function runSlideshow(src) {
   }
   document.getElementById('ss-close-btn').addEventListener('click', closeSlideshow);
 
+  function updateLpBtn() {
+    const btn = document.getElementById('ss-lp-btn');
+    if (btn) btn.style.background = lowPower ? 'rgba(255,255,255,0.35)' : '';
+  }
+  updateLpBtn();
+  document.getElementById('ss-lp-btn').addEventListener('click', () => {
+    lowPower = !lowPower;
+    localStorage.setItem(LOW_POWER_KEY, lowPower ? '1' : '0');
+    document.getElementById('ss-wrap').classList.toggle('ss-low-power', lowPower);
+    if (lowPower) slotEls[activeSlot].classList.remove(...KB_CLASSES);
+    imgEls[activeSlot].src = photoSrc(photoAt(pos)); // 화면에 보이는 사진 화질도 즉시 반영
+    updateLpBtn();
+  });
+
   document.getElementById('ss-info-btn').addEventListener('click', () => {
     infoVisible = !infoVisible;
     const infoEl = document.getElementById('ss-info');
@@ -552,6 +578,7 @@ async function runSlideshow(src) {
 
   // ── Keyboard ─────────────────────────────────────────────────
   function handleKeydown(e) {
+    showUI(); // 리모컨(방향키)만 쓰는 TV 등은 마우스 이동이 없어 이게 유일한 툴바 재표시 수단
     switch (e.key) {
       case 'ArrowRight': case 'ArrowDown':  advance(1);  break;
       case 'ArrowLeft':  case 'ArrowUp':    advance(-1); break;

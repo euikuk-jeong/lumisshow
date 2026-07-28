@@ -10,6 +10,7 @@ from PIL import Image, ImageOps
 SIZES: dict[str, tuple[int, int]] = {
     "small": (300, 200),
     "medium": (800, 600),
+    "large": (1920, 1080),
 }
 
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".tiff", ".bmp"}
@@ -61,10 +62,14 @@ def generate_thumbnail(file_path: str, size: str) -> str:
                 return out_path
             os.makedirs(_thumb_dir(), exist_ok=True)
             max_w, max_h = SIZES[size]
+            # large(1920x1080)는 원본과 크기차가 작아(보통 2~3배) *2 마진을 요구하면
+            # draft가 1/2·1/4 스케일을 찾지 못해 풀해상도 디코딩으로 떨어짐(측정: 3배 느림).
+            # small/medium은 원본 대비 훨씬 작아 *2 마진을 둬도 충분히 축소된 스케일이 걸린다.
+            draft_mult = 1 if size == "large" else 2
             with _thumb_semaphore, Image.open(file_path) as img:
                 # JPEG draft: 목표 크기보다 큰 원본을 요청 크기에 가까운 스케일(1/2, 1/4...)로
                 # 디코딩해 풀해상도 디코딩 대비 속도·메모리를 크게 절감 (JPEG 외 포맷은 no-op)
-                img.draft("RGB", (max_w * 2, max_h * 2))
+                img.draft("RGB", (max_w * draft_mult, max_h * draft_mult))
                 img = ImageOps.exif_transpose(img)
                 img.thumbnail((max_w, max_h), Image.LANCZOS)
                 img.convert("RGB").save(out_path, "JPEG", quality=85, optimize=True)

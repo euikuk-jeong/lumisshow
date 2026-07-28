@@ -203,6 +203,7 @@ class SharePhotoItem(BaseModel):
     url: str
     thumb_small_url: str
     thumb_medium_url: str
+    thumb_large_url: str
     filename: Optional[str]
     file_path: Optional[str] = None  # Admin 응답 전용 — 공유 링크에는 노출하지 않음
     taken_at: Optional[datetime]
@@ -236,7 +237,7 @@ _EXIF_META_FIELDS = (
 
 def build_share_photo_item(
     id: int, file_path: str, url: str,
-    thumb_small_url: str, thumb_medium_url: str, meta: dict,
+    thumb_small_url: str, thumb_medium_url: str, thumb_large_url: str, meta: dict,
     include_file_path: bool = False,
 ) -> SharePhotoItem:
     """EXIF meta dict → SharePhotoItem. share.py·admin_people.py 공용 빌더.
@@ -247,6 +248,7 @@ def build_share_photo_item(
         url=url,
         thumb_small_url=thumb_small_url,
         thumb_medium_url=thumb_medium_url,
+        thumb_large_url=thumb_large_url,
         filename=os.path.basename(file_path),
         file_path=file_path if include_file_path else None,
         **{k: meta.get(k) for k in _EXIF_META_FIELDS},

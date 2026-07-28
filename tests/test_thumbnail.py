@@ -44,6 +44,45 @@ def test_generate_thumbnail_medium(data_dir, img_path):
         assert t.height <= 600
 
 
+def test_generate_thumbnail_large(data_dir, img_path):
+    out = generate_thumbnail(img_path, "large")
+    assert os.path.exists(out)
+    with Image.open(out) as t:
+        assert t.width <= 1920
+        assert t.height <= 1080
+
+
+def test_thumbnail_large_uses_1x_draft_margin(data_dir, tmp_path, monkeypatch):
+    """large는 원본과 크기차가 작아 draft 마진을 2배로 두면 스케일을 못 찾고 풀해상도
+    디코딩으로 떨어진다(실측 3배 느림). small/medium은 기존대로 2배 마진 유지.
+
+    JpegImageFile.draft()는 클래스 자체 오버라이드라 Image.Image.draft를 패치해도
+    가로채지지 않는다(ImageOps.exif_transpose가 반환하는 사본은 평범한 Image.Image라
+    thumbnail() 내부의 자체 draft(reducing_gap=2.0) 호출만 거기서 잡히고, 우리가 만든
+    explicit draft() 호출과는 무관함) — 그래서 실제 오버라이드 대상인
+    JpegImagePlugin.JpegImageFile.draft를 직접 패치해야 우리 코드의 explicit 호출만 잡힌다."""
+    from PIL import JpegImagePlugin
+
+    p = str(tmp_path / "big.jpg")
+    Image.new("RGB", (6000, 4000), color=(10, 20, 30)).save(p, "JPEG")
+
+    calls = []
+    orig_draft = JpegImagePlugin.JpegImageFile.draft
+
+    def spy_draft(self, mode, size):
+        calls.append(size)
+        return orig_draft(self, mode, size)
+
+    monkeypatch.setattr(JpegImagePlugin.JpegImageFile, "draft", spy_draft)
+
+    generate_thumbnail(p, "large")
+    assert calls == [(1920, 1080)]
+
+    calls.clear()
+    generate_thumbnail(p, "medium")
+    assert calls == [(1600, 1200)]
+
+
 def test_thumbnail_aspect_ratio_preserved(data_dir, img_path):
     """1000x800 → small(300x200): 비율 유지 → 250x200 또는 300x240 아닌 250x200"""
     out = generate_thumbnail(img_path, "small")
