@@ -284,6 +284,7 @@ async def test_person_photos_detail(admin_client):
     assert p0["url"] == "/api/admin/photo?path=2024/photo_0.jpg"
     assert p0["thumb_small_url"] == "/api/admin/thumb?path=2024/photo_0.jpg&size=small"
     assert p0["thumb_medium_url"] == "/api/admin/thumb?path=2024/photo_0.jpg&size=medium"
+    assert p0["thumb_large_url"] == "/api/admin/thumb?path=2024/photo_0.jpg&size=large"
     assert p0["filename"] == "photo_0.jpg"
 
     # 페이지네이션: page=2&size=1 → 두 번째 사진만

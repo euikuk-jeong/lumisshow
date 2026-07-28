@@ -65,6 +65,12 @@ async def test_thumb_medium(admin_client, media_env):
     assert r.status_code == 200
 
 
+async def test_thumb_large(admin_client, media_env):
+    path = media_env["stored_path"]
+    r = await admin_client.get(f"/thumb/{path}?size=large")
+    assert r.status_code == 200
+
+
 async def test_thumb_invalid_size(admin_client, media_env):
     path = media_env["stored_path"]
     r = await admin_client.get(f"/thumb/{path}?size=huge")

@@ -38,6 +38,11 @@
   z-index: 1;
 }
 
+/* 저사양 모드: 전체화면 blur 배경 레이어 생략 (약한 GPU에서 필터 렌더 비용 큼) */
+.ss-wrap.ss-low-power .ss-slot::before {
+  display: none;
+}
+
 /* Empty image hidden */
 .ss-img:not([src]), .ss-img[src=""] { opacity: 0; }
 
@@ -318,6 +323,7 @@
   .ss-counter,
   #ss-next-btn,
   #ss-info-btn,
+  #ss-lp-btn,
   #ss-fs-btn { display: none; }
 }
 

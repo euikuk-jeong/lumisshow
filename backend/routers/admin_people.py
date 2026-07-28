@@ -629,6 +629,7 @@ async def list_person_photos_detail(
             url=f"/api/admin/photo?path={quote(p)}",
             thumb_small_url=f"/api/admin/thumb?path={quote(p)}&size=small",
             thumb_medium_url=f"/api/admin/thumb?path={quote(p)}&size=medium",
+            thumb_large_url=f"/api/admin/thumb?path={quote(p)}&size=large",
             meta=meta_map.get(p, {}),
             include_file_path=True,  # Admin 전용 — 프론트 정렬·라이트박스용
         )

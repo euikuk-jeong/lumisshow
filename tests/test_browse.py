@@ -157,6 +157,12 @@ async def test_thumb_returns_image(auth_client):
     assert r.headers["content-type"] == "image/jpeg"
 
 
+async def test_thumb_large_returns_image(auth_client):
+    r = await auth_client.get("/api/admin/thumb?path=photo0.jpg&size=large")
+    assert r.status_code == 200
+    assert r.headers["content-type"] == "image/jpeg"
+
+
 async def test_thumb_invalid_size(auth_client):
     r = await auth_client.get("/api/admin/thumb?path=photo0.jpg&size=huge")
     assert r.status_code == 400
