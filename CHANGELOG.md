@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.15.4] - 2026-07-29
+
+### Changed
+- **화면 전반 숫자 표시에 1000단위 구분 기호 적용**: 인물 목록/상세의 확정·추정 얼굴 수를
+  포함해 앨범/폴더/사진 수, 조회수, 선택 개수, 슬라이드쇼·라이트박스·공유뷰어 인덱스,
+  경로 복구·파일정리 대기 건수, 앨범에 사진 추가 결과 등 자릿수가 커질 수 있는 숫자 표시를
+  `toLocaleString()`으로 통일. 음악 트랙 수·숨김 경로 수처럼 항상 작은 값만 갖는 카운터는
+  제외 (`admin-people.js`, `admin-person-detail.js`, `admin-person-photos.js`,
+  `admin-albums.js`, `admin-album-edit.js`, `admin-browse.js`, `album-view.js`,
+  `slideshow.js`, `lightbox.js`)
+
 ## [1.15.3] - 2026-07-29
 
 ### Changed
@@ -889,7 +900,8 @@ Phase 2 — AI 얼굴 인식 스마트 앨범. NAS 로컬 AI(InsightFace)로 사
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v1.15.3...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v1.15.4...HEAD
+[1.15.4]: https://github.com/euikuk-jeong/lumisshow/compare/v1.15.3...v1.15.4
 [1.15.3]: https://github.com/euikuk-jeong/lumisshow/compare/v1.15.2...v1.15.3
 [1.15.2]: https://github.com/euikuk-jeong/lumisshow/compare/v1.15.1...v1.15.2
 [1.15.1]: https://github.com/euikuk-jeong/lumisshow/compare/v1.15.0...v1.15.1
