@@ -740,6 +740,7 @@ async def test_ai_status_and_jobs(admin_client):
     r = await admin_client.get("/api/admin/ai/status")
     stats = r.json()
     assert stats["photos"] == 0 and stats["faces"] == 0 and stats["recent_jobs"] == []
+    assert stats["persons"] == 0 and stats["unassigned"] == 0
 
     r = await admin_client.post("/api/admin/ai/jobs", json={"type": "scan"})
     assert r.status_code == 201 and r.json()["duplicated"] is False
@@ -755,6 +756,23 @@ async def test_ai_status_and_jobs(admin_client):
     stats = (await admin_client.get("/api/admin/ai/status")).json()
     assert stats["recent_jobs"][0]["type"] == "scan"
     assert stats["recent_jobs"][0]["status"] == "pending"
+
+
+async def test_ai_status_unassigned_excludes_labeled_and_matched(admin_client):
+    """미분류(unassigned)는 라벨도 매칭도 없는 얼굴만 센다."""
+    face_ids = await _seed_faces(3)
+    pid = (await admin_client.post("/api/admin/people", json={"name": "지우"})).json()["id"]
+
+    await admin_client.post(
+        "/api/admin/faces/batch-label", json={"face_ids": [face_ids[0]], "person_id": pid}
+    )
+    await _seed_match(face_ids[1], pid)
+    # face_ids[2]는 라벨도 매칭도 없음 → 미분류
+
+    stats = (await admin_client.get("/api/admin/ai/status")).json()
+    assert stats["faces"] == 3
+    assert stats["unassigned"] == 1
+    assert stats["persons"] == 1
 
 
 # ── 무시된 얼굴 재검토 ────────────────────────────────────────────────
