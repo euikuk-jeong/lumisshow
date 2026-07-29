@@ -61,7 +61,7 @@ export async function renderAlbumView(token) {
         <h1 class="viewer-title">${esc(album.album_name)}</h1>
         ${album.description ? `<p class="viewer-desc text-muted">${esc(album.description)}</p>` : ''}
         <div class="viewer-meta">
-          <span>📷 ${album.photo_count}장</span>
+          <span>📷 ${album.photo_count.toLocaleString()}장</span>
           <span>📅 ${new Date(album.created_at).toLocaleDateString('ko-KR')}</span>
           ${expiryHtml}
           ${album.has_music ? '<span>🎵 음악 있음</span>' : ''}
@@ -379,7 +379,7 @@ function _openSharePhotoViewer(token, photos, startIdx) {
     imgEl.onload = () => { imgEl.style.opacity = '1'; };
     imgEl.src = photo.url;
     filenameEl.textContent = photo.filename || '';
-    counterEl.textContent = `${idx + 1} / ${photos.length}`;
+    counterEl.textContent = `${(idx + 1).toLocaleString()} / ${photos.length.toLocaleString()}`;
     dlBtn.href = photo.url;
     dlBtn.download = photo.filename || 'photo.jpg';
     resetZoom();

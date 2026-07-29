@@ -126,7 +126,7 @@ function renderEditForm(album, links, tzOffset, serverTheme = 'dark') {
           <hr class="divider" style="margin:12px 0">
           <div class="flex items-center gap-2">
             <span class="form-label" style="margin:0">조회 수</span>
-            <span id="view-count-value">${album.view_count ?? 0}회</span>
+            <span id="view-count-value">${(album.view_count ?? 0).toLocaleString()}회</span>
             <button type="button" class="btn btn-ghost btn-sm" id="btn-reset-views">초기화</button>
           </div>
         </div>
@@ -187,7 +187,7 @@ function renderEditForm(album, links, tzOffset, serverTheme = 'dark') {
       <!-- Photos -->
       <div class="card aei-photos">
           <div class="flex items-center justify-between" style="margin-bottom:12px">
-            <p class="section-title" style="margin:0">사진 (<span id="photo-count-label">${album.photos.length}</span>장)</p>
+            <p class="section-title" style="margin:0">사진 (<span id="photo-count-label">${album.photos.length.toLocaleString()}</span>장)</p>
             <div class="flex gap-2 items-center" id="photo-normal-controls">
               <button type="button" class="btn btn-warning btn-sm" id="btn-repair-paths" style="display:none">경로 복구</button>
               <div class="photo-sort-wrap">
@@ -356,7 +356,7 @@ function renderEditForm(album, links, tzOffset, serverTheme = 'dark') {
     } else if (photoState.viewMode === 'date') {
       el.innerHTML = groupPhotosByDate(photoState.photos).map(g => `
         <div class="date-group">
-          <div class="date-group-header" data-key="${esc(g.key)}">${esc(g.label)} <span class="text-muted text-sm">(${g.photos.length}장)</span></div>
+          <div class="date-group-header" data-key="${esc(g.key)}">${esc(g.label)} <span class="text-muted text-sm">(${g.photos.length.toLocaleString()}장)</span></div>
           <div class="photo-grid">${g.photos.map(p =>
             photoThumb(p, photoState.coverPath, photoState.removeMode, photoState.removeSelected.has(p.file_path))
           ).join('')}</div>
@@ -371,7 +371,7 @@ function renderEditForm(album, links, tzOffset, serverTheme = 'dark') {
     attachImageErrorTracking();
     photoState.recomputeDateOffsets();
     const countEl = document.getElementById('photo-count-label');
-    if (countEl) countEl.textContent = photoState.photos.length;
+    if (countEl) countEl.textContent = photoState.photos.length.toLocaleString();
   }
 
   function setPhotoViewMode(mode) {
@@ -563,7 +563,7 @@ function bindPhotoRemoveMode(albumId, photoState, refresh) {
 
   function updateCount() {
     const n = photoState.removeSelected.size;
-    countLabel.textContent = `${n}개 선택됨`;
+    countLabel.textContent = `${n.toLocaleString()}개 선택됨`;
     confirmBtn.disabled = n === 0;
   }
 
@@ -596,7 +596,7 @@ function bindPhotoRemoveMode(albumId, photoState, refresh) {
   confirmBtn.addEventListener('click', async () => {
     const paths = Array.from(photoState.removeSelected);
     if (!paths.length) return;
-    if (!confirm(`선택한 ${paths.length}장을 앨범에서 제외하시겠습니까?`)) return;
+    if (!confirm(`선택한 ${paths.length.toLocaleString()}장을 앨범에서 제외하시겠습니까?`)) return;
     confirmBtn.disabled = true;
     try {
       await api.delete(`/api/admin/albums/${albumId}/photos`, { photo_paths: paths });
@@ -1014,9 +1014,9 @@ function bindRepairPaths(albumId, photoState, refresh, resetBroken) {
       refresh();
 
       const parts = [];
-      if (fixed.length)     parts.push(`${fixed.length}건 복구됨`);
-      if (ambiguous.length) parts.push(`${ambiguous.length}건 후보 여러 개 (수동 확인 필요)`);
-      if (not_found.length) parts.push(`${not_found.length}건 파일 없음`);
+      if (fixed.length)     parts.push(`${fixed.length.toLocaleString()}건 복구됨`);
+      if (ambiguous.length) parts.push(`${ambiguous.length.toLocaleString()}건 후보 여러 개 (수동 확인 필요)`);
+      if (not_found.length) parts.push(`${not_found.length.toLocaleString()}건 파일 없음`);
       alert(parts.length ? parts.join('\n') : '복구할 경로가 없습니다.');
     } catch (err) {
       alert(err.message);
