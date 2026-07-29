@@ -1,9 +1,17 @@
 import { shareApi, ShareAuthError } from '../api.js';
 import { esc, getVersion } from '../utils.js';
-import { EFFECTS, EFFECT_LABELS, LOW_POWER_KEY, loadSlideshowSettings } from '../slideshow-config.js';
+import { EFFECTS, EFFECT_LABELS, loadSlideshowSettings } from '../slideshow-config.js';
 
 function saveSettings(token, s) {
   localStorage.setItem(`slideshow_settings_${token}`, JSON.stringify(s));
+}
+
+// "간단히 보기" 체크박스는 기억되는 설정이 아니라 뷰 화면 진입할 때마다 항상
+// 언체크로 시작하는 1회성 선택 — 체크 상태를 슬라이드쇼 URL에 실어 보내기만 한다.
+function withLowPower(path) {
+  const checked = document.getElementById('chk-lowpower')?.checked;
+  if (!checked) return path;
+  return path + (path.includes('?') ? '&' : '?') + 'lp=1';
 }
 
 function formatDateInTZ(isoString, offsetMinutes) {
@@ -60,8 +68,11 @@ export async function renderAlbumView(token) {
         </div>
         <div class="viewer-actions">
           <button class="btn btn-primary btn-lg" id="btn-slideshow">▶ 슬라이드쇼</button>
-          <button class="btn btn-ghost btn-lg" id="btn-lowpower" title="느리거나 오래된 TV 등에서 재생이 버벅일 때 켜세요. 이 기기에서만 적용됩니다.">간단히 보기</button>
           <button class="btn btn-ghost btn-lg" id="btn-settings">⚙ 설정</button>
+          <label class="viewer-lowpower-check" title="느리거나 오래된 TV 등에서 재생이 버벅일 때 체크하세요.">
+            <input type="checkbox" id="chk-lowpower">
+            간단히 보기
+          </label>
         </div>
         <a class="btn btn-ghost w-full viewer-download"
            ${photos.length > 0 ? `href="/api/share/${token}/download"` : 'aria-disabled="true" tabindex="-1" style="opacity:0.4;pointer-events:none;cursor:not-allowed"'}>⬇ 전체 다운로드 (ZIP)</a>
@@ -127,37 +138,16 @@ export async function renderAlbumView(token) {
   });
 
   document.getElementById('btn-slideshow').addEventListener('click', () => {
-    window.navigate(`/s/${token}/slideshow`);
+    window.navigate(withLowPower(`/s/${token}/slideshow`));
   });
   document.getElementById('btn-settings').addEventListener('click', () => {
     document.getElementById('settings-overlay').style.display = 'flex';
   });
-  _initLowPowerToggle();
 
   document.getElementById('thumb-grid')?.addEventListener('click', (e) => {
     const thumb = e.target.closest('.viewer-thumb');
     if (thumb) _openSharePhotoViewer(token, photos, parseInt(thumb.dataset.idx, 10));
   });
-}
-
-function _initLowPowerToggle() {
-  const btn = document.getElementById('btn-lowpower');
-  if (!btn) return;
-
-  function render() {
-    const on = localStorage.getItem(LOW_POWER_KEY) === '1';
-    btn.classList.toggle('btn-primary', on);
-    btn.classList.toggle('btn-ghost', !on);
-    btn.textContent = on ? '✓ 간단히 보기' : '간단히 보기';
-  }
-
-  btn.addEventListener('click', () => {
-    const on = localStorage.getItem(LOW_POWER_KEY) === '1';
-    localStorage.setItem(LOW_POWER_KEY, on ? '0' : '1');
-    render();
-  });
-
-  render();
 }
 
 function _openSharePhotoViewer(token, photos, startIdx) {
@@ -424,7 +414,7 @@ function _openSharePhotoViewer(token, photos, startIdx) {
 
   overlay.querySelector('.spv-ss-btn').addEventListener('click', () => {
     close();
-    window.navigate(`/s/${token}/slideshow?i=${idx}`);
+    window.navigate(withLowPower(`/s/${token}/slideshow?i=${idx}`));
   });
 
   infoBtnEl.addEventListener('click', () => {
@@ -482,7 +472,7 @@ function _initSettingsPanel(token, album) {
       effect: document.getElementById('s-effect').value,
     });
     document.getElementById('settings-overlay').style.display = 'none';
-    window.navigate(`/s/${token}/slideshow`);
+    window.navigate(withLowPower(`/s/${token}/slideshow`));
   });
 
   document.getElementById('settings-overlay').addEventListener('click', (e) => {

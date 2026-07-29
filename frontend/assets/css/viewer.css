@@ -91,6 +91,17 @@
   margin-bottom: 16px;
 }
 
+.viewer-lowpower-check {
+  display: inline-flex;
+  align-items: center;
+  align-self: center;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--muted);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
 .btn-lg {
   padding: 12px 24px;
   font-size: 15px;
