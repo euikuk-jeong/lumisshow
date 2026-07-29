@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.15.1] - 2026-07-29
+
+### Changed
+- **슬라이드쇼 저사양 모드 토글 위치를 슬라이드쇼 내부에서 뷰어 화면으로 이동**: 리모컨
+  (방향키)만 있는 TV에서 슬라이드쇼 재생 도중 토글에 접근하기 번거로웠던 문제 —
+  공유 뷰어(`/s/{token}`) 화면의 "슬라이드쇼" 버튼 옆에 "간단히 보기" 버튼을 두어
+  시작 전에 미리 켜두는 방식으로 변경. 기기별 `localStorage` 저장은 그대로 유지
+  (`album-view.js`, `slideshow.js`, `slideshow-config.js`)
+
 ## [1.15.0] - 2026-07-29
 
 ### Added
@@ -862,7 +871,8 @@ Phase 2 — AI 얼굴 인식 스마트 앨범. NAS 로컬 AI(InsightFace)로 사
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v1.15.0...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v1.15.1...HEAD
+[1.15.1]: https://github.com/euikuk-jeong/lumisshow/compare/v1.15.0...v1.15.1
 [1.15.0]: https://github.com/euikuk-jeong/lumisshow/compare/v1.14.0...v1.15.0
 [1.14.0]: https://github.com/euikuk-jeong/lumisshow/compare/v1.13.0...v1.14.0
 [1.13.0]: https://github.com/euikuk-jeong/lumisshow/compare/v1.12.0...v1.13.0
