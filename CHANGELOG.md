@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.15.2] - 2026-07-29
+
+### Changed
+- **"간단히 보기"를 기억되는 설정에서 1회성 체크박스로 변경**: 공유 뷰어 화면의
+  버튼 순서를 [슬라이드쇼] [설정] [ ] 간단히 보기로 재배치하고 버튼 대신
+  체크박스로 바꿈. `localStorage` 저장을 제거해 뷰 화면에 진입할 때마다 항상
+  언체크 상태로 시작하도록 변경 — 체크 상태는 슬라이드쇼 진입 시 `?lp=1` URL
+  파라미터로만 1회 전달(기존 `?i=` 시작 인덱스 파라미터와 공존)
+  (`album-view.js`, `slideshow.js`, `slideshow-config.js`, `viewer.css`)
+
 ## [1.15.1] - 2026-07-29
 
 ### Changed
@@ -871,7 +881,8 @@ Phase 2 — AI 얼굴 인식 스마트 앨범. NAS 로컬 AI(InsightFace)로 사
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v1.15.1...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v1.15.2...HEAD
+[1.15.2]: https://github.com/euikuk-jeong/lumisshow/compare/v1.15.1...v1.15.2
 [1.15.1]: https://github.com/euikuk-jeong/lumisshow/compare/v1.15.0...v1.15.1
 [1.15.0]: https://github.com/euikuk-jeong/lumisshow/compare/v1.14.0...v1.15.0
 [1.14.0]: https://github.com/euikuk-jeong/lumisshow/compare/v1.13.0...v1.14.0
