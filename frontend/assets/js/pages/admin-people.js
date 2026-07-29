@@ -168,8 +168,9 @@ async function loadAiStatus() {
       .map(j => `${j.type} 작업 ${j.status === 'running' ? '실행 중' : '대기 중'}`)
       .join(', ');
     el.textContent =
-      `분석 사진 ${s.photos.toLocaleString()}장 · 얼굴 ${s.faces.toLocaleString()}개 · 라벨 ${s.labels.toLocaleString()}개`
-      + (s.errors ? ` · 오류 ${s.errors}장` : '')
+      `인물 ${s.persons.toLocaleString()}명, `
+      + `얼굴 ${s.faces.toLocaleString()}개(미분류 얼굴 ${s.unassigned.toLocaleString()}개), `
+      + `분석 사진 ${s.photos.toLocaleString()}장(오류 ${s.errors.toLocaleString()}장)`
       + (activeText ? ` · ${activeText}` : '');
   } catch {
     el.textContent = 'AI 분석 데이터가 아직 없습니다 (워커 첫 스캔 전)';

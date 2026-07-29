@@ -939,7 +939,11 @@ async def ai_status(_: str = Depends(get_current_admin), db=Depends(get_ai_db)):
              (SELECT COUNT(*) FROM photos_analyzed WHERE status='error') AS errors,
              (SELECT COUNT(*) FROM faces) AS faces,
              (SELECT COUNT(*) FROM persons) AS persons,
-             (SELECT COUNT(*) FROM face_labels) AS labels"""
+             (SELECT COUNT(*) FROM face_labels) AS labels,
+             (SELECT COUNT(*) FROM faces f
+                LEFT JOIN face_labels fl ON fl.face_id = f.id
+                LEFT JOIN face_matches fm ON fm.face_id = f.id
+                WHERE fl.face_id IS NULL AND fm.face_id IS NULL) AS unassigned"""
     ) as cur:
         stats = dict(await cur.fetchone())
     async with db.execute(
