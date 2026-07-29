@@ -9,6 +9,10 @@ export const EFFECT_LABELS = {
 
 export const DEFAULT_SETTINGS = { interval: 5, order: 'sequential', music: true, volume: 25, effect: 'random', loop: true };
 
+// 기기(브라우저)별 저장 — 앨범/토큰과 무관. 옛날 TV 등에서 뷰어 화면의 "간단히 보기"
+// 버튼으로 켜두면 그 기기에서 재생하는 모든 슬라이드쇼에 적용된다.
+export const LOW_POWER_KEY = 'slideshow_low_power';
+
 export function loadSlideshowSettings(albumDefaults = {}, token = '') {
   const base = { ...DEFAULT_SETTINGS, ...albumDefaults };
   try {
