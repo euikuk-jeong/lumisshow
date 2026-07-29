@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.15.3] - 2026-07-29
+
+### Changed
+- **Admin 인물 페이지 AI 요약 문구 개편**: "분석 사진 x장 · 얼굴 x개 · 라벨 x개"에서
+  "인물 x명, 얼굴 x개(미분류 얼굴 x개), 분석 사진 x장(오류 x장)" 형식으로 변경 —
+  인물 수와 미분류(라벨·매칭 모두 없는) 얼굴 수를 바로 확인 가능. `/api/admin/ai/status`
+  응답에 `unassigned` 필드 추가 (`admin_people.py`, `admin-people.js`)
+
 ## [1.15.2] - 2026-07-29
 
 ### Changed
@@ -881,7 +889,8 @@ Phase 2 — AI 얼굴 인식 스마트 앨범. NAS 로컬 AI(InsightFace)로 사
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v1.15.2...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v1.15.3...HEAD
+[1.15.3]: https://github.com/euikuk-jeong/lumisshow/compare/v1.15.2...v1.15.3
 [1.15.2]: https://github.com/euikuk-jeong/lumisshow/compare/v1.15.1...v1.15.2
 [1.15.1]: https://github.com/euikuk-jeong/lumisshow/compare/v1.15.0...v1.15.1
 [1.15.0]: https://github.com/euikuk-jeong/lumisshow/compare/v1.14.0...v1.15.0
