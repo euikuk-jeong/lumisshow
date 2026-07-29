@@ -1,6 +1,6 @@
 import { shareApi, ShareAuthError } from '../api.js';
 import { esc, getVersion } from '../utils.js';
-import { EFFECTS, EFFECT_LABELS, loadSlideshowSettings } from '../slideshow-config.js';
+import { EFFECTS, EFFECT_LABELS, LOW_POWER_KEY, loadSlideshowSettings } from '../slideshow-config.js';
 
 function saveSettings(token, s) {
   localStorage.setItem(`slideshow_settings_${token}`, JSON.stringify(s));
@@ -60,6 +60,7 @@ export async function renderAlbumView(token) {
         </div>
         <div class="viewer-actions">
           <button class="btn btn-primary btn-lg" id="btn-slideshow">▶ 슬라이드쇼</button>
+          <button class="btn btn-ghost btn-lg" id="btn-lowpower" title="느리거나 오래된 TV 등에서 재생이 버벅일 때 켜세요. 이 기기에서만 적용됩니다.">간단히 보기</button>
           <button class="btn btn-ghost btn-lg" id="btn-settings">⚙ 설정</button>
         </div>
         <a class="btn btn-ghost w-full viewer-download"
@@ -131,11 +132,32 @@ export async function renderAlbumView(token) {
   document.getElementById('btn-settings').addEventListener('click', () => {
     document.getElementById('settings-overlay').style.display = 'flex';
   });
+  _initLowPowerToggle();
 
   document.getElementById('thumb-grid')?.addEventListener('click', (e) => {
     const thumb = e.target.closest('.viewer-thumb');
     if (thumb) _openSharePhotoViewer(token, photos, parseInt(thumb.dataset.idx, 10));
   });
+}
+
+function _initLowPowerToggle() {
+  const btn = document.getElementById('btn-lowpower');
+  if (!btn) return;
+
+  function render() {
+    const on = localStorage.getItem(LOW_POWER_KEY) === '1';
+    btn.classList.toggle('btn-primary', on);
+    btn.classList.toggle('btn-ghost', !on);
+    btn.textContent = on ? '✓ 간단히 보기' : '간단히 보기';
+  }
+
+  btn.addEventListener('click', () => {
+    const on = localStorage.getItem(LOW_POWER_KEY) === '1';
+    localStorage.setItem(LOW_POWER_KEY, on ? '0' : '1');
+    render();
+  });
+
+  render();
 }
 
 function _openSharePhotoViewer(token, photos, startIdx) {

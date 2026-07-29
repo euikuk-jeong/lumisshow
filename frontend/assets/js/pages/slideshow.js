@@ -1,10 +1,9 @@
 import { api, shareApi, AdminAuthError, ShareAuthError } from '../api.js';
 import { esc } from '../utils.js';
-import { EFFECTS, DEFAULT_SETTINGS, loadSlideshowSettings, saveSlideshowSettings } from '../slideshow-config.js';
+import { EFFECTS, DEFAULT_SETTINGS, LOW_POWER_KEY, loadSlideshowSettings, saveSlideshowSettings } from '../slideshow-config.js';
 
 const TRANS_MS = 700;
 const KB_CLASSES = ['kb-tl','kb-tr','kb-bl','kb-br','kb-t','kb-b','kb-l','kb-r'];
-const LOW_POWER_KEY = 'slideshow_low_power'; // 기기(브라우저)별 저장 — 앨범/토큰과 무관, 옛날 TV 등에서 수동 고정용
 
 function buildOrder(total, order, startIdx) {
   const seq = Array.from({ length: total }, (_, i) => i);
@@ -145,7 +144,7 @@ async function runSlideshow(src) {
   let transTimer = null;
   let hideTimer = null;
   const preloadCache = {};
-  let lowPower = localStorage.getItem(LOW_POWER_KEY) === '1';
+  const lowPower = localStorage.getItem(LOW_POWER_KEY) === '1'; // 뷰어 화면 "간단히 보기" 버튼에서 기기별로 저장됨
 
   // ── Audio ────────────────────────────────────────────────────
   const musicCount = album.music_count || 0;
@@ -215,7 +214,6 @@ async function runSlideshow(src) {
         <button class="ss-tb-btn" id="ss-next-btn" title="다음">&#9654;</button>
         <a class="ss-tb-btn" id="ss-dl-btn" title="현재 사진 다운로드" download>&#8595;</a>
         <button class="ss-tb-btn ss-info-btn-icon" id="ss-info-btn" title="정보">i</button>
-        <button class="ss-tb-btn" id="ss-lp-btn" title="저사양 모드: 배경 흐림·Ken Burns 효과 끄기 (느린 기기용)">저사양</button>
         <button class="ss-tb-btn" id="ss-fs-btn" title="전체화면">&#x26F6;</button>
         <button class="ss-tb-btn" id="ss-close-btn" title="닫기">&#215;</button>
       </div>
@@ -524,20 +522,6 @@ async function runSlideshow(src) {
     window.navigate(src.closePath, true);
   }
   document.getElementById('ss-close-btn').addEventListener('click', closeSlideshow);
-
-  function updateLpBtn() {
-    const btn = document.getElementById('ss-lp-btn');
-    if (btn) btn.style.background = lowPower ? 'rgba(255,255,255,0.35)' : '';
-  }
-  updateLpBtn();
-  document.getElementById('ss-lp-btn').addEventListener('click', () => {
-    lowPower = !lowPower;
-    localStorage.setItem(LOW_POWER_KEY, lowPower ? '1' : '0');
-    document.getElementById('ss-wrap').classList.toggle('ss-low-power', lowPower);
-    if (lowPower) slotEls[activeSlot].classList.remove(...KB_CLASSES);
-    imgEls[activeSlot].src = photoSrc(photoAt(pos)); // 화면에 보이는 사진 화질도 즉시 반영
-    updateLpBtn();
-  });
 
   document.getElementById('ss-info-btn').addEventListener('click', () => {
     infoVisible = !infoVisible;
