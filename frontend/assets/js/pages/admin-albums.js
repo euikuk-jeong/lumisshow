@@ -62,8 +62,8 @@ function albumCard(album) {
       <div class="album-info">
         <div class="album-name" title="${esc(album.name)}">${esc(album.name)}</div>
         <div class="album-meta">
-          <span>📷 ${album.photo_count}장</span>
-          <span>👁 ${album.view_count ?? 0}회</span>
+          <span>📷 ${album.photo_count.toLocaleString()}장</span>
+          <span>👁 ${(album.view_count ?? 0).toLocaleString()}회</span>
           <span>${date}</span>
         </div>
       </div>

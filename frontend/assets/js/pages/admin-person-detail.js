@@ -55,7 +55,7 @@ export async function renderAdminPersonDetail(personId) {
         <h1 class="page-title">${esc(person.name)}
           <button class="btn btn-ghost btn-sm" id="btn-rename" title="이름 변경">✎</button>
         </h1>
-        <p class="page-subtitle">확정 ${person.labeled_count} · 추정 ${person.matched_count}</p>
+        <p class="page-subtitle">확정 ${person.labeled_count.toLocaleString()} · 추정 ${person.matched_count.toLocaleString()}</p>
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <a href="/admin/people" class="btn btn-ghost" data-link>← 인물 목록</a>
@@ -160,7 +160,7 @@ export async function renderAdminPersonDetail(personId) {
     try {
       const { photos } = await api.get(`/api/admin/people/${personId}/photos?source=labeled`);
       if (!photos.length) { alert('이 인물의 사진이 없습니다.'); return; }
-      const name = prompt(`사진 ${photos.length}장으로 앨범을 만듭니다.\n앨범 이름:`, person.name);
+      const name = prompt(`사진 ${photos.length.toLocaleString()}장으로 앨범을 만듭니다.\n앨범 이름:`, person.name);
       if (!name?.trim()) return;
       const album = await api.post('/api/admin/albums', {
         name: name.trim(),
@@ -299,15 +299,16 @@ function setAllMatchedSelected(on) {
 
 function updateMatchedToolbar() {
   const n = _matchedSelected.size;
+  const nText = n.toLocaleString();
   const confirmBtn = document.getElementById('btn-confirm-selected');
   confirmBtn.disabled = n === 0;
-  confirmBtn.textContent = n ? `선택 확정 (${n})` : '선택 확정';
+  confirmBtn.textContent = n ? `선택 확정 (${nText})` : '선택 확정';
   const ignoreBtn = document.getElementById('btn-ignore-selected');
   ignoreBtn.disabled = n === 0;
-  ignoreBtn.textContent = n ? `선택 무시 (${n})` : '선택 무시';
+  ignoreBtn.textContent = n ? `선택 무시 (${nText})` : '선택 무시';
   const reassignBtn = document.getElementById('btn-reassign-selected');
   reassignBtn.disabled = n === 0 || !document.getElementById('reassign-person').options.length;
-  reassignBtn.textContent = n ? `다른 인물로 지정 (${n})` : '다른 인물로 지정';
+  reassignBtn.textContent = n ? `다른 인물로 지정 (${nText})` : '다른 인물로 지정';
 }
 
 async function confirmSelected(personId) {
@@ -322,7 +323,7 @@ async function confirmSelected(personId) {
 async function ignoreSelected(personId) {
   const ids = [..._matchedSelected];
   if (!ids.length) return;
-  if (!confirm(`선택한 ${ids.length}개 얼굴을 '등록 인물 아님'으로 무시 처리할까요?`)) return;
+  if (!confirm(`선택한 ${ids.length.toLocaleString()}개 얼굴을 '등록 인물 아님'으로 무시 처리할까요?`)) return;
   try {
     await api.post('/api/admin/faces/batch-label', { face_ids: ids, person_id: null });
     renderAdminPersonDetail(personId);
@@ -336,7 +337,7 @@ async function reassignSelected(personId) {
   const targetId = Number(select.value);
   if (!targetId) return;
   const targetName = select.options[select.selectedIndex].textContent;
-  if (!confirm(`선택한 ${ids.length}개 얼굴을 '${targetName}' 인물로 확정 지정할까요?`)) return;
+  if (!confirm(`선택한 ${ids.length.toLocaleString()}개 얼굴을 '${targetName}' 인물로 확정 지정할까요?`)) return;
   try {
     await api.post('/api/admin/faces/batch-label', { face_ids: ids, person_id: targetId });
     renderAdminPersonDetail(personId);
@@ -348,7 +349,7 @@ async function confirmByThreshold(personId) {
   if (!Number.isFinite(pct) || pct < 0 || pct > 100) { alert('0~100 사이 값을 입력하세요'); return; }
   try {
     const r = await api.post(`/api/admin/people/${personId}/confirm-matched`, { min_score: pct / 100 });
-    alert(`${r.count}장을 확정했습니다.`);
+    alert(`${r.count.toLocaleString()}장을 확정했습니다.`);
     if (r.count > 0) renderAdminPersonDetail(personId);
   } catch (e) { alert(e.message); }
 }
@@ -450,13 +451,13 @@ function updateLabeledToolbar() {
   if (!btn) return;
   const n = _labeledSelected.size;
   btn.disabled = n === 0;
-  btn.textContent = n ? `선택 확정 해제 (${n})` : '선택 확정 해제';
+  btn.textContent = n ? `선택 확정 해제 (${n.toLocaleString()})` : '선택 확정 해제';
 }
 
 async function unlabelSelectedLabeled(personId) {
   const ids = [..._labeledSelected];
   if (!ids.length) return;
-  if (!confirm(`선택한 ${ids.length}개 얼굴의 확정을 해제할까요?`)) return;
+  if (!confirm(`선택한 ${ids.length.toLocaleString()}개 얼굴의 확정을 해제할까요?`)) return;
   try {
     await api.post('/api/admin/faces/batch-unlabel', { face_ids: ids });
     renderAdminPersonDetail(personId);

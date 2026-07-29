@@ -204,7 +204,7 @@ function groupByDate(photos) {
 function renderDateGroups(groups, selected) {
   return groups.map(g => `
     <div class="date-group">
-      <div class="date-group-header" data-key="${esc(g.key)}">${esc(g.label)} <span class="text-muted text-sm">(${g.photos.length}장)</span></div>
+      <div class="date-group-header" data-key="${esc(g.key)}">${esc(g.label)} <span class="text-muted text-sm">(${g.photos.length.toLocaleString()}장)</span></div>
       <div class="photo-grid">${g.photos.map(p => selectableThumb(p, selected.has(p.path))).join('')}</div>
     </div>`).join('');
 }
@@ -217,7 +217,7 @@ function renderBrowseResult(state) {
   const breadcrumbHTML = currentPath !== null ? buildBreadcrumb(currentPath) : '';
   const foldersHTML = folders.length
     ? `<div class="folder-list">${folders.map(f =>
-        `<div class="folder-item" data-path="${esc(f.path)}">📁 ${esc(f.name)} <span class="text-muted text-sm">(${f.child_count})</span></div>`
+        `<div class="folder-item" data-path="${esc(f.path)}">📁 ${esc(f.name)} <span class="text-muted text-sm">(${f.child_count.toLocaleString()})</span></div>`
       ).join('')}</div>`
     : '';
 
@@ -235,7 +235,7 @@ function renderBrowseResult(state) {
   const selectedInView = sorted.filter(p => state.selected.has(p.path)).length;
   const headerHTML = sorted.length
     ? `<div class="browse-photos-header">
-        <span class="text-muted text-sm" id="browse-photo-count">${selectedInView} / ${sorted.length} 선택</span>
+        <span class="text-muted text-sm" id="browse-photo-count">${selectedInView.toLocaleString()} / ${sorted.length.toLocaleString()} 선택</span>
         <div style="display:flex;gap:6px">
           <button id="btn-select-all" class="btn btn-ghost btn-sm">전체 선택</button>
           <button id="btn-deselect-all" class="btn btn-ghost btn-sm">전체 해제</button>
@@ -284,11 +284,11 @@ function updatePhotoCount(state) {
   const el = document.getElementById('browse-photo-count');
   if (!el) return;
   const selectedInView = state.lastPhotos.filter(p => state.selected.has(p.path)).length;
-  el.textContent = `${selectedInView} / ${state.lastPhotos.length} 선택`;
+  el.textContent = `${selectedInView.toLocaleString()} / ${state.lastPhotos.length.toLocaleString()} 선택`;
 }
 
 function updateSelectionBar(count) {
-  document.getElementById('selection-count').textContent = `${count}개 선택됨`;
+  document.getElementById('selection-count').textContent = `${count.toLocaleString()}개 선택됨`;
   document.getElementById('selection-bar').classList.toggle('visible', count > 0);
 }
 
@@ -302,7 +302,7 @@ async function addSelected(albumId, state, backUrl) {
       photo_paths: Array.from(state.selected),
     });
     if (result && result.skipped > 0) {
-      alert(`${result.added}장 추가됨, ${result.skipped}장 중복 제외`);
+      alert(`${result.added.toLocaleString()}장 추가됨, ${result.skipped.toLocaleString()}장 중복 제외`);
     }
     window.navigate(backUrl);
   } catch (err) {

@@ -213,7 +213,7 @@ async function runSlideshow(src) {
         </div>
         <button class="ss-tb-btn" id="ss-pause-btn" title="일시정지">&#9646;&#9646;</button>
         <button class="ss-tb-btn" id="ss-prev-btn" title="이전">&#9664;</button>
-        <span class="ss-counter" id="ss-counter">1 / ${photos.length}</span>
+        <span class="ss-counter" id="ss-counter">1 / ${photos.length.toLocaleString()}</span>
         <button class="ss-tb-btn" id="ss-next-btn" title="다음">&#9654;</button>
         <a class="ss-tb-btn" id="ss-dl-btn" title="현재 사진 다운로드" download>&#8595;</a>
         <button class="ss-tb-btn ss-info-btn-icon" id="ss-info-btn" title="정보">i</button>
@@ -333,7 +333,7 @@ async function runSlideshow(src) {
       dlBtn.href = photo.url;
       dlBtn.download = photo.filename || 'photo.jpg';
     }
-    document.getElementById('ss-counter').textContent = `${pos + 1} / ${totalPhotos}`;
+    document.getElementById('ss-counter').textContent = `${(pos + 1).toLocaleString()} / ${totalPhotos.toLocaleString()}`;
     const pauseBtn = document.getElementById('ss-pause-btn');
     pauseBtn.innerHTML = playing ? '&#9646;&#9646;' : '&#9654;';
     pauseBtn.title = playing ? '일시정지' : '재개';

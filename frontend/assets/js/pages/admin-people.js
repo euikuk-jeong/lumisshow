@@ -50,7 +50,7 @@ async function loadPathRepairs() {
     el.innerHTML = `
       <div class="alert" style="display:flex;flex-direction:column;gap:8px">
         <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
-          <strong>경로 복구 대기 ${repairs.length}건</strong>
+          <strong>경로 복구 대기 ${repairs.length.toLocaleString()}건</strong>
           <button class="btn btn-primary btn-sm" id="btn-repair-approve-all">전체 승인</button>
         </div>
         <div style="display:flex;flex-direction:column;gap:4px">
@@ -102,7 +102,7 @@ async function loadOrphanCleanups() {
     el.innerHTML = `
       <div class="alert alert-error" style="display:flex;flex-direction:column;gap:8px">
         <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
-          <strong>파일이 없어진 사진 정리 대기 ${cleanups.length}건</strong>
+          <strong>파일이 없어진 사진 정리 대기 ${cleanups.length.toLocaleString()}건</strong>
           <button class="btn btn-primary btn-sm" id="btn-orphan-approve-all">전체 삭제 승인</button>
         </div>
         <p class="text-muted" style="margin:0;font-size:13px">
@@ -237,7 +237,7 @@ function personCard(p) {
       <div class="person-cover">${cover}</div>
       <div class="person-info">
         <div class="person-name" title="${esc(p.name)}">${esc(p.name)}</div>
-        <div class="person-meta">확정 ${p.labeled_count} · 추정 ${p.matched_count}</div>
+        <div class="person-meta">확정 ${p.labeled_count.toLocaleString()} · 추정 ${p.matched_count.toLocaleString()}</div>
       </div>
     </div>`;
 }
@@ -297,7 +297,7 @@ async function loadPeopleOptions(selectPersonId) {
     people.sort((a, b) => a.name.localeCompare(b.name, 'ko'));
     select.innerHTML = [
       `<option value="__new__">+ 새 인물 생성</option>`,
-      ...people.map(p => `<option value="${p.id}">${esc(p.name)} (${p.labeled_count}/${p.matched_count})</option>`),
+      ...people.map(p => `<option value="${p.id}">${esc(p.name)} (${p.labeled_count.toLocaleString()}/${p.matched_count.toLocaleString()})</option>`),
     ].join('');
     if (selectPersonId != null) select.value = String(selectPersonId);
   } catch (e) { alert(e.message); }
@@ -414,7 +414,7 @@ function setAllSelected(on) {
 // 미분류(btn-ignore)·무시 목록(btn-unignore) 두 페이지가 공용.
 function updateToolbar() {
   const n = _selected.size;
-  document.getElementById('sel-count').textContent = `${n}개 선택`;
+  document.getElementById('sel-count').textContent = `${n.toLocaleString()}개 선택`;
   document.getElementById('btn-assign').disabled = n === 0;
   const secondary = document.getElementById('btn-ignore') || document.getElementById('btn-unignore');
   if (secondary) secondary.disabled = n === 0;
@@ -508,7 +508,7 @@ function ignoredFaceCard(f) {
 async function unignoreSelected() {
   const ids = [..._selected];
   if (!ids.length) return;
-  if (!confirm(`선택한 ${ids.length}개 얼굴의 무시를 해제할까요?\n(미분류 얼굴로 돌아가며, 다음 재매칭 때 추정 대상이 됩니다)`)) return;
+  if (!confirm(`선택한 ${ids.length.toLocaleString()}개 얼굴의 무시를 해제할까요?\n(미분류 얼굴로 돌아가며, 다음 재매칭 때 추정 대상이 됩니다)`)) return;
   try {
     await api.post('/api/admin/faces/batch-unlabel', { face_ids: ids });
     ids.forEach(id => document.querySelector(`.face-card[data-face="${id}"]`)?.remove());

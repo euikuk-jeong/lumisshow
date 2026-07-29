@@ -80,7 +80,7 @@ export async function renderAdminPersonPhotos(personId) {
       total = res.total;
       state.photos = state.photos.concat(res.photos);
       if (!document.getElementById('photos-content')) return; // 페이지 이탈
-      subtitle.textContent = `확정 얼굴이 포함된 사진 불러오는 중... (${state.photos.length}/${total})`;
+      subtitle.textContent = `확정 얼굴이 포함된 사진 불러오는 중... (${state.photos.length.toLocaleString()}/${total.toLocaleString()})`;
       if (!res.photos.length) break;
       page++;
     } while (state.photos.length < total);
@@ -90,7 +90,7 @@ export async function renderAdminPersonPhotos(personId) {
     return;
   }
 
-  subtitle.textContent = `확정 얼굴이 포함된 사진 ${state.photos.length}장`;
+  subtitle.textContent = `확정 얼굴이 포함된 사진 ${state.photos.length.toLocaleString()}장`;
   document.getElementById('btn-slideshow').disabled = !state.photos.length;
 
   // ── 정렬 ─────────────────────────────────────────────────────────────
@@ -166,7 +166,7 @@ export async function renderAdminPersonPhotos(personId) {
       let idx = 0;
       el.innerHTML = groupByDate(displayed).map(g => `
         <div class="date-group">
-          <div class="date-group-header" data-key="${esc(g.key)}">${esc(g.label)} <span class="text-muted text-sm">(${g.photos.length}장)</span></div>
+          <div class="date-group-header" data-key="${esc(g.key)}">${esc(g.label)} <span class="text-muted text-sm">(${g.photos.length.toLocaleString()}장)</span></div>
           <div class="photo-grid">${g.photos.map(p => photoCard(p, idx++)).join('')}</div>
         </div>`).join('');
     } else {
@@ -226,7 +226,7 @@ export async function renderAdminPersonPhotos(personId) {
       onDelete: async path => {
         await api.delete(`/api/admin/people/${personId}/photo-label?path=${encodeURIComponent(path)}`);
         state.photos = state.photos.filter(p => p.file_path !== path);
-        subtitle.textContent = `확정 얼굴이 포함된 사진 ${state.photos.length}장`;
+        subtitle.textContent = `확정 얼굴이 포함된 사진 ${state.photos.length.toLocaleString()}장`;
         document.getElementById('btn-slideshow').disabled = !state.photos.length;
         refresh();
       },

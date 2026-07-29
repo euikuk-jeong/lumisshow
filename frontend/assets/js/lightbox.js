@@ -149,7 +149,7 @@ export function openLightbox(paths, startIdx, options = {}) {
     const { isSelected, selectedCount, totalCount } = options.getSelectionState(localPaths[idx]);
     selBtn.textContent = isSelected ? '✓ 선택됨' : '선택';
     selBtn.classList.toggle('lb-selected', isSelected);
-    if (selCountEl) selCountEl.textContent = `(${selectedCount}/${totalCount})`;
+    if (selCountEl) selCountEl.textContent = `(${selectedCount.toLocaleString()}/${totalCount.toLocaleString()})`;
   }
 
   function show(i) {
@@ -158,7 +158,7 @@ export function openLightbox(paths, startIdx, options = {}) {
     imgEl.style.opacity = '0.4';
     imgEl.onload = () => { imgEl.style.opacity = '1'; };
     imgEl.src = `/api/admin/photo?path=${encodeURIComponent(localPaths[i])}`;
-    captionEl.textContent = `${localPaths[i].split('/').pop()}  (${i + 1} / ${localPaths.length})`;
+    captionEl.textContent = `${localPaths[i].split('/').pop()}  (${(i + 1).toLocaleString()} / ${localPaths.length.toLocaleString()})`;
     prevBtn.style.visibility = i > 0 ? 'visible' : 'hidden';
     nextBtn.style.visibility = i < localPaths.length - 1 ? 'visible' : 'hidden';
     if (coverBtn && options.isCover) {
