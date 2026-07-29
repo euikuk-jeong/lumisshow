@@ -1,6 +1,6 @@
 import { api, shareApi, AdminAuthError, ShareAuthError } from '../api.js';
 import { esc } from '../utils.js';
-import { EFFECTS, DEFAULT_SETTINGS, LOW_POWER_KEY, loadSlideshowSettings, saveSlideshowSettings } from '../slideshow-config.js';
+import { EFFECTS, DEFAULT_SETTINGS, loadSlideshowSettings, saveSlideshowSettings } from '../slideshow-config.js';
 
 const TRANS_MS = 700;
 const KB_CLASSES = ['kb-tl','kb-tr','kb-bl','kb-br','kb-t','kb-b','kb-l','kb-r'];
@@ -91,14 +91,18 @@ async function runSlideshow(src) {
   firstPage.photos.forEach((p, i) => { photos[i] = p; });
 
   const cfg = loadSlideshowSettings(album.slideshow_defaults || {}, src.settingsKey);
-  const rawI = parseInt(new URLSearchParams(location.search).get('i') ?? '', 10);
+  const urlParams = new URLSearchParams(location.search);
+  const rawI = parseInt(urlParams.get('i') ?? '', 10);
   const urlIdx = isNaN(rawI) ? null : Math.max(0, Math.min(totalPhotos - 1, rawI));
   const startIdx = urlIdx ?? 0;
+  // 뷰어 화면 "간단히 보기" 체크박스에서 진입 시에만 붙는 1회성 파라미터 — 저장/기억 안 함
+  const lowPower = urlParams.get('lp') === '1';
 
-  // Remove ?i=N from URL — it was only needed to pick the start photo
-  if (urlIdx !== null) {
+  // Remove ?i=N&lp=1 from URL — only needed to pick the start photo / low-power mode
+  if (urlIdx !== null || urlParams.has('lp')) {
     const url = new URL(location.href);
     url.searchParams.delete('i');
+    url.searchParams.delete('lp');
     history.replaceState(null, '', url.pathname + (url.search || ''));
   }
 
@@ -144,7 +148,6 @@ async function runSlideshow(src) {
   let transTimer = null;
   let hideTimer = null;
   const preloadCache = {};
-  const lowPower = localStorage.getItem(LOW_POWER_KEY) === '1'; // 뷰어 화면 "간단히 보기" 버튼에서 기기별로 저장됨
 
   // ── Audio ────────────────────────────────────────────────────
   const musicCount = album.music_count || 0;
