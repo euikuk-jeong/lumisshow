@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { startedInEdgeZone, resolveSwipeDirection, isTap, SWIPE_EDGE_EXCLUDE_PX, SWIPE_THRESHOLD_PX } from './touch-gesture.js';
+import { startedInEdgeZone, resolveSwipeDirection, isTap, clampDragOffset, SWIPE_EDGE_EXCLUDE_PX, SWIPE_THRESHOLD_PX } from './touch-gesture.js';
 
 test('startedInEdgeZone: 왼쪽 가장자리 안쪽이면 true', () => {
   assert.equal(startedInEdgeZone(10, 0, 400), true);
@@ -45,4 +45,15 @@ test('isTap: 움직임이 크면 tap 아님', () => {
 });
 test('isTap: 시간이 오래 걸리면 tap 아님', () => {
   assert.equal(isTap(5, 5, 500), false);
+});
+
+test('clampDragOffset: 다음 사진 없는데 다음 방향(dx<0)이면 0', () => {
+  assert.equal(clampDragOffset(-80, { hasPrev: true, hasNext: false }), 0);
+});
+test('clampDragOffset: 이전 사진 없는데 이전 방향(dx>0)이면 0', () => {
+  assert.equal(clampDragOffset(80, { hasPrev: false, hasNext: true }), 0);
+});
+test('clampDragOffset: 이웃 있으면 그대로 통과', () => {
+  assert.equal(clampDragOffset(-80, { hasPrev: true, hasNext: true }), -80);
+  assert.equal(clampDragOffset(80, { hasPrev: true, hasNext: true }), 80);
 });
