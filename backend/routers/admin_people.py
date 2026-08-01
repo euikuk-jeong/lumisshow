@@ -531,6 +531,17 @@ async def rename_person(
             raise HTTPException(status_code=400, detail="이미 존재하는 인물입니다")
     try:
         await db.execute("UPDATE persons SET name = ? WHERE id = ?", (name, person_id))
+        # 이 UPDATE는 UNIQUE(photo_path, tag, source)에 걸릴 수 있다 — 같은 사진에
+        # 이미 삭제된 인물(persons row는 없지만 init_ai_db() 재시작 전이라 photo_tags
+        # row가 아직 안 지워진 경우)의 동명 태그가 남아있으면 충돌한다. persons.name의
+        # 전역 UNIQUE는 "살아있는" 인물끼리만 보장하므로, 재시작 사이 stale row는
+        # 여기서 직접 걷어내야 한다.
+        await db.execute(
+            """DELETE FROM photo_tags
+               WHERE source = 'person' AND tag = ? AND person_id != ?
+                 AND NOT EXISTS (SELECT 1 FROM persons WHERE id = photo_tags.person_id)""",
+            (name, person_id),
+        )
         await db.execute(
             "UPDATE photo_tags SET tag = ? WHERE person_id = ? AND source = 'person'",
             (name, person_id),

@@ -922,6 +922,34 @@ async def test_rename_person_updates_photo_tags(admin_client):
     assert tags == [{"photo_path": "2024/photo_0.jpg", "tag": "정지우", "person_id": pid}]
 
 
+async def test_rename_person_clears_stale_conflicting_tag_from_deleted_person(admin_client):
+    """persons.name의 전역 UNIQUE는 '살아있는' 인물끼리만 보장한다 — 재시작(init_ai_db)
+    전이라 photo_tags에는 이미 삭제된 인물(person_id=9999, persons row 없음)의 동명
+    태그가 같은 사진에 남아있을 수 있다. 이 경우에도 rename이 UNIQUE(photo_path, tag,
+    source) 충돌 없이 성공하고 태그가 새 이름으로 옮겨가야 한다."""
+    from backend.models.ai_database import _ai_db_path
+
+    face_ids = await _seed_faces(1)
+    photo_path = "2024/photo_0.jpg"
+    pid = (await admin_client.post("/api/admin/people", json={"name": "지우"})).json()["id"]
+    await admin_client.post(f"/api/admin/faces/{face_ids[0]}/label", json={"person_id": pid})
+
+    async with aiosqlite.connect(_ai_db_path()) as db:
+        await db.execute(
+            """INSERT INTO photo_tags (photo_path, tag, source, person_id)
+               VALUES (?, '철수', 'person', 9999)""",
+            (photo_path,),
+        )
+        await db.commit()
+
+    r = await admin_client.put(f"/api/admin/people/{pid}", json={"name": "철수"})
+    assert r.status_code == 200
+
+    tags = await _person_tags(pid)
+    assert tags == [{"photo_path": photo_path, "tag": "철수", "person_id": pid}]
+    assert await _person_tags(9999) == []
+
+
 async def test_delete_person_removes_photo_tags(admin_client):
     face_ids = await _seed_faces(1)
     pid = (await admin_client.post("/api/admin/people", json={"name": "지우"})).json()["id"]
