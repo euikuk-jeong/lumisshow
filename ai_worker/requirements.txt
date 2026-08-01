@@ -5,3 +5,4 @@ onnxruntime>=1.17
 opencv-python-headless>=4.9
 reverse_geocoder>=1.5
 kiwipiepy>=0.20
+tokenizers>=0.20

@@ -35,6 +35,14 @@ def min_det_score() -> float:
     return float(os.getenv("AI_MIN_DET_SCORE", "0.5"))
 
 
+def tag_threshold() -> float:
+    """CLIP zero-shot 태그 부여 임계값(코사인 유사도). 정식 eval은 생략하고
+    (doc/tagging_requirement.md 결정) 실사진 15장 정성 검증(2026-08-02, 82개 어휘
+    기준 평균 4.4개/사진 부여, 누락 0건)으로 잡은 초기값. `tagger.tag_threshold_setting`을
+    통해 ai_settings(Admin 설정, Phase 4 예정)가 있으면 이 값보다 우선한다."""
+    return float(os.getenv("AI_TAG_THRESHOLD", "0.24"))
+
+
 def model_root() -> str:
     """InsightFace 모델 가중치 저장 경로. DATA_DIR 볼륨에 두어 컨테이너
     재시작 시 재다운로드를 방지한다 (라이선스상 이미지에 포함하지 않음)."""

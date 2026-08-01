@@ -39,6 +39,8 @@ db.py         # ai.db 스키마/연결 (sqlite3 동기, WAL)
 scanner.py    # PHOTO_ROOT 증분 스캔(path+mtime, @eaDir 제외) + 폴더명 Kiwi 태깅(커버리지 방식)
 pipeline.py   # InsightFace lazy 로드, 사진 1장 분석→기록(1장=1커밋, resumable), GPS EXIF 추출
 geocoder.py   # GPS→(도시,국가) 역지오코딩(reverse_geocoder, 오프라인), photo_tags(location) 동기화
+tagger.py     # CLIP zero-shot 이미지/텍스트 인코딩(onnxruntime+tokenizers), 모델 자동 다운로드
+tag_vocab.py  # CLIP 태그 어휘(82개, {prompt: 영어, label: 한국어})
 matcher.py    # cosine 매칭 (numpy brute-force), 임베딩 BLOB 변환
 notify.py     # Discord webhook 알림 (AI_DISCORD_WEBHOOK_URL)
 main.py       # CLI: scan(--limit) | rematch | daemon
@@ -159,8 +161,44 @@ alpha-2 코드를 `geocoder._COUNTRY_NAMES_KO` 정적 매핑으로 한국어 국
 `admin_people.py`의 `_apply_path_repair`(경로복구 승인)는 `source='path'` 태그를
 new_path로 갱신하지 않고 **지우기만** 한다 — Kiwi는 워커 전용 무거운 의존성이라
 backend에서 재계산할 수 없기 때문. 지운 뒤 다음 워커 스캔의 커버리지 로직이
-new_path 폴더명으로 다시 채운다. `location`/`ai`/`manual`/`person` 태그는 사진
-콘텐츠 자체 정보라 경로가 바뀌어도 유효하므로 그대로 `UPDATE`한다.
+new_path 폴더명으로 다시 채운다. `location`/`ai`/`manual`/`person` 태그와
+`photo_embeddings`는 사진 콘텐츠 자체 정보라 경로가 바뀌어도 유효하므로 그대로
+`UPDATE`한다.
+
+### 사물/장면 태깅 (CLIP, `tagger.py`/`tag_vocab.py`) — 신규/변경 사진만, 기존 4.5만 장은 Phase 4 대상
+`pipeline.analyze_and_store()`가 얼굴 검출과 같은 이미지(이미 exif_transpose까지
+끝난 것)로 CLIP 이미지 임베딩을 계산해 `photo_embeddings`에 캐시하고,
+`tag_vocab.TAG_VOCAB`(82개, 텍스트 임베딩은 `run_scan()`에서 스캔당 1회만 계산해
+재사용) 대비 코사인 유사도가 threshold 이상인 태그를 `photo_tags(source='ai')`에
+기록한다. 재분석 시 기존 'ai' 태그는 지우고 현재 어휘/threshold로 재채점.
+
+**Kiwi/GPS와 달리 커버리지 방식이 아니다** — `pending_photos()`(mtime 기반)에
+걸린 사진만 처리한다. CLIP 추론은 사진 1장에 대략 수십~100ms+가 들어(Kiwi의
+폴더명 파싱이나 GPS의 KD-tree 조회와 비교가 안 되는 비용) 이미 분석된 기존
+4.5만 장까지 매 스캔 조용히 재인코딩하면 "가벼운 증분 스캔"이 예측 불가능하게
+느려진다. 기존 물량 소급 처리와, `tag_vocab.py`/threshold 변경 후 재채점은
+Phase 4의 `tag-backfill`(전용 CLI + Admin 잡)이 담당하도록 의도적으로 미룸 —
+**Phase 3 배포 직후에는 기존 사진에 `source='ai'` 태그가 전혀 없다.**
+
+CLIP 모델(`Xenova/clip-vit-base-patch32`, transformers.js용 ONNX 변환본,
+openai/clip-vit-base-patch32와 동일 MIT 라이선스)은 8-bit 양자화판(vision+text
+합쳐 ~154MB, fp32 605MB 대비 가볍고 NAS 추론도 빠름)을 쓴다. insightface와
+동일하게 워커 최초 실행 시 `$DATA_DIR/models/clip/`에 자동 다운로드(`main`이
+아니라 특정 커밋 sha로 고정 — 제3자가 강제 push해도 이미 캐시된
+`photo_embeddings`와 다른 가중치를 조용히 받지 않도록). 다운로드는
+Content-Length와 실제 수신 바이트 수를 비교해 불완전 응답을 잡고, 실패 시
+`.part` 임시 파일을 지워 다음 실행이 재시도할 수 있게 한다.
+
+텍스트 인코딩에 PyTorch/transformers 없이 `onnxruntime`(이미 의존성) +
+`tokenizers`(HF 경량 BPE 토크나이저, ~26MB, torch 없음)만 쓴다 — 이미지
+인코더만 배포하고 텍스트 임베딩을 오프라인에서 미리 계산해 넣는 방식도
+검토했으나, 실측으로 `tokenizers`+`text_model.onnx` 조합이 문제없이 동작함을
+확인해 기각(어휘 추가가 `tag_vocab.py` 수정만으로 다음 스캔부터 바로 반영되는
+게 더 단순함). threshold 기본값(`AI_TAG_THRESHOLD=0.24`)은 정식 eval 없이
+(`doc/tagging_requirement.md` 결정) 실사진 15장(`testdata/photos`) 정성
+검증으로 잡음 — 82개 어휘 기준 평균 4.4개 태그/사진, 누락 0건. CLIP 로딩(모델
+다운로드 포함) 실패는 얼굴 인식과 무관한 별도 기능이라 그 스캔은 얼굴 인식만
+수행하고 계속 진행한다(best-effort, `run_scan()`에서 예외를 삼킴).
 
 ### 경로 규약
 `faces.photo_path`, `photos_analyzed.path`는 **PHOTO_ROOT 상대 경로 + `/` 구분자**
