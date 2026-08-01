@@ -119,6 +119,23 @@ CREATE TABLE IF NOT EXISTS pending_orphan_cleanups (
     detected_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS idx_pending_orphan_cleanups_status ON pending_orphan_cleanups(status);
+
+-- 사물/장면/위치/폴더명/인물 태그. 워커(ai/path/location)와 LumisShow(manual/person)
+-- 양쪽이 상시 쓰는 첫 ai.db 테이블 — WAL+busy_timeout으로 동시 쓰기를 직렬화한다.
+-- source가 다르면 같은 텍스트가 동시에 존재할 수 있어(예: GPS location='서울' +
+-- 폴더명 path='서울') UNIQUE에 source를 포함한다.
+CREATE TABLE IF NOT EXISTS photo_tags (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    photo_path TEXT NOT NULL,
+    tag        TEXT NOT NULL,
+    source     TEXT NOT NULL DEFAULT 'manual',  -- ai | manual | person | path | location
+    person_id  INTEGER,                 -- source='person'일 때만 값 존재 (FK 없음, face_labels 관례와 동일)
+    confidence REAL,
+    tagged_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (photo_path, tag, source)
+);
+CREATE INDEX IF NOT EXISTS idx_photo_tags_tag ON photo_tags(tag);
+CREATE INDEX IF NOT EXISTS idx_photo_tags_person ON photo_tags(person_id);
 """
 
 
@@ -167,6 +184,34 @@ async def init_ai_db() -> None:
         # 과거(reject를 status='rejected'로 영구 고정하던 버전)에 쌓인 row 정리 —
         # 그대로 두면 old_path UNIQUE 제약에 걸려 다음 스캔이 재제안하지 못한다.
         await db.execute("DELETE FROM pending_path_repairs WHERE status = 'rejected'")
+        # photo_tags(source='person') 소급: 이 컬럼이 추가되기 전부터 있던 face_labels는
+        # 이벤트 기반 동기화(admin_people.py)를 한 번도 안 거쳤으므로 태그가 비어있다.
+        # ON CONFLICT DO NOTHING이라 매 시작마다 실행해도 안전(idempotent)하며,
+        # 이후 라벨 변경은 admin_people.py의 _sync_person_tag가 실시간으로 반영한다.
+        await db.execute(
+            """INSERT INTO photo_tags (photo_path, tag, source, person_id)
+               SELECT DISTINCT f.photo_path, p.name, 'person', p.id
+               FROM face_labels fl
+               JOIN faces f ON f.id = fl.face_id
+               JOIN persons p ON p.id = fl.person_id
+               WHERE fl.person_id IS NOT NULL
+               ON CONFLICT(photo_path, tag, source) DO NOTHING"""
+        )
+        # 반대 방향 정리: 워커가 mtime 변경으로 사진을 재분석하면 faces를 DELETE(FK
+        # CASCADE로 face_labels도 함께 삭제)하지만 photo_tags는 워커가 건드리지
+        # 않으므로 이벤트 동기화(_sync_person_tag)가 발동하지 않는다. 그대로 두면
+        # 라벨이 사라진 뒤에도 person 태그가 유령처럼 남는다 — _sync_person_tag가
+        # 지키는 불변식(라벨이 실제로 없으면 태그도 없다)의 역방향을 여기서 보정한다.
+        await db.execute(
+            """DELETE FROM photo_tags
+               WHERE source = 'person'
+                 AND NOT EXISTS (
+                   SELECT 1 FROM faces f
+                   JOIN face_labels fl ON fl.face_id = f.id
+                   WHERE f.photo_path = photo_tags.photo_path
+                     AND fl.person_id = photo_tags.person_id
+                 )"""
+        )
         await db.commit()
 
 

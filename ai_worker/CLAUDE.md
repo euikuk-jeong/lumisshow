@@ -106,6 +106,25 @@ urllib 기본 User-Agent(`Python-urllib/x.x`)는 Discord(Cloudflare)가 403으�
 전송 실패 시 최대 3회 시도(2초 간격 고정 딜레이), 3회 모두 실패하면 로그만 남기고
 포기한다(daemon 루프를 막지 않기 위해 예외를 밖으로 던지지 않음).
 
+### photo_tags — 워커·백엔드 상시 동시 쓰기 첫 테이블
+사물/장면/위치/폴더명/인물 태그(`doc/tagging_requirement.md`). 기존 테이블은 전부
+워커 전용/백엔드 전용으로 쓰기 주체가 나뉘어 있었으나(예외는 path-repair 승인뿐),
+`photo_tags`는 워커가 야간 스캔 중 `ai`/`path`/`location`을 상시 쓰고 백엔드는 얼굴
+라벨링 시 `person`(+수동 태깅 시 `manual`)을 상시 쓰는 첫 상시 동시 쓰기 테이블이다.
+기존과 동일하게 WAL + busy_timeout으로 직렬화한다. `UNIQUE(photo_path, tag, source)` —
+source를 키에 포함해 서로 다른 source의 동일 텍스트가 별개 행으로 공존 가능(예:
+GPS `location='서울'` + 폴더명 `path='서울'`).
+
+`source='person'` 동기화(`backend/routers/admin_people.py`의 `_sync_person_tag`)는
+확정 라벨(`face_labels`)에만 반응한다 — `face_matches`(AI 추정)는 반영하지 않는다
+(승인 큐 취지와 충돌 방지). face_labels를 쓰는 모든 지점(단건/배치 라벨링·해제,
+사진 단위 해제, 점수 기준 일괄 확정)과 인물 삭제·이름변경, 경로 복구
+(`_apply_path_repair`)·orphan 정리(`_apply_orphan_cleanup`)가 전부 이 헬퍼 또는
+직접 UPDATE/DELETE를 거쳐야 한다 — 헬퍼 미경유 시 태그가 stale하게 남거나 조기
+삭제될 수 있다. 기존(이 컬럼 도입 이전) face_labels 분은 `init_ai_db()`의
+`INSERT ... ON CONFLICT DO NOTHING` 소급 쿼리로 1회성 backfill한다(매 시작마다
+실행해도 idempotent).
+
 ### 경로 규약
 `faces.photo_path`, `photos_analyzed.path`는 **PHOTO_ROOT 상대 경로 + `/` 구분자**
 (backend의 `photo_meta_cache.file_path` 관례와 동일).

@@ -106,6 +106,23 @@ CREATE TABLE IF NOT EXISTS pending_orphan_cleanups (
     detected_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS idx_pending_orphan_cleanups_status ON pending_orphan_cleanups(status);
+
+-- 사물/장면/위치/폴더명/인물 태그. 워커(ai/path/location)와 LumisShow(manual/person)
+-- 양쪽이 상시 쓰는 첫 ai.db 테이블 — WAL+busy_timeout으로 동시 쓰기를 직렬화한다.
+-- source가 다르면 같은 텍스트가 동시에 존재할 수 있어(예: GPS location='서울' +
+-- 폴더명 path='서울') UNIQUE에 source를 포함한다.
+CREATE TABLE IF NOT EXISTS photo_tags (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    photo_path TEXT NOT NULL,
+    tag        TEXT NOT NULL,
+    source     TEXT NOT NULL DEFAULT 'manual',  -- ai | manual | person | path | location
+    person_id  INTEGER,                 -- source='person'일 때만 값 존재 (FK 없음, face_labels 관례와 동일)
+    confidence REAL,
+    tagged_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (photo_path, tag, source)
+);
+CREATE INDEX IF NOT EXISTS idx_photo_tags_tag ON photo_tags(tag);
+CREATE INDEX IF NOT EXISTS idx_photo_tags_person ON photo_tags(person_id);
 """
 
 

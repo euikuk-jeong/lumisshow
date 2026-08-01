@@ -66,6 +66,41 @@ async def _person_or_404(person_id: int, db) -> None:
             raise HTTPException(status_code=404, detail="Person not found")
 
 
+async def _sync_person_tag(db, photo_path: str, person_id: int) -> None:
+    """photo_tags(source='person')를 이 사진·인물의 확정 라벨 잔존 여부에 맞춘다.
+
+    같은 사진에 같은 인물의 얼굴이 여러 개 있을 수 있어(반사, 배경 인물 중복 등)
+    라벨 하나가 바뀌거나 지워졌다고 바로 태그를 지우면 안 된다 — 매번 실제로
+    남아있는 확정 라벨 수를 다시 세어 0건일 때만 제거한다. face_labels를 쓰는
+    모든 지점(단건/배치 라벨링·해제, 인물 삭제·이름변경 제외 — 그건 별도 처리)은
+    반드시 이 헬퍼를 거쳐야 한다."""
+    async with db.execute(
+        """SELECT COUNT(*) AS n FROM faces f
+           JOIN face_labels fl ON fl.face_id = f.id
+           WHERE f.photo_path = ? AND fl.person_id = ?""",
+        (photo_path, person_id),
+    ) as cur:
+        remaining = (await cur.fetchone())["n"]
+    if remaining:
+        async with db.execute(
+            "SELECT name FROM persons WHERE id = ?", (person_id,)
+        ) as cur:
+            person_row = await cur.fetchone()
+        if person_row is None:
+            return
+        await db.execute(
+            """INSERT INTO photo_tags (photo_path, tag, source, person_id)
+               VALUES (?, ?, 'person', ?)
+               ON CONFLICT(photo_path, tag, source) DO NOTHING""",
+            (photo_path, person_row["name"], person_id),
+        )
+    else:
+        await db.execute(
+            "DELETE FROM photo_tags WHERE photo_path = ? AND source = 'person' AND person_id = ?",
+            (photo_path, person_id),
+        )
+
+
 # 인물이 등장하는 사진 판정: 라벨이 있으면 라벨 우선, 없으면 자동 매칭
 _PERSON_PHOTOS_FROM = """
     FROM faces f
@@ -240,6 +275,13 @@ async def _apply_path_repair(db, photo_root: str, old_path: str, new_path: str) 
         "UPDATE faces SET photo_path = ? WHERE photo_path = ?",
         (new_path, old_path),
     )
+    # photo_tags: 사진 콘텐츠 자체 정보(현재 존재하는 source 전부)는 경로가 바뀌어도
+    # 유효하므로 photo_path만 갱신한다. source='path'(폴더명 유래)가 도입되면 그건
+    # 폴더가 바뀐 순간 무효가 되므로 여기서 예외 처리가 추가로 필요하다.
+    await db.execute(
+        "UPDATE photo_tags SET photo_path = ? WHERE photo_path = ?",
+        (new_path, old_path),
+    )
 
 
 @router.get("/people/path-repairs")
@@ -340,6 +382,7 @@ async def _apply_orphan_cleanup(db, app_db, path: str) -> None:
     같은 경로 캐시가 있으면 함께 삭제한다(없어도 무방 — best-effort)."""
     await db.execute("DELETE FROM faces WHERE photo_path = ?", (path,))
     await db.execute("DELETE FROM photos_analyzed WHERE path = ?", (path,))
+    await db.execute("DELETE FROM photo_tags WHERE photo_path = ?", (path,))
     await app_db.execute("DELETE FROM photo_meta_cache WHERE file_path = ?", (path,))
     await app_db.commit()
 
@@ -488,6 +531,10 @@ async def rename_person(
             raise HTTPException(status_code=400, detail="이미 존재하는 인물입니다")
     try:
         await db.execute("UPDATE persons SET name = ? WHERE id = ?", (name, person_id))
+        await db.execute(
+            "UPDATE photo_tags SET tag = ? WHERE person_id = ? AND source = 'person'",
+            (name, person_id),
+        )
         await db.commit()
     except sqlite3.IntegrityError:
         raise HTTPException(status_code=400, detail="이미 존재하는 인물입니다")
@@ -525,6 +572,9 @@ async def delete_person(
     # face_matches의 잔여 행은 워커 소유 테이블이라 건드리지 않는다.
     # 조회는 항상 persons JOIN이므로 보이지 않으며, 다음 rematch 때 정리된다.
     await db.execute("DELETE FROM face_labels WHERE person_id = ?", (person_id,))
+    await db.execute(
+        "DELETE FROM photo_tags WHERE person_id = ? AND source = 'person'", (person_id,)
+    )
     await db.execute("DELETE FROM persons WHERE id = ?", (person_id,))
     await db.commit()
 
@@ -673,7 +723,10 @@ async def unlabel_person_photo(
     if face_ids:
         placeholders = ",".join("?" * len(face_ids))
         await db.execute(f"DELETE FROM face_labels WHERE face_id IN ({placeholders})", face_ids)
-        await db.commit()
+    # face_ids가 비어 있어도(이미 해제됨) 호출 — 워커 재분석 등으로 태그만 stale하게
+    # 남아있는 경우를 이 엔드포인트가 우연히 지나가는 김에 자체 치유하도록 한다.
+    await _sync_person_tag(db, path, person_id)
+    await db.commit()
 
 
 @router.post("/people/{person_id}/confirm-matched")
@@ -684,17 +737,21 @@ async def confirm_matched_by_score(
     """이 인물의 추정 얼굴 중 score >= min_score 전체를 확정 처리 (페이지네이션 무관)."""
     await _person_or_404(person_id, db)
     async with db.execute(
-        """SELECT face_id FROM face_matches
-           WHERE person_id = ? AND score >= ?
-             AND face_id NOT IN (SELECT face_id FROM face_labels)""",
+        """SELECT fm.face_id, f.photo_path FROM face_matches fm
+           JOIN faces f ON f.id = fm.face_id
+           WHERE fm.person_id = ? AND fm.score >= ?
+             AND fm.face_id NOT IN (SELECT face_id FROM face_labels)""",
         (person_id, body.min_score),
     ) as cur:
-        face_ids = [r["face_id"] for r in await cur.fetchall()]
+        rows = await cur.fetchall()
+    face_ids = [r["face_id"] for r in rows]
     if face_ids:
         await db.executemany(
             "INSERT INTO face_labels (face_id, person_id) VALUES (?, ?)",
             [(fid, person_id) for fid in face_ids],
         )
+        for photo_path in {r["photo_path"] for r in rows}:
+            await _sync_person_tag(db, photo_path, person_id)
         await db.commit()
     return {"count": len(face_ids)}
 
@@ -856,17 +913,27 @@ async def set_face_label(
     _: str = Depends(get_current_admin), db=Depends(get_ai_db),
 ):
     """얼굴에 인물 확정 라벨 기록. person_id=null은 '등록 인물 아님(무시)'."""
-    async with db.execute("SELECT id FROM faces WHERE id = ?", (face_id,)) as cur:
-        if await cur.fetchone() is None:
-            raise HTTPException(status_code=404, detail="Face not found")
+    async with db.execute("SELECT photo_path FROM faces WHERE id = ?", (face_id,)) as cur:
+        face_row = await cur.fetchone()
+    if face_row is None:
+        raise HTTPException(status_code=404, detail="Face not found")
     if body.person_id is not None:
         await _person_or_404(body.person_id, db)
+    async with db.execute(
+        "SELECT person_id FROM face_labels WHERE face_id = ?", (face_id,)
+    ) as cur:
+        prev = await cur.fetchone()
+    old_person_id = prev["person_id"] if prev is not None else None
     await db.execute(
         """INSERT INTO face_labels (face_id, person_id) VALUES (?, ?)
            ON CONFLICT(face_id) DO UPDATE SET
              person_id=excluded.person_id, labeled_at=CURRENT_TIMESTAMP""",
         (face_id, body.person_id),
     )
+    if old_person_id is not None and old_person_id != body.person_id:
+        await _sync_person_tag(db, face_row["photo_path"], old_person_id)
+    if body.person_id is not None:
+        await _sync_person_tag(db, face_row["photo_path"], body.person_id)
     await db.commit()
     return {"face_id": face_id, "person_id": body.person_id}
 
@@ -883,17 +950,32 @@ async def batch_label_faces(
     ids = list(dict.fromkeys(body.face_ids))  # 중복 제거, 순서 유지
     placeholders = ",".join("?" * len(ids))
     async with db.execute(
-        f"SELECT COUNT(*) AS n FROM faces WHERE id IN ({placeholders})", ids
+        f"SELECT id, photo_path FROM faces WHERE id IN ({placeholders})", ids
     ) as cur:
-        found = (await cur.fetchone())["n"]
-    if found != len(ids):
+        face_rows = await cur.fetchall()
+    if len(face_rows) != len(ids):
         raise HTTPException(status_code=404, detail="존재하지 않는 얼굴이 포함되어 있습니다")
+    photo_path_by_face = {r["id"]: r["photo_path"] for r in face_rows}
+    async with db.execute(
+        f"SELECT face_id, person_id FROM face_labels WHERE face_id IN ({placeholders})", ids
+    ) as cur:
+        old_person_by_face = {r["face_id"]: r["person_id"] for r in await cur.fetchall()}
     await db.executemany(
         """INSERT INTO face_labels (face_id, person_id) VALUES (?, ?)
            ON CONFLICT(face_id) DO UPDATE SET
              person_id=excluded.person_id, labeled_at=CURRENT_TIMESTAMP""",
         [(fid, body.person_id) for fid in ids],
     )
+    touched_pairs: set[tuple[str, int]] = set()
+    for fid in ids:
+        photo_path = photo_path_by_face[fid]
+        old_person_id = old_person_by_face.get(fid)
+        if old_person_id is not None and old_person_id != body.person_id:
+            touched_pairs.add((photo_path, old_person_id))
+        if body.person_id is not None:
+            touched_pairs.add((photo_path, body.person_id))
+    for photo_path, pid in touched_pairs:
+        await _sync_person_tag(db, photo_path, pid)
     await db.commit()
     return {"count": len(ids)}
 
@@ -902,7 +984,15 @@ async def batch_label_faces(
 async def delete_face_label(
     face_id: int, _: str = Depends(get_current_admin), db=Depends(get_ai_db)
 ):
+    async with db.execute(
+        """SELECT fl.person_id, f.photo_path FROM face_labels fl
+           JOIN faces f ON f.id = fl.face_id WHERE fl.face_id = ?""",
+        (face_id,),
+    ) as cur:
+        row = await cur.fetchone()
     await db.execute("DELETE FROM face_labels WHERE face_id = ?", (face_id,))
+    if row is not None and row["person_id"] is not None:
+        await _sync_person_tag(db, row["photo_path"], row["person_id"])
     await db.commit()
 
 
@@ -915,7 +1005,18 @@ async def batch_unlabel_faces(
         raise HTTPException(status_code=400, detail="face_ids가 비어 있습니다")
     ids = list(dict.fromkeys(body.face_ids))
     placeholders = ",".join("?" * len(ids))
+    async with db.execute(
+        f"""SELECT fl.person_id, f.photo_path FROM face_labels fl
+            JOIN faces f ON f.id = fl.face_id WHERE fl.face_id IN ({placeholders})""",
+        ids,
+    ) as cur:
+        rows = await cur.fetchall()
     await db.execute(f"DELETE FROM face_labels WHERE face_id IN ({placeholders})", ids)
+    touched_pairs = {
+        (r["photo_path"], r["person_id"]) for r in rows if r["person_id"] is not None
+    }
+    for photo_path, pid in touched_pairs:
+        await _sync_person_tag(db, photo_path, pid)
     await db.commit()
 
 
