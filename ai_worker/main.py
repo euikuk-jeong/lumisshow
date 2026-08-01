@@ -47,6 +47,15 @@ def run_scan(limit: int | None = None) -> dict:
         "photos": len(pending), "faces": 0, "errors": 0,
         "renamed": renamed, "orphaned": orphaned, "elapsed": 0.0,
     }
+
+    # 폴더명 태깅(Kiwi)은 mtime 기반 pending과 무관한 커버리지 방식이라, 얼굴 재분석
+    # 대상이 없어도(pending 비어도) 실행해야 한다 — 이 기능 도입 이전 사진이나
+    # 경로복구로 새로 생긴 path 태그 공백을 여기서 채운다.
+    path_tagged = scanner.tag_paths_from_folder_names(conn)
+    if path_tagged:
+        log.info("폴더명 태깅(Kiwi): %d장에 path 태그 반영", path_tagged)
+    summary["path_tagged"] = path_tagged
+
     if not pending:
         return summary
 

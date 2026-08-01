@@ -136,6 +136,16 @@ CREATE TABLE IF NOT EXISTS photo_tags (
 );
 CREATE INDEX IF NOT EXISTS idx_photo_tags_tag ON photo_tags(tag);
 CREATE INDEX IF NOT EXISTS idx_photo_tags_person ON photo_tags(person_id);
+
+-- GPS EXIF 역지오코딩 결과(정본). photo_tags(source='location')는 이 값의 복제본 —
+-- city/country가 바뀌거나 사라지면 geocoder.sync_location_tag()(ai_worker)가 함께 정리한다.
+CREATE TABLE IF NOT EXISTS photo_locations (
+    photo_path TEXT PRIMARY KEY,
+    city       TEXT,
+    country    TEXT,
+    source     TEXT NOT NULL DEFAULT 'exif_gps',  -- exif_gps | manual
+    tagged_at  DATETIME DEFAULT CURRENT_TIMESTAMP
+);
 """
 
 

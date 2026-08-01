@@ -274,6 +274,43 @@ async def test_people_repair_approve_applies_and_preserves_label(admin_client):
     assert [r["photo_path"] for r in rows] == ["new_dir/photo.jpg"]
 
 
+async def test_people_repair_approve_deletes_path_tags_but_keeps_content_tags(admin_client):
+    """source='path'(폴더명 유래)는 new_path로 옮기지 않고 지우기만 한다 — Kiwi는
+    ai_worker 전용이라 backend가 재계산할 수 없고, 다음 워커 스캔이 커버리지 방식으로
+    채운다. location/ai/manual/person처럼 사진 콘텐츠 자체 정보는 그대로 photo_path만
+    갱신돼야 한다."""
+    photo_root = Path(os.getenv("PHOTO_ROOT"))
+    (photo_root / "old_dir").mkdir()
+    (photo_root / "old_dir" / "photo.jpg").write_bytes(b"fake")
+    await _seed_analyzed("old_dir/photo.jpg")
+    await _seed_face_row("old_dir/photo.jpg")
+
+    from backend.models.ai_database import _ai_db_path
+
+    async with aiosqlite.connect(_ai_db_path()) as db:
+        await db.execute(
+            "INSERT INTO photo_tags (photo_path, tag, source) VALUES "
+            "('old_dir/photo.jpg', '캠핑', 'path'), "
+            "('old_dir/photo.jpg', '서울', 'location')"
+        )
+        await db.commit()
+
+    (photo_root / "new_dir").mkdir()
+    (photo_root / "old_dir" / "photo.jpg").rename(photo_root / "new_dir" / "photo.jpg")
+    (photo_root / "old_dir").rmdir()
+
+    r = await admin_client.post("/api/admin/people/repair-paths")
+    proposal_id = r.json()["proposed"][0]["id"]
+    r = await admin_client.post(f"/api/admin/people/path-repairs/{proposal_id}/approve")
+    assert r.status_code == 200
+
+    async with aiosqlite.connect(_ai_db_path()) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute("SELECT tag, source, photo_path FROM photo_tags") as cur:
+            rows = [dict(r) for r in await cur.fetchall()]
+    assert rows == [{"tag": "서울", "source": "location", "photo_path": "new_dir/photo.jpg"}]
+
+
 async def test_people_repair_ambiguous(admin_client):
     photo_root = Path(os.getenv("PHOTO_ROOT"))
     for d in ["dir1", "dir2"]:
@@ -352,10 +389,18 @@ async def test_people_repair_ambiguous_not_queued_as_orphan(admin_client):
 
 async def test_orphan_cleanup_approve_deletes_ai_and_cache_rows(admin_client):
     """승인 시 faces(→face_labels/face_matches 캐스케이드)·photos_analyzed·
-    photo_meta_cache·photo_tags가 모두 삭제돼야 한다."""
+    photo_meta_cache·photo_tags·photo_locations가 모두 삭제돼야 한다."""
+    from backend.models.ai_database import _ai_db_path
+
     await _seed_analyzed("ghost/missing.jpg")
     face_id = await _seed_face_row("ghost/missing.jpg")
     await _seed_photo_meta_cache("ghost/missing.jpg")
+    async with aiosqlite.connect(_ai_db_path()) as db:
+        await db.execute(
+            "INSERT INTO photo_locations (photo_path, city, country) VALUES "
+            "('ghost/missing.jpg', 'Seoul', '대한민국')"
+        )
+        await db.commit()
 
     r = await admin_client.post("/api/admin/people", json={"name": "지우"})
     person_id = r.json()["id"]
@@ -370,7 +415,6 @@ async def test_orphan_cleanup_approve_deletes_ai_and_cache_rows(admin_client):
     assert r.status_code == 200
     assert r.json() == {"path": "ghost/missing.jpg"}
 
-    from backend.models.ai_database import _ai_db_path
     from backend.models.database import _db_path
 
     async with aiosqlite.connect(_ai_db_path()) as db:
@@ -383,6 +427,8 @@ async def test_orphan_cleanup_approve_deletes_ai_and_cache_rows(admin_client):
         async with db.execute("SELECT COUNT(*) FROM pending_orphan_cleanups") as cur:
             assert (await cur.fetchone())[0] == 0
         async with db.execute("SELECT COUNT(*) FROM photo_tags") as cur:
+            assert (await cur.fetchone())[0] == 0
+        async with db.execute("SELECT COUNT(*) FROM photo_locations") as cur:
             assert (await cur.fetchone())[0] == 0
 
     async with aiosqlite.connect(_db_path()) as db:

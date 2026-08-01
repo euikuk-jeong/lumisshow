@@ -9,6 +9,72 @@ from ai_worker import config
 
 _logger = logging.getLogger(__name__)
 
+# Kiwi가 뽑은 1음절 명사(예: "캠핑장"→"캠핑"+"장")는 조사성 접미 파편일 가능성이 높아
+# 태그로서 의미가 거의 없고, "-장"/"-실" 같은 흔한 접미어가 여러 폴더에서 반복돼
+# 노이즈가 되므로 제외한다.
+_MIN_NOUN_LEN = 2
+_kiwi = None
+
+
+def _get_kiwi():
+    """Kiwi()는 사전 로딩 비용이 있어(수백ms~1초대) 모듈 전역에 1회만 만들어
+    재사용한다. insightface와 동일하게 무거운 의존성이라 lazy import —
+    scanner 단위 테스트는 kiwipiepy 설치 없이도 다른 함수는 그대로 실행 가능."""
+    global _kiwi
+    if _kiwi is None:
+        from kiwipiepy import Kiwi
+
+        _kiwi = Kiwi()
+    return _kiwi
+
+
+def extract_folder_nouns(folder_name: str) -> list[str]:
+    """폴더명에서 명사(NNG/NNP)만 순서·중복 제거해 추출한다."""
+    tokens = _get_kiwi().tokenize(folder_name)
+    nouns: list[str] = []
+    for t in tokens:
+        if t.tag in ("NNG", "NNP") and len(t.form) >= _MIN_NOUN_LEN and t.form not in nouns:
+            nouns.append(t.form)
+    return nouns
+
+
+def tag_paths_from_folder_names(conn: sqlite3.Connection) -> int:
+    """photos_analyzed 중 아직 path 태그가 없는 사진의 바로 상위 폴더명을 Kiwi로
+    분석해 photo_tags(source='path')에 기록한다.
+
+    mtime 기반 pending_photos()와 무관하게 "커버리지"로 동작한다 — photo_tags에
+    source='path' 행이 하나도 없는 사진만 대상으로 삼기 때문에, 이 기능 도입 이전
+    사진(기존 4.5만 장)도 다음 스캔에서 자연히 채워지고, 경로복구 승인(admin_people.py의
+    _apply_path_repair는 path 태그를 지우기만 하고 재계산은 안 함 — Kiwi는 워커
+    전용이라 백엔드에서 실행할 수 없음) 이후에도 다음 스캔이 이어서 채운다.
+    같은 폴더는 1회만 Kiwi를 실행해 재사용한다(폴더 단위 캐싱).
+
+    명사가 하나도 없는 폴더(예: 순수 영문/숫자 폴더명)의 사진은 태그가 영원히 안
+    생기므로 매 스캔 재시도된다 — Kiwi 호출 자체는 저렴해 감수할 만한 비용이다."""
+    rows = conn.execute(
+        """SELECT path FROM photos_analyzed
+           WHERE path NOT IN (SELECT DISTINCT photo_path FROM photo_tags WHERE source = 'path')"""
+    ).fetchall()
+    if not rows:
+        return 0
+
+    folder_cache: dict[str, list[str]] = {}
+    tagged = 0
+    for row in rows:
+        path = row["path"]
+        folder = os.path.basename(os.path.dirname(path))
+        if folder not in folder_cache:
+            folder_cache[folder] = extract_folder_nouns(folder) if folder else []
+        for noun in folder_cache[folder]:
+            conn.execute(
+                """INSERT INTO photo_tags (photo_path, tag, source) VALUES (?, ?, 'path')
+                   ON CONFLICT(photo_path, tag, source) DO NOTHING""",
+                (path, noun),
+            )
+        tagged += 1
+    conn.commit()
+    return tagged
+
 
 def walk_photos(root: str) -> Iterator[tuple[str, float]]:
     """(PHOTO_ROOT 상대 경로, mtime) 나열. 숨김 디렉토리(@eaDir 등)는 제외."""
