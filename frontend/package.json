@@ -1,0 +1,8 @@
+{
+  "name": "lumisshow-frontend",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test assets/js/*.test.js"
+  }
+}

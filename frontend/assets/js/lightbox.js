@@ -8,6 +8,8 @@
  *   getSelectionState(path)→ { isSelected, selectedCount, totalCount }
  *   onToggleSelect(path)   → void      선택 토글 콜백
  */
+import { startedInEdgeZone, resolveSwipeDirection } from './touch-gesture.js';
+
 export function openLightbox(paths, startIdx, options = {}) {
   const localPaths = [...paths];
   let idx = startIdx;
@@ -80,6 +82,7 @@ export function openLightbox(paths, startIdx, options = {}) {
 
   let dragging = null;
   let pinch = null;
+  let swipeStart = null;
   const activePointers = new Map();
 
   function pointDist(a, b) { return Math.hypot(a.x - b.x, a.y - b.y); }
@@ -92,11 +95,15 @@ export function openLightbox(paths, startIdx, options = {}) {
     if (activePointers.size >= 2) {
       e.preventDefault();
       dragging = null;
+      swipeStart = null;
       const [p1, p2] = [...activePointers.values()];
       pinch = { startDist: pointDist(p1, p2), startScale: scale, lastMid: pointMid(p1, p2) };
       return;
     }
-    if (scale === 1) return;
+    if (scale === 1) {
+      if (e.pointerType === 'touch') swipeStart = { x: e.clientX, y: e.clientY };
+      return;
+    }
     e.preventDefault();
     dragging = { x: e.clientX, y: e.clientY };
     imgEl.setPointerCapture(e.pointerId);
@@ -125,6 +132,16 @@ export function openLightbox(paths, startIdx, options = {}) {
     applyTransform();
   });
   function endPointer(e) {
+    if (swipeStart && activePointers.size === 1) {
+      const rect = overlay.getBoundingClientRect();
+      const dx = e.clientX - swipeStart.x;
+      const dy = e.clientY - swipeStart.y;
+      const startedInEdge = startedInEdgeZone(swipeStart.x, rect.left, rect.right);
+      const dir = resolveSwipeDirection({ dx, dy, startedInEdge });
+      if (dir === 1 && idx < localPaths.length - 1) show(idx + 1);
+      else if (dir === -1 && idx > 0) show(idx - 1);
+    }
+    swipeStart = null;
     activePointers.delete(e.pointerId);
     if (activePointers.size < 2) pinch = null;
     if (activePointers.size === 1 && scale > 1) {

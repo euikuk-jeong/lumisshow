@@ -1,6 +1,7 @@
 import { api, shareApi, AdminAuthError, ShareAuthError } from '../api.js';
 import { esc } from '../utils.js';
 import { EFFECTS, DEFAULT_SETTINGS, loadSlideshowSettings, saveSlideshowSettings } from '../slideshow-config.js';
+import { startedInEdgeZone, resolveSwipeDirection, isTap } from '../touch-gesture.js';
 
 const TRANS_MS = 700;
 const KB_CLASSES = ['kb-tl','kb-tr','kb-bl','kb-br','kb-t','kb-b','kb-l','kb-r'];
@@ -580,7 +581,10 @@ async function runSlideshow(src) {
   }
   document.addEventListener('keydown', handleKeydown);
 
-  // ── Touch tap zones (좌35% = 이전, 우35% = 다음, 중앙 = 툴바 토글) ──
+  // ── Touch: 탭존(좌35%/중앙/우35%) + 스와이프(좌우 이동) ────────
+  // 스와이프는 화면 가장자리(SWIPE_EDGE_EXCLUDE_PX 이내)에서 시작하면 무시한다.
+  // iOS는 그 영역을 뒤로가기 제스처 전용으로 예약해 두어 preventDefault로도 못 막으므로,
+  // 해당 영역 밖에서 시작한 좌우 드래그만 넘기기로 처리해 시스템 제스처와 충돌을 피한다.
   const wrap = document.getElementById('ss-wrap');
   let tStart = null;
   wrap.addEventListener('touchstart', (e) => {
@@ -588,24 +592,36 @@ async function runSlideshow(src) {
   }, { passive: true });
   wrap.addEventListener('touchend', (e) => {
     if (!tStart) return;
-    const dx = Math.abs(e.changedTouches[0].clientX - tStart.x);
-    const dy = Math.abs(e.changedTouches[0].clientY - tStart.y);
+    const rect = wrap.getBoundingClientRect();
+    const endX = e.changedTouches[0].clientX;
+    const endY = e.changedTouches[0].clientY;
+    const dx = endX - tStart.x;
+    const dy = endY - tStart.y;
     const dt = Date.now() - tStart.t;
+    const startedInEdge = startedInEdgeZone(tStart.x, rect.left, rect.right);
     tStart = null;
-    if (dx < 15 && dy < 15 && dt < 300) {
-      const rect = wrap.getBoundingClientRect();
-      const relX = (e.changedTouches[0].clientX - rect.left) / rect.width;
+
+    if (isTap(dx, dy, dt)) {
+      const relX = (endX - rect.left) / rect.width;
       if (relX < 0.35) { advance(-1); showUI(); }
       else if (relX > 0.65) { advance(1); showUI(); }
       else toggleUI();
+      return;
     }
+
+    const dir = resolveSwipeDirection({ dx, dy, startedInEdge });
+    if (dir !== 0) { advance(dir); showUI(); }
   }, { passive: true });
 
   // ── 모바일: 자동 전체화면 + orientation lock ─────────────────
-  if (window.matchMedia('(pointer: coarse) and (hover: none)').matches) {
-    document.documentElement.requestFullscreen?.()
+  function enterFullscreen() {
+    if (!document.documentElement.requestFullscreen) return;
+    document.documentElement.requestFullscreen()
       .then(() => screen.orientation?.lock('landscape').catch(() => {}))
       .catch(() => {});
+  }
+  if (window.matchMedia('(pointer: coarse) and (hover: none)').matches) {
+    enterFullscreen();
   }
 
   // ── UI auto-hide ─────────────────────────────────────────────
@@ -635,9 +651,7 @@ async function runSlideshow(src) {
   document.addEventListener('fullscreenchange', handleFSChange);
   document.getElementById('ss-fs-btn').addEventListener('click', () => {
     if (!document.fullscreenElement) {
-      document.documentElement.requestFullscreen()
-        .then(() => screen.orientation?.lock('landscape').catch(() => {}))
-        .catch(() => {});
+      enterFullscreen();
     } else {
       document.exitFullscreen();
     }
