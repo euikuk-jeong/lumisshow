@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.16.0] - 2026-08-02
+
+### Added
+- **슬라이드쇼/전체 사진 보기/라이트박스에 좌우 스와이프 제스처 추가**: 화면 가장자리
+  (~28px) 시작 터치는 스와이프 후보에서 제외해 iOS 뒤로가기 시스템 제스처와 충돌하지
+  않도록 함. 기존 탭존(슬라이드쇼)·버튼 내비게이션은 그대로 유지. 판정 로직은
+  `touch-gesture.js`로 분리해 세 화면이 공유하고 node 내장 테스트러너로 unit test 작성
+  (`slideshow.js`, `album-view.js`, `lightbox.js`, `touch-gesture.js`,
+  `touch-gesture.test.js`, `viewer.css`, `frontend/package.json`)
+
+### Fixed
+- **iPhone에서 슬라이드쇼 진입 시 툴바 자동 숨김·전체화면 버튼이 동작하지 않던 문제**:
+  `requestFullscreen?.().then(...)` 체인이 Fullscreen API 미지원 브라우저(iPhone Safari)에서
+  TypeError를 던져 이후 UI 초기화 코드가 스킵되던 버그 수정 (`slideshow.js`)
+
 ## [1.15.4] - 2026-07-29
 
 ### Changed
@@ -900,7 +915,8 @@ Phase 2 — AI 얼굴 인식 스마트 앨범. NAS 로컬 AI(InsightFace)로 사
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v1.15.4...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v1.16.0...HEAD
+[1.16.0]: https://github.com/euikuk-jeong/lumisshow/compare/v1.15.4...v1.16.0
 [1.15.4]: https://github.com/euikuk-jeong/lumisshow/compare/v1.15.3...v1.15.4
 [1.15.3]: https://github.com/euikuk-jeong/lumisshow/compare/v1.15.2...v1.15.3
 [1.15.2]: https://github.com/euikuk-jeong/lumisshow/compare/v1.15.1...v1.15.2
