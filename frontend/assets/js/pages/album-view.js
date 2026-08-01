@@ -1,7 +1,7 @@
 import { shareApi, ShareAuthError } from '../api.js';
 import { esc, getVersion } from '../utils.js';
 import { EFFECTS, EFFECT_LABELS, loadSlideshowSettings } from '../slideshow-config.js';
-import { startedInEdgeZone, resolveSwipeDirection } from '../touch-gesture.js';
+import { startedInEdgeZone, resolveSwipeDirection, clampDragOffset } from '../touch-gesture.js';
 
 function saveSettings(token, s) {
   localStorage.setItem(`slideshow_settings_${token}`, JSON.stringify(s));
@@ -157,6 +157,8 @@ function _openSharePhotoViewer(token, photos, startIdx) {
   let zoom = 1;
   let panX = 0;
   let panY = 0;
+  let swipeX = 0;     // 스와이프 드래그 중 현재 사진의 X 오프셋(px)
+  let settling = false; // 스와이프 완료/취소 애니메이션 진행 중 여부
   const MIN_ZOOM = 1;
   const MAX_ZOOM = 4;
 
@@ -166,7 +168,9 @@ function _openSharePhotoViewer(token, photos, startIdx) {
     <button class="spv-close" title="닫기">✕</button>
     <div class="spv-body">
       <button class="spv-nav spv-prev">‹</button>
+      <img class="spv-peek-img spv-peek-prev" alt="">
       <img class="spv-img" src="" alt="">
+      <img class="spv-peek-img spv-peek-next" alt="">
       <div class="spv-info" style="display:none"></div>
       <button class="spv-nav spv-next">›</button>
     </div>
@@ -184,6 +188,8 @@ function _openSharePhotoViewer(token, photos, startIdx) {
   document.body.appendChild(overlay);
 
   const imgEl      = overlay.querySelector('.spv-img');
+  const peekPrevEl = overlay.querySelector('.spv-peek-prev');
+  const peekNextEl = overlay.querySelector('.spv-peek-next');
   const bodyEl     = overlay.querySelector('.spv-body');
   const prevBtn    = overlay.querySelector('.spv-prev');
   const nextBtn    = overlay.querySelector('.spv-next');
@@ -203,14 +209,25 @@ function _openSharePhotoViewer(token, photos, startIdx) {
   }
 
   function applyTransform() {
-    imgEl.style.transform = zoom > 1 ? `translate(${panX}px, ${panY}px) scale(${zoom})` : '';
+    imgEl.style.transform = zoom > 1
+      ? `translate(-50%, -50%) translate(${panX}px, ${panY}px) scale(${zoom})`
+      : `translate(-50%, -50%) translateX(${swipeX}px)`;
     imgEl.style.cursor = zoom > 1 ? 'grab' : '';
+    updatePeekTransforms();
     prevBtn.style.visibility = (zoom <= 1 && idx > 0) ? 'visible' : 'hidden';
     nextBtn.style.visibility = (zoom <= 1 && idx < photos.length - 1) ? 'visible' : 'hidden';
   }
 
+  // 이전/다음 미리보기 이미지를 화면 밖(±bodyWidth)에 대기시켜 두었다가
+  // swipeX만큼 같이 이동시켜 드래그를 따라오는 것처럼 보이게 한다.
+  function updatePeekTransforms() {
+    const bodyWidth = bodyEl.offsetWidth;
+    peekPrevEl.style.transform = `translate(-50%, -50%) translateX(${swipeX - bodyWidth}px)`;
+    peekNextEl.style.transform = `translate(-50%, -50%) translateX(${swipeX + bodyWidth}px)`;
+  }
+
   function resetZoom() {
-    zoom = MIN_ZOOM; panX = 0; panY = 0;
+    zoom = MIN_ZOOM; panX = 0; panY = 0; swipeX = 0;
     applyTransform();
   }
 
@@ -309,8 +326,16 @@ function _openSharePhotoViewer(token, photos, startIdx) {
       lastTouchPos = { x: e.touches[0].clientX, y: e.touches[0].clientY };
       lastPinchDist = null;
       swipeStart = null;
-    } else if (e.touches.length === 1) {
-      swipeStart = { x: e.touches[0].clientX, y: e.touches[0].clientY, t: Date.now() };
+    } else if (e.touches.length === 1 && !settling) {
+      const rect = bodyEl.getBoundingClientRect();
+      swipeStart = {
+        x: e.touches[0].clientX,
+        y: e.touches[0].clientY,
+        t: Date.now(),
+        // 시작 시점에 한 번만 판정 — 가장자리에서 시작한 드래그는 따라오는 시늉조차 하지 않는다.
+        // (도중에만 취소되면 끝까지 드래그해도 항상 스냅백되는 것처럼 보여 혼란스럽다)
+        edge: startedInEdgeZone(e.touches[0].clientX, rect.left, rect.right),
+      };
     }
   }, { passive: true });
 
@@ -343,6 +368,10 @@ function _openSharePhotoViewer(token, photos, startIdx) {
       lastTouchPos = { x: e.touches[0].clientX, y: e.touches[0].clientY };
       clampPan();
       applyTransform();
+    } else if (e.touches.length === 1 && zoom <= 1 && swipeStart && !settling && !swipeStart.edge) {
+      const dx = e.touches[0].clientX - swipeStart.x;
+      swipeX = clampDragOffset(dx, { hasPrev: idx > 0, hasNext: idx < photos.length - 1 });
+      applyTransform();
     }
   }, { passive: false });
 
@@ -351,17 +380,80 @@ function _openSharePhotoViewer(token, photos, startIdx) {
     if (e.touches.length === 0) lastTouchPos = null;
 
     if (swipeStart && e.touches.length === 0 && zoom <= 1) {
-      const rect = bodyEl.getBoundingClientRect();
       const endTouch = e.changedTouches[0];
       const dx = endTouch.clientX - swipeStart.x;
       const dy = endTouch.clientY - swipeStart.y;
-      const startedInEdge = startedInEdgeZone(swipeStart.x, rect.left, rect.right);
-      const dir = resolveSwipeDirection({ dx, dy, startedInEdge });
-      if (dir === 1 && idx < photos.length - 1) show(idx + 1);
-      else if (dir === -1 && idx > 0) show(idx - 1);
+      let dir = resolveSwipeDirection({ dx, dy, startedInEdge: swipeStart.edge });
+      if (dir === 1 && idx >= photos.length - 1) dir = 0;
+      if (dir === -1 && idx <= 0) dir = 0;
+      settleSwipe(dir);
     }
     swipeStart = null;
   }, { passive: true });
+
+  // 스와이프 판정(dir: 1=다음, -1=이전, 0=취소) 이후 화면 밖까지 슬라이드하거나
+  // 원위치로 되돌아가는 애니메이션을 재생한 뒤 실제 사진 전환을 적용한다.
+  function settleSwipe(dir) {
+    const bodyWidth = bodyEl.offsetWidth;
+    const targetX = dir === 1 ? -bodyWidth : dir === -1 ? bodyWidth : 0;
+    if (Math.round(swipeX) === Math.round(targetX)) {
+      finishSwipe(dir);
+      return;
+    }
+    settling = true;
+    const els = [imgEl, peekPrevEl, peekNextEl];
+    els.forEach(el => el.classList.add('spv-snapping'));
+    swipeX = targetX;
+    applyTransform();
+
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      clearTimeout(fallbackTimer);
+      imgEl.removeEventListener('transitionend', onTransitionEnd);
+      els.forEach(el => el.classList.remove('spv-snapping'));
+      settling = false;
+      finishSwipe(dir);
+    };
+    // transitionend는 opacity/transform 등 속성별로 각각 발생하므로 transform 전환이
+    // imgEl에서 끝난 경우만 받는다 — 그렇지 않으면 슬라이드가 끝나기 전에 조기 커밋된다.
+    const onTransitionEnd = (e) => {
+      if (e.target !== imgEl || e.propertyName !== 'transform') return;
+      finish();
+    };
+    imgEl.addEventListener('transitionend', onTransitionEnd);
+    // 탭 백그라운드 등으로 transitionend가 아예 발생하지 않는 경우를 대비한 안전망
+    // (없으면 settling이 true로 고정돼 이후 스와이프가 영구히 먹통이 된다)
+    const fallbackTimer = setTimeout(finish, 350);
+  }
+
+  // 스와이프로 완료된 사진 전환: 새 이미지가 실제로 로드된 뒤에만 swipeX를 되돌린다.
+  // 다음/이전 사진은 이미 peek 이미지로 화면에 보이고 있으므로, 로드 전에 먼저
+  // 위치를 리셋해버리면 아직 안 뜬 이전 사진이 잠깐 다시 보이는 깜빡임이 생긴다.
+  function commitSwipe(newIdx) {
+    const photo = photos[newIdx];
+    imgEl.addEventListener('load', () => {
+      idx = newIdx;
+      swipeX = 0;
+      zoom = MIN_ZOOM; panX = 0; panY = 0;
+      applyTransform();
+      peekPrevEl.src = idx > 0 ? photos[idx - 1].url : '';
+      peekNextEl.src = idx < photos.length - 1 ? photos[idx + 1].url : '';
+      filenameEl.textContent = photo.filename || '';
+      counterEl.textContent = `${(idx + 1).toLocaleString()} / ${photos.length.toLocaleString()}`;
+      dlBtn.href = photo.url;
+      dlBtn.download = photo.filename || 'photo.jpg';
+      if (infoVisible) infoEl.innerHTML = formatInfo(photo);
+    }, { once: true });
+    imgEl.src = photo.url;
+  }
+
+  function finishSwipe(dir) {
+    if (dir === 1 && idx < photos.length - 1) commitSwipe(idx + 1);
+    else if (dir === -1 && idx > 0) commitSwipe(idx - 1);
+    else { swipeX = 0; applyTransform(); }
+  }
 
   // ── EXIF info formatter ─────────────────────────────────────
 
@@ -399,6 +491,8 @@ function _openSharePhotoViewer(token, photos, startIdx) {
     imgEl.style.opacity = '0.4';
     imgEl.onload = () => { imgEl.style.opacity = '1'; };
     imgEl.src = photo.url;
+    peekPrevEl.src = idx > 0 ? photos[idx - 1].url : '';
+    peekNextEl.src = idx < photos.length - 1 ? photos[idx + 1].url : '';
     filenameEl.textContent = photo.filename || '';
     counterEl.textContent = `${(idx + 1).toLocaleString()} / ${photos.length.toLocaleString()}`;
     dlBtn.href = photo.url;

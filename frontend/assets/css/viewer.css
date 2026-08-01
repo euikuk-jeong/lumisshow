@@ -240,7 +240,10 @@
   touch-action: none;
 }
 
-.spv-img {
+.spv-img, .spv-peek-img {
+  position: absolute;
+  top: 50%;
+  left: 50%;
   max-width: calc(100% - 120px);
   max-height: 100%;
   object-fit: contain;
@@ -250,6 +253,15 @@
   touch-action: none;
   user-select: none;
   -webkit-user-drag: none;
+}
+
+.spv-peek-img {
+  pointer-events: none;
+}
+
+/* 스와이프 취소/완료 시 화면 밖 대상 위치까지 부드럽게 이동시키는 스냅 애니메이션 */
+.spv-img.spv-snapping, .spv-peek-img.spv-snapping {
+  transition: opacity 0.15s, transform 0.25s ease;
 }
 
 .spv-nav {
@@ -360,7 +372,7 @@
   .viewer-actions { flex-direction: column; }
   .viewer-grid { grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); }
   .spv-nav { font-size: 40px; padding: 12px 10px; }
-  .spv-img { max-width: calc(100% - 80px); }
+  .spv-img, .spv-peek-img { max-width: calc(100% - 80px); }
   .spv-filename { max-width: 160px; }
   .spv-btn { padding: 6px 10px; font-size: 12px; }
 }

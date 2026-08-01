@@ -30,3 +30,10 @@ export function resolveSwipeDirection({ dx, dy, startedInEdge, threshold = SWIPE
 export function isTap(dx, dy, dt, { moveThreshold = 15, timeThreshold = 300 } = {}) {
   return Math.abs(dx) < moveThreshold && Math.abs(dy) < moveThreshold && dt < timeThreshold;
 }
+
+/** 이웃 사진이 없는 방향으로 드래그하면 화면이 따라가지 않도록 오프셋을 0으로 고정 */
+export function clampDragOffset(dx, { hasPrev, hasNext }) {
+  if (dx < 0 && !hasNext) return 0;
+  if (dx > 0 && !hasPrev) return 0;
+  return dx;
+}
