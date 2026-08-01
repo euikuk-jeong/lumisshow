@@ -206,7 +206,10 @@ async def search(
     all_basics = await asyncio.to_thread(_walk_all_photos_basic_cached, start_dir, root, hidden_paths)
     if q:
         ql = q.lower()
-        basics = [b for b in all_basics if ql in b[1].lower()]
+        basics = [
+            b for b in all_basics
+            if ql in b[1].lower() or ql in os.path.relpath(b[0], root).replace("\\", "/").lower()
+        ]
     else:
         basics = all_basics
 
