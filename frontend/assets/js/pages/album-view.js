@@ -1,6 +1,7 @@
 import { shareApi, ShareAuthError } from '../api.js';
 import { esc, getVersion } from '../utils.js';
 import { EFFECTS, EFFECT_LABELS, loadSlideshowSettings } from '../slideshow-config.js';
+import { startedInEdgeZone, resolveSwipeDirection } from '../touch-gesture.js';
 
 function saveSettings(token, s) {
   localStorage.setItem(`slideshow_settings_${token}`, JSON.stringify(s));
@@ -283,10 +284,14 @@ function _openSharePhotoViewer(token, photos, startIdx) {
   document.addEventListener('mousemove', onMouseMove);
   document.addEventListener('mouseup', onMouseUp);
 
-  // ── Touch: pinch zoom + single-finger pan ───────────────────
+  // ── Touch: pinch zoom + single-finger pan + swipe navigate (zoom=1) ──
+  // 스와이프는 화면 가장자리(SWIPE_EDGE_EXCLUDE_PX 이내)에서 시작하면 무시한다.
+  // iOS는 그 영역을 뒤로가기 제스처 전용으로 예약해 두어 preventDefault로도 못 막으므로,
+  // 해당 영역 밖에서 시작한 좌우 드래그만 이전/다음 사진 이동으로 처리한다.
   let lastPinchDist = null;
   let lastPinchMid  = null;
   let lastTouchPos  = null;
+  let swipeStart    = null;
 
   bodyEl.addEventListener('touchstart', (e) => {
     if (e.touches.length === 2) {
@@ -299,9 +304,13 @@ function _openSharePhotoViewer(token, photos, startIdx) {
         y: (e.touches[0].clientY + e.touches[1].clientY) / 2,
       };
       lastTouchPos = null;
+      swipeStart = null;
     } else if (e.touches.length === 1 && zoom > 1) {
       lastTouchPos = { x: e.touches[0].clientX, y: e.touches[0].clientY };
       lastPinchDist = null;
+      swipeStart = null;
+    } else if (e.touches.length === 1) {
+      swipeStart = { x: e.touches[0].clientX, y: e.touches[0].clientY, t: Date.now() };
     }
   }, { passive: true });
 
@@ -340,6 +349,18 @@ function _openSharePhotoViewer(token, photos, startIdx) {
   bodyEl.addEventListener('touchend', (e) => {
     if (e.touches.length < 2) { lastPinchDist = null; lastPinchMid = null; }
     if (e.touches.length === 0) lastTouchPos = null;
+
+    if (swipeStart && e.touches.length === 0 && zoom <= 1) {
+      const rect = bodyEl.getBoundingClientRect();
+      const endTouch = e.changedTouches[0];
+      const dx = endTouch.clientX - swipeStart.x;
+      const dy = endTouch.clientY - swipeStart.y;
+      const startedInEdge = startedInEdgeZone(swipeStart.x, rect.left, rect.right);
+      const dir = resolveSwipeDirection({ dx, dy, startedInEdge });
+      if (dir === 1 && idx < photos.length - 1) show(idx + 1);
+      else if (dir === -1 && idx > 0) show(idx - 1);
+    }
+    swipeStart = null;
   }, { passive: true });
 
   // ── EXIF info formatter ─────────────────────────────────────
