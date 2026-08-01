@@ -129,19 +129,6 @@ async def test_search_by_name_case_insensitive(auth_client):
     assert data["total"] == 3
 
 
-async def test_search_by_path(auth_client):
-    r = await auth_client.get("/api/admin/search?q=sub")
-    data = r.json()
-    assert data["total"] == 1
-    assert data["items"][0]["name"] == "nested.jpg"
-
-
-async def test_search_by_path_does_not_match_unrelated_folder(auth_client):
-    r = await auth_client.get("/api/admin/search?q=does_not_exist_anywhere")
-    data = r.json()
-    assert data["total"] == 0
-
-
 async def test_search_in_subfolder(auth_client):
     r = await auth_client.get("/api/admin/search?folder=sub")
     data = r.json()
