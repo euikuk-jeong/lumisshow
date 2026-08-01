@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.16.1] - 2026-08-02
+
+### Added
+- **전체 사진 보기(공유 뷰어) 스와이프에 드래그 추적 슬라이드 효과 추가**: 손가락
+  이동에 맞춰 이전/다음 사진이 실시간으로 따라 들어오는 캐러셀 효과. 임계값을
+  넘겨 손을 떼면 끝까지 슬라이드 후 전환, 못 넘기면 원위치로 스냅백(0.25s).
+  슬라이드쇼는 대상에서 제외(기존 탭존 유지), admin 라이트박스는 레이아웃
+  구조(shrink-wrap) 문제로 이번엔 제외 (`album-view.js`, `touch-gesture.js`,
+  `touch-gesture.test.js`, `viewer.css`)
+
+### Fixed
+- **가장자리(28px) 시작 드래그가 끝까지 드래그해도 항상 스냅백되던 문제**:
+  가장자리 판정을 touchend 시점이 아닌 touchstart 시점에 하도록 변경 —
+  실기기 브라우저 테스트 중 발견 (`album-view.js`)
+
 ## [1.16.0] - 2026-08-02
 
 ### Added
@@ -915,7 +930,8 @@ Phase 2 — AI 얼굴 인식 스마트 앨범. NAS 로컬 AI(InsightFace)로 사
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v1.16.0...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v1.16.1...HEAD
+[1.16.1]: https://github.com/euikuk-jeong/lumisshow/compare/v1.16.0...v1.16.1
 [1.16.0]: https://github.com/euikuk-jeong/lumisshow/compare/v1.15.4...v1.16.0
 [1.15.4]: https://github.com/euikuk-jeong/lumisshow/compare/v1.15.3...v1.15.4
 [1.15.3]: https://github.com/euikuk-jeong/lumisshow/compare/v1.15.2...v1.15.3
