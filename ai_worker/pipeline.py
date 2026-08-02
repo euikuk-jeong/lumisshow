@@ -151,37 +151,15 @@ def _update_location(
     geocoder.sync_location_tag(conn, rel_path)
 
 
-def _update_ai_tags(
+def _score_and_store_ai_tags(
     conn: sqlite3.Connection,
     rel_path: str,
-    img: Image.Image,
-    clip_ctx: ClipTaggingContext | None,
+    embed: np.ndarray,
+    clip_ctx: ClipTaggingContext,
 ) -> None:
-    """CLIP 임베딩을 photo_embeddings에 저장하고, 어휘 텍스트 임베딩과의 코사인
-    유사도가 threshold 이상인 태그를 photo_tags(source='ai')에 기록한다.
-
-    재분석 시 기존 'ai' 태그는 지우고 현재 어휘/threshold 기준으로 다시 채점한다
-    (photo_embeddings는 그대로 재사용 없이 매번 새로 인코딩 — 사진 콘텐츠가 바뀌었을
-    수 있는 재분석 상황이라 캐시를 신뢰할 수 없음). clip_ctx가 없거나(CLIP 모델
-    로딩 실패) 임베딩 자체가 실패하면 기존 'ai' 태그를 그대로 둔 채 아무 것도 하지
-    않는다 — best-effort지만, Kiwi/GPS와 달리 CLIP은 재실패 시 다음 스캔에서도
-    자동으로 다시 채워지지 않는(coverage 방식이 아닌) 유일한 트랙이라 지우기만 하고
-    못 채우면 영구 유실이 된다. 조금 낡은 태그가 남는 쪽이 안전하다."""
-    if clip_ctx is None:
-        return
-    try:
-        embed = clip_ctx.tagger.embed_image(img)
-    except Exception:
-        _logger.exception("%s CLIP 임베딩 실패", rel_path)
-        return
-
+    """주어진(이미 계산된) 임베딩으로 현재 어휘/threshold 기준 photo_tags(source='ai')를
+    갱신한다(기존 'ai' 태그 삭제 후 재삽입) — 이미지 재인코딩은 하지 않는다."""
     conn.execute("DELETE FROM photo_tags WHERE photo_path = ? AND source = 'ai'", (rel_path,))
-    conn.execute(
-        """INSERT INTO photo_embeddings (photo_path, embedding) VALUES (?, ?)
-           ON CONFLICT(photo_path) DO UPDATE SET
-             embedding=excluded.embedding, updated_at=CURRENT_TIMESTAMP""",
-        (rel_path, matcher.embedding_to_blob(embed)),
-    )
     sims = clip_ctx.text_embeds @ embed
     for i, sim in enumerate(sims):
         if sim >= clip_ctx.threshold:
@@ -191,6 +169,95 @@ def _update_ai_tags(
                    ON CONFLICT(photo_path, tag, source) DO NOTHING""",
                 (rel_path, tag_vocab.TAG_VOCAB[i]["label"], float(sim)),
             )
+
+
+def _update_ai_tags(
+    conn: sqlite3.Connection,
+    rel_path: str,
+    img: Image.Image,
+    clip_ctx: ClipTaggingContext | None,
+) -> None:
+    """이미지를 새로 인코딩해 photo_embeddings에 저장하고 photo_tags(source='ai')를
+    갱신한다(scan 경로 — 사진 콘텐츠가 바뀌었을 수 있는 재분석 상황이라 캐시를
+    신뢰할 수 없어 매번 새로 인코딩). 어휘/threshold만 바뀌고 이미지는 그대로인
+    경우의 재채점은 `rescore_ai_tags_from_cache`(tag-backfill 전용, 재인코딩 없음)를 쓴다.
+
+    clip_ctx가 없거나(CLIP 모델 로딩 실패) 임베딩 자체가 실패하면 기존 'ai' 태그를
+    그대로 둔 채 아무 것도 하지 않는다 — best-effort지만, Kiwi/GPS와 달리 CLIP은
+    실패 시 다음 스캔에서도 자동으로 다시 채워지지 않는(coverage 방식이 아닌)
+    유일한 트랙이라 지우기만 하고 못 채우면 영구 유실이 된다. 조금 낡은 태그가
+    남는 쪽이 안전하다."""
+    if clip_ctx is None:
+        return
+    try:
+        embed = clip_ctx.tagger.embed_image(img)
+    except Exception:
+        _logger.exception("%s CLIP 임베딩 실패", rel_path)
+        return
+
+    conn.execute(
+        """INSERT INTO photo_embeddings (photo_path, embedding) VALUES (?, ?)
+           ON CONFLICT(photo_path) DO UPDATE SET
+             embedding=excluded.embedding, updated_at=CURRENT_TIMESTAMP""",
+        (rel_path, matcher.embedding_to_blob(embed)),
+    )
+    _score_and_store_ai_tags(conn, rel_path, embed, clip_ctx)
+
+
+def rescore_ai_tags_from_cache(
+    conn: sqlite3.Connection, rel_path: str, clip_ctx: ClipTaggingContext | None
+) -> bool:
+    """photo_embeddings에 이미 저장된 벡터를 그대로 재사용해 현재 어휘/threshold로만
+    재채점한다(tag-backfill 전용) — 이미지를 다시 열거나 재인코딩하지 않는다. 이게
+    photo_embeddings를 캐시해두는 핵심 이유: 어휘 확장·threshold 조정이 전체 재인코딩
+    (사진 수만 장 기준 수십 분~수 시간) 없이 벡터 비교(수십 밀리초)만으로 끝난다.
+    캐시된 임베딩이 없으면(아직 한 번도 인코딩 안 된 사진) False를 반환하고 아무 것도
+    하지 않는다 — 그 경우는 `_update_ai_tags`로 새로 인코딩해야 한다.
+
+    `_update_ai_tags`(scan 경로)와 달리 여기서는 재채점 결과 'ai' 태그가 0개가 되어도
+    기존 태그를 그대로 삭제한다 — admin이 threshold를 올리는 등 명시적으로 재계산을
+    요청한 결과이므로 "낡은 태그가 남는 쪽이 안전하다"는 Phase 3의 best-effort 원칙이
+    적용되지 않는다. embed_image() 실패로 태그를 잃는 실패 시나리오 자체가 없다
+    (임베딩은 이미 캐시돼 있으므로)."""
+    if clip_ctx is None:
+        return False
+    row = conn.execute(
+        "SELECT embedding FROM photo_embeddings WHERE photo_path = ?", (rel_path,)
+    ).fetchone()
+    if row is None:
+        return False
+    embed = matcher.blob_to_embedding(row["embedding"])
+    _score_and_store_ai_tags(conn, rel_path, embed, clip_ctx)
+    return True
+
+
+def backfill_photo(
+    conn: sqlite3.Connection,
+    rel_path: str,
+    abs_path: str,
+    clip_ctx: ClipTaggingContext | None,
+    need_embedding: bool,
+    need_location: bool,
+) -> tuple[bool, bool]:
+    """tag-backfill 전용: 얼굴 재분석 없이 CLIP 임베딩/위치만 소급 반영한다(파일을
+    1번만 연다). (임베딩을 새로 채웠는지, 위치를 새로 채웠는지)를 반환 — 파일을
+    열 수 없으면 예외를 그대로 던진다(호출부인 main.run_tag_backfill이 건너뛰고
+    계속 진행)."""
+    with Image.open(abs_path) as raw:
+        gps = _extract_gps(raw)
+        img = ImageOps.exif_transpose(raw).convert("RGB")
+
+    embedded = False
+    if need_embedding:
+        _update_ai_tags(conn, rel_path, img, clip_ctx)
+        embedded = True
+
+    located = False
+    if need_location and gps is not None:
+        _update_location(conn, rel_path, gps)
+        located = True
+
+    return embedded, located
 
 
 def analyze_and_store(
