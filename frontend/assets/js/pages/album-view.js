@@ -457,9 +457,15 @@ function _openSharePhotoViewer(token, photos, startIdx) {
 
   // ── EXIF info formatter ─────────────────────────────────────
 
+  function rowsToHtml(rows) {
+    return rows.map(([l, v]) =>
+      `<div class="ss-info-row"><span class="ss-info-label">${esc(l)}</span><span class="ss-info-value">${esc(v)}</span></div>`
+    ).join('');
+  }
+
   function formatInfo(photo) {
-    const rows = [];
-    const add = (label, value) => { if (value != null && value !== '') rows.push([label, String(value)]); };
+    const exifRows = [];
+    const add = (label, value) => { if (value != null && value !== '') exifRows.push([label, String(value)]); };
     add('Filename', photo.filename);
     if (photo.taken_at) {
       const d = new Date(photo.taken_at);
@@ -478,9 +484,20 @@ function _openSharePhotoViewer(token, photos, startIdx) {
     add('Flash', photo.flash);
     add('Metering', photo.metering);
     add('Exposure Mode', photo.exposure_mode);
-    return rows.map(([l, v]) =>
-      `<div class="ss-info-row"><span class="ss-info-label">${esc(l)}</span><span class="ss-info-value">${esc(v)}</span></div>`
-    ).join('');
+
+    // 태그 — 백엔드가 뷰어별로 노출 가능한 source만 채워 보내므로(공유 링크는
+    // person_tags/location_tags가 항상 빈 배열) 프론트에서 재분기하지 않는다.
+    const tagRows = [];
+    const addList = (label, list) => { if (list && list.length) tagRows.push([label, list.join(', ')]); };
+    addList('인물', photo.person_tags);
+    addList('위치', photo.location_tags);
+    addList('태그', photo.ai_tags);
+    addList('폴더명', photo.path_tags);
+    addList('직접 추가', photo.manual_tags);
+
+    const exifHtml = rowsToHtml(exifRows);
+    if (!tagRows.length) return exifHtml;
+    return `${exifHtml}<div class="ss-info-divider"></div><div class="ss-info-section">🏷 태그</div>${rowsToHtml(tagRows)}`;
   }
 
   // ── Photo display ───────────────────────────────────────────
