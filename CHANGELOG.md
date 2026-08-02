@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.2] - 2026-08-03
+
+### Fixed
+- **전체 사진 보기(라이트박스) 정보 패널에 태그 정보 누락**: EXIF만 표시되고
+  인물/위치/태그/폴더명/직접 추가 태그가 표시되지 않던 문제 수정. 슬라이드쇼
+  정보 패널과 동일하게 태그 섹션 추가 (`frontend/assets/js/pages/album-view.js`)
+
+### Changed
+- **정보 패널 EXIF/태그 영역 시각 분리**: 전체 사진 보기·슬라이드쇼 양쪽
+  정보 패널에서 EXIF와 태그를 구분선으로 나눠 표시 — 슬라이드쇼의 EXIF/음악
+  구분과 동일한 패턴 적용 (`frontend/assets/js/pages/album-view.js`,
+  `frontend/assets/js/pages/slideshow.js`)
+
 ## [2.0.1] - 2026-08-03
 
 ### Fixed
@@ -982,7 +995,8 @@ Phase 2 — AI 얼굴 인식 스마트 앨범. NAS 로컬 AI(InsightFace)로 사
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v2.0.1...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v2.0.2...HEAD
+[2.0.2]: https://github.com/euikuk-jeong/lumisshow/compare/v2.0.1...v2.0.2
 [2.0.1]: https://github.com/euikuk-jeong/lumisshow/compare/v2.0.0...v2.0.1
 [2.0.0]: https://github.com/euikuk-jeong/lumisshow/compare/v1.16.1...v2.0.0
 [1.16.1]: https://github.com/euikuk-jeong/lumisshow/compare/v1.16.0...v1.16.1
