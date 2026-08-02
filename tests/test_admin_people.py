@@ -388,6 +388,37 @@ async def test_person_photos_detail(admin_client):
     assert r.status_code == 404
 
 
+async def test_person_photos_detail_includes_all_source_tags(admin_client):
+    """정보 패널(i 버튼) 노출용 — Admin 응답은 person/location/ai/path/manual
+    5개 source 전부 채워져야 한다(doc/tagging_requirement.md 노출 범위 표)."""
+    import aiosqlite
+
+    from backend.models.ai_database import _ai_db_path
+
+    face_ids = await _seed_faces(1)
+    pid = (await admin_client.post("/api/admin/people", json={"name": "지우"})).json()["id"]
+    await admin_client.post(f"/api/admin/faces/{face_ids[0]}/label", json={"person_id": pid})
+
+    async with aiosqlite.connect(_ai_db_path()) as db:
+        await db.execute(
+            "INSERT INTO photo_tags (photo_path, tag, source) VALUES "
+            "('2024/photo_0.jpg', '서울', 'location'), "
+            "('2024/photo_0.jpg', '대한민국', 'location'), "
+            "('2024/photo_0.jpg', '캠핑', 'ai'), "
+            "('2024/photo_0.jpg', '서울대공원', 'path'), "
+            "('2024/photo_0.jpg', '눈사람', 'manual')"
+        )
+        await db.commit()
+
+    r = await admin_client.get(f"/api/admin/people/{pid}/photos-detail")
+    photo = r.json()["photos"][0]
+    assert photo["person_tags"] == ["지우"]
+    assert photo["location_tags"] == ["서울", "대한민국"]  # city 먼저(삽입 순서), 알파벳순 아님
+    assert photo["ai_tags"] == ["캠핑"]
+    assert photo["path_tags"] == ["서울대공원"]
+    assert photo["manual_tags"] == ["눈사람"]
+
+
 async def test_person_photos_detail_source_labeled(admin_client):
     """source=labeled — 확정(라벨) 얼굴 사진만, 추정 매칭 제외. file_path 포함."""
     face_ids = await _seed_faces(3)
