@@ -1,18 +1,23 @@
-"""ai.db (Phase 2 얼굴 인식) 연결.
+"""ai.db (Phase 2 얼굴 인식 + Phase 3 태그/위치) 연결.
 
-쓰기 주체 분리 규칙 — LumisShow는 persons·face_labels·jobs·ai_settings만 쓴다.
-photos_analyzed·faces·face_matches는 AI 워커(ai_worker/) 전용 쓰기 테이블.
+쓰기 주체 분리 규칙 — LumisShow는 persons·face_labels·jobs·ai_settings를 상시
+쓴다. photos_analyzed·faces·face_matches·photo_embeddings는 AI 워커(ai_worker/)
+전용 쓰기 테이블. photo_tags·photo_locations는 워커(ai/path/location 소스,
+photo_locations 전체)와 LumisShow(person/manual 소스)가 각자의 이벤트에서
+상시 함께 쓰는 예외 테이블 — 자세한 내용은 `ai_worker/CLAUDE.md`의
+"photo_tags — 워커·백엔드 상시 동시 쓰기 첫 테이블" 절 참고.
 
 예외: routers/admin_people.py의 POST /api/admin/people/path-repairs/{id}/approve(-all)는
-사진/폴더명 변경으로 생긴 orphan 경로를 admin이 승인한 뒤 photos_analyzed.path/faces.photo_path를
-직접 UPDATE한다 — on-demand·저빈도 관리자 액션이라 WAL+busy_timeout(15s)이 워커와의
-동시 쓰기를 안전하게 직렬화한다. rename 후보 자체는 ai_worker/scanner.py(야간 자동 스캔)와
+사진/폴더명 변경으로 생긴 orphan 경로를 admin이 승인한 뒤 photos_analyzed.path/faces.photo_path
+(+콘텐츠 기반 photo_tags 행/photo_embeddings.photo_path)를 직접 UPDATE한다 —
+on-demand·저빈도 관리자 액션이라 WAL+busy_timeout(15s)이 워커와의 동시 쓰기를
+안전하게 직렬화한다. rename 후보 자체는 ai_worker/scanner.py(야간 자동 스캔)와
 POST /api/admin/people/repair-paths(수동 스캔) 양쪽이 pending_path_repairs에 제안만 쌓고,
 실제 UPDATE는 admin이 승인해야만 일어난다. 같은 패턴으로 rename 후보가 전혀 없는(파일이
 진짜로 사라진) 경로는 pending_orphan_cleanups에 삭제 제안으로 쌓이고,
 POST /api/admin/people/orphan-cleanups/{id}/approve(-all) 승인 시에만
-photos_analyzed/faces(→FK CASCADE로 face_labels/face_matches)와 photo_meta_cache(app.db)를
-함께 삭제한다.
+photos_analyzed/faces(→FK CASCADE로 face_labels/face_matches)·photo_tags·
+photo_locations·photo_embeddings와 photo_meta_cache(app.db)를 함께 삭제한다.
 
 !! 스키마는 ai_worker/db.py의 _DDL과 동일하게 유지할 것 (컨테이너가 분리되어
    코드를 공유할 수 없어 복제함). 한쪽을 변경하면 반드시 다른 쪽도 변경한다.

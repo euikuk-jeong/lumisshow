@@ -1,6 +1,8 @@
 """CLIP zero-shot 태그 어휘. 표준 데이터셋(ImageNet 등) 번역이 아니라, 가족 앨범에
-실제 나올 법한 개념 위주로 직접 큐레이션했다(총 82개, 10개 카테고리 — 2026-08-02
-`doc/tagging_requirement.md` 확정). `prompt`(영어)는 CLIP 텍스트 인코더 입력,
+실제 나올 법한 개념 위주로 직접 큐레이션했다(총 80개, 10개 카테고리 — 2026-08-02
+`doc/tagging_requirement.md` 확정 82개에서, 실사진 검증 중 "추석"/"설날" 프롬프트가
+체계적으로 오탐(야외 단체사진을 명절로 오인)해 2026-08-02 제외해 80개로 조정).
+`prompt`(영어)는 CLIP 텍스트 인코더 입력,
 `label`(한국어)은 화면 표시용이며 `photo_tags.tag` 값으로 그대로 저장된다.
 
 어휘 추가는 이 리스트에 항목만 더하면 된다 — CLIP 텍스트 임베딩은 스캔마다
@@ -82,11 +84,9 @@ TAG_VOCAB: list[dict[str, str]] = [
     {"prompt": "a photo of a rainbow", "label": "무지개"},
     {"prompt": "a photo of clouds in the sky", "label": "구름"},
     {"prompt": "a photo of a foggy scene", "label": "안개"},
-    # 이벤트/행사 (14)
+    # 이벤트/행사 (12) — "추석"/"설날"은 실사진 검증 중 오탐이 심해 제외(위 docstring 참고)
     {"prompt": "a photo of a birthday party", "label": "생일파티"},
     {"prompt": "a photo of a christmas celebration", "label": "크리스마스"},
-    {"prompt": "a photo of a Korean Lunar New Year celebration", "label": "설날"},
-    {"prompt": "a photo of a Korean Chuseok harvest festival celebration", "label": "추석"},
     {"prompt": "a photo of a wedding ceremony", "label": "결혼식"},
     {"prompt": "a photo of a Korean first birthday celebration", "label": "돌잔치"},
     {"prompt": "a photo of a graduation ceremony", "label": "졸업식"},

@@ -607,7 +607,7 @@ def test_analyze_and_store_keeps_stale_ai_tags_when_clip_ctx_none(conn):
 
 
 def test_tag_vocab_has_82_unique_entries():
-    assert len(tag_vocab.TAG_VOCAB) == 82
+    assert len(tag_vocab.TAG_VOCAB) == 80
     labels = [e["label"] for e in tag_vocab.TAG_VOCAB]
     prompts = [e["prompt"] for e in tag_vocab.TAG_VOCAB]
     assert len(set(labels)) == len(labels)
@@ -669,8 +669,7 @@ def test_download_detects_truncated_response_and_cleans_up_part_file(tmp_path, m
     )
     dest = str(tmp_path / "model.onnx")
 
-    import pytest as _pytest
-    with _pytest.raises(OSError):
+    with pytest.raises(OSError):
         tagger._download("http://example.invalid/model.onnx", dest)
 
     assert not os.path.exists(dest)

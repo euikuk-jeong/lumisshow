@@ -40,7 +40,7 @@ scanner.py    # PHOTO_ROOT 증분 스캔(path+mtime, @eaDir 제외) + 폴더명 
 pipeline.py   # InsightFace lazy 로드, 사진 1장 분석→기록(1장=1커밋, resumable), GPS EXIF 추출
 geocoder.py   # GPS→(도시,국가) 역지오코딩(reverse_geocoder, 오프라인), photo_tags(location) 동기화
 tagger.py     # CLIP zero-shot 이미지/텍스트 인코딩(onnxruntime+tokenizers), 모델 자동 다운로드
-tag_vocab.py  # CLIP 태그 어휘(82개, {prompt: 영어, label: 한국어})
+tag_vocab.py  # CLIP 태그 어휘(80개, {prompt: 영어, label: 한국어})
 matcher.py    # cosine 매칭 (numpy brute-force), 임베딩 BLOB 변환
 notify.py     # Discord webhook 알림 (AI_DISCORD_WEBHOOK_URL)
 main.py       # CLI: scan(--limit) | rematch | daemon
@@ -128,6 +128,12 @@ GPS `location='서울'` + 폴더명 `path='서울'`).
 `INSERT ... ON CONFLICT DO NOTHING` 소급 쿼리로 1회성 backfill한다(매 시작마다
 실행해도 idempotent).
 
+`photo_embeddings`(CLIP 이미지 벡터, Phase 3)도 같은 예외 패턴을 따른다 — 워커가
+매 스캔 `INSERT/UPDATE`하는 기본 소유자지만, `admin_people.py`의 경로복구 승인
+(`_apply_path_repair`, `UPDATE photo_path`)과 orphan 정리 승인(`_apply_orphan_cleanup`,
+`DELETE`)이 path-repair와 동일한 저빈도 관리자 액션 근거로 backend에서도 건드린다.
+`photo_tags`처럼 상시 동시 쓰기는 아니고, 기존 path-repair 예외의 연장선.
+
 ### GPS 위치 태깅 (`geocoder.py`) — 오프라인, 도시는 영문·국가만 한국어
 `pipeline.FacePipeline.analyze()`가 `ImageOps.exif_transpose()` 호출 **전**
 원본 이미지에서 GPS EXIF를 읽는다(transpose 이후 이미지는 exif가 유실될 수 있음).
@@ -168,7 +174,7 @@ new_path 폴더명으로 다시 채운다. `location`/`ai`/`manual`/`person` 태
 ### 사물/장면 태깅 (CLIP, `tagger.py`/`tag_vocab.py`) — 신규/변경 사진만, 기존 4.5만 장은 Phase 4 대상
 `pipeline.analyze_and_store()`가 얼굴 검출과 같은 이미지(이미 exif_transpose까지
 끝난 것)로 CLIP 이미지 임베딩을 계산해 `photo_embeddings`에 캐시하고,
-`tag_vocab.TAG_VOCAB`(82개, 텍스트 임베딩은 `run_scan()`에서 스캔당 1회만 계산해
+`tag_vocab.TAG_VOCAB`(80개, 텍스트 임베딩은 `run_scan()`에서 스캔당 1회만 계산해
 재사용) 대비 코사인 유사도가 threshold 이상인 태그를 `photo_tags(source='ai')`에
 기록한다. 재분석 시 기존 'ai' 태그는 지우고 현재 어휘/threshold로 재채점.
 
@@ -196,9 +202,14 @@ Content-Length와 실제 수신 바이트 수를 비교해 불완전 응답을 �
 확인해 기각(어휘 추가가 `tag_vocab.py` 수정만으로 다음 스캔부터 바로 반영되는
 게 더 단순함). threshold 기본값(`AI_TAG_THRESHOLD=0.24`)은 정식 eval 없이
 (`doc/tagging_requirement.md` 결정) 실사진 15장(`testdata/photos`) 정성
-검증으로 잡음 — 82개 어휘 기준 평균 4.4개 태그/사진, 누락 0건. CLIP 로딩(모델
-다운로드 포함) 실패는 얼굴 인식과 무관한 별도 기능이라 그 스캔은 얼굴 인식만
-수행하고 계속 진행한다(best-effort, `run_scan()`에서 예외를 삼킴).
+검증으로 잡음 — 82개 어휘 기준 평균 4.4개 태그/사진, 누락 0건. 같은 검증에서
+"추석"/"설날" 프롬프트(문장이 너무 길어 CLIP이 구체화하지 못하고 "야외
+단체사진" 방향으로 수렴)가 무관한 야외 사진에서도 반복적으로 상위 태그로
+발화해 2026-08-02 어휘에서 제외(82→80개) — 프롬프트를 더 구체적인 장면
+묘사로 재작성해 재검증하기 전까지는 tag_vocab.py에 다시 넣지 않는다.
+CLIP 로딩(모델 다운로드 포함) 실패는 얼굴 인식과 무관한 별도 기능이라 그
+스캔은 얼굴 인식만 수행하고 계속 진행한다(best-effort, `run_scan()`에서
+예외를 삼킴).
 
 ### 경로 규약
 `faces.photo_path`, `photos_analyzed.path`는 **PHOTO_ROOT 상대 경로 + `/` 구분자**
