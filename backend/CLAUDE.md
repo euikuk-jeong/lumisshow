@@ -55,7 +55,7 @@ routers/
   admin_albums.py    # CRUD /api/admin/albums/*
   admin_links.py     # CRUD /api/admin/albums/{id}/links
   admin_people.py    # Phase 2: 인물 CRUD, 얼굴 라벨/교정, 인물 사진 상세(슬라이드쇼용), 크롭 서빙, AI 잡 트리거, 경로 복구 승인
-  admin_ai_tags.py   # Phase 5: 태그 목록/사진 그리드/삭제/일괄이름변경/수동태그추가 (photo_tags 기반, person·location은 조회만 또는 미노출)
+  admin_ai_tags.py   # Phase 5: 태그 목록/사진 그리드/삭제/일괄이름변경/수동태그추가 (photo_tags 기반, person·location은 조회만 또는 미노출). Phase 7: GET /tags/xmp-export — DB 메타데이터를 XMP 사이드카 ZIP으로 스트리밍 다운로드
   share.py           # GET|POST /api/share/{token}/*
   media.py           # /thumb/, /media/, /music/{token}?index=N 서빙
 models/
@@ -66,10 +66,11 @@ services/
   thumbnail.py       # Pillow 썸네일 생성, EXIF 전체 메타 추출
   photo_meta.py      # photo_meta_cache 조회/적재 (load_photo_meta) — admin_browse/admin_albums/admin_people/share 공용
   photo_tags.py      # Phase 6: photo_tags 일괄 조회 (load_photo_tags) — 정보 패널(i 버튼) 태그 노출용, 뷰어별 source 노출 범위(ADMIN_INFO_PANEL_SOURCES/SHARE_INFO_PANEL_SOURCES) 정의
+  xmp_export.py      # Phase 7: XMP 사이드카 생성 (build_xmp_content, load_locations, load_confirmed_regions) — dc:subject/mwg-rs:RegionList/Iptc4xmpExt:LocationCreated 매핑
   paths.py           # PHOTO_ROOT 하위 경로 resolve·containment 검증 (resolve_abs, assert_within_photo_root) — media/share 공용
   settings.py        # settings 테이블 조회 (get_settings, DEFAULTS) — admin_settings/admin_browse/admin_albums/share 공용
   auth.py            # JWT 생성/검증, bcrypt 해시 (ADMIN_PASSWORD_HASH 지원), admin_image_auth (이미지 서빙 인증)
-  zip_stream.py      # 스트리밍 ZIP 생성
+  zip_stream.py      # 스트리밍 ZIP 생성 (zip_generator: 디스크 파일, zip_generator_from_content: 메모리 텍스트 — XMP export 전용)
   tag_vocab.py       # Phase 5: 수동 태그 추가용 어휘 목록 — ai_worker/tag_vocab.py의 label만 복제(컨테이너 분리로 코드 공유 불가, 어휘 바뀌면 양쪽 동기화 필요)
 ```
 
@@ -134,3 +135,14 @@ EXIF를 직접 수정한 경우 등 파일 내용이 캐시 이후 바뀐 경우
 
 ### ZIP 다운로드
 `StreamingResponse` + `zipstream-ng` 청크 스트리밍으로 서버 메모리에 전체 파일을 올리지 않음. 응답 헤더에 `Content-Disposition: attachment` 설정.
+
+### XMP export (Phase 7)
+`GET /api/admin/tags/xmp-export` — 태그/위치/확정 인물을 사진별 `.xmp` 사이드카로 묶어 원본과 동일한 폴더 구조의 ZIP으로 스트리밍(`zip_stream.zip_generator_from_content`, 디스크 파일이 아니라 메모리에서 생성한 XML 텍스트를 담는 변형). 원본 사진은 절대 쓰지 않음.
+
+- **대상 사진**: `photo_tags`/`photo_locations`/확정 `face_labels`(person_id NOT NULL) 중 하나라도 있는 사진만 — `UNION` 쿼리로 후보 목록을 구한 뒤, 사진별로 실제 내보낼 내용이 없으면(`has_exportable_content()`가 `False`) ZIP에서 제외.
+- **얼굴 영역(`mwg-rs:RegionList`)은 `face_labels`로 확정된 것만** — `face_matches`(AI 추정, 미확정)는 얼굴 인식 승인 큐 취지상 제외. bbox(픽셀)를 0~1 비율로 정규화하려면 사진 width/height가 필요한데(`photo_meta_cache`, 기존 EXIF 캐시 재사용), 못 구하면 얼굴 영역이 있어도 `mwg-rs:Regions` 블록 자체를 생략(잘못된 비율보다 생략이 안전). **width/height 조회는 확정 얼굴이 있는 사진만 대상** — 라이브러리 전체(수만 장) 기준으로 `load_photo_meta()`를 부르면 캐시 미스마다 NAS EXIF 재읽기가 발생해 요청 하나가 수십 분~시간 단위로 걸릴 수 있어, 실제로 width/height가 필요한 대상(확정 얼굴이 있는 사진)으로만 좁힌다.
+- **XMP 본문 생성은 ZIP 인코딩 시점까지 지연**(`xmp_export.xmp_bytes_iter`) — 대상이 라이브러리 전체일 수 있어, 모든 사진의 XMP 텍스트를 미리 만들어 리스트에 쌓아두면(문자열 수만 개, 컨테이너 `mem_limit` 대비 무시 못할 크기) 첫 바이트 응답 전에 메모리를 크게 잡아먹는다. `zip_generator_from_content()`에 완성된 문자열 대신 제너레이터를 넘기면 zipstream-ng가 각 항목을 실제로 인코딩할 때(스트리밍 중, 한 항목씩)까지 본문 생성을 미룬다 — "내보낼 게 있는지" 판단(`has_exportable_content()`)은 사전에 저렴하게 하고, 실제 XML 조립(`build_xmp_content()`)만 지연. 부수 효과로 이 조립도 `run_in_executor` 스레드 안에서 실행되어 이벤트 루프를 막지 않는다.
+- **arcname은 `photo_path`에서 확장자만 뺀 stem** — RAW+JPEG처럼 같은 폴더에 stem이 같은 파일 쌍이 있으면 충돌하므로(먼저 처리된 쪽이 짧은 이름을 선점), 이미 쓰인 stem이면 원본 파일명 전체 + `.xmp`로 대체해 유일성을 보장한다(`admin_ai_tags.py`의 `seen_arcnames`). 후보 조회 쿼리에 `ORDER BY photo_path`를 둬 어떤 쪽이 짧은 이름을 갖는지 실행마다 달라지지 않게 한다.
+- **`dc:subject`는 source 구분 없이 전체** — 정보 패널(`services/photo_tags.py`)과 달리 XMP export는 Admin 본인이 받는 개인 백업/이전용이라 뷰어별 프라이버시 분리가 필요 없음.
+- **인증은 `admin_image_auth`(Bearer 또는 `admin_img_session` 쿠키)** — `get_current_admin`(Bearer 전용)이 아닌 이유: Admin UI가 JS blob 다운로드 없이 단순 `<a href download>` 링크로 트리거하기 때문(`/thumb`, `/photo`, `/faces/{id}/crop`과 동일 패턴).
+- **XMP 패킷의 `xpacket begin` 속성값은 리터럴 BOM(U+FEFF) 한 글자**(XMP 스펙 요구사항) — 소스에 보이지 않는 문자를 직접 넣으면 편집 사고 위험이 커서 `chr(0xFEFF)`로 명시적으로 생성(`services/xmp_export.py`).

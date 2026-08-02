@@ -9,12 +9,18 @@ source='location'은 조회만 지원한다(목록·사진 그리드는 노출�
 photo_locations가 정본이고 photo_tags는 검색용 복제본이라, 여기서 태그만 지우면
 photo_locations와 어긋난다. 수동 교정은 photo_locations 전용 UI가 필요(이번 범위 아님,
 doc의 "추후 UI" 항목).
+
+/tags/xmp-export(Phase 7)는 위 태그 CRUD와 무관한 별도 기능(DB → XMP 사이드카
+일괄 내보내기)이지만, doc 설계상 같은 라우터에 배치하기로 확정돼 있어 여기 둔다.
 """
 
+import os
 import sqlite3
+from datetime import datetime
 from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import StreamingResponse
 
 from backend.models.ai_database import get_ai_db
 from backend.models.database import get_db
@@ -24,9 +30,18 @@ from backend.models.schemas import (
     TagRenameRequest,
     build_share_photo_item,
 )
-from backend.services.auth import get_current_admin
+from backend.services.auth import admin_image_auth, get_current_admin
 from backend.services.photo_meta import load_photo_meta
+from backend.services.photo_tags import load_photo_tags
 from backend.services.tag_vocab import MANUAL_TAG_VOCAB
+from backend.services.xmp_export import (
+    XMP_EXPORT_TAG_SOURCES,
+    has_exportable_content,
+    load_confirmed_regions,
+    load_locations,
+    xmp_bytes_iter,
+)
+from backend.services.zip_stream import zip_generator_from_content
 
 router = APIRouter(prefix="/api/admin", tags=["admin-ai-tags"])
 
@@ -163,3 +178,75 @@ async def add_manual_tag(
         "photo_path": body.photo_path, "tag": body.tag, "source": "manual",
         "added": bool(cur.rowcount),
     }
+
+
+@router.get("/tags/xmp-export")
+async def export_xmp(
+    _: str = Depends(admin_image_auth), db=Depends(get_ai_db), app_db=Depends(get_db)
+):
+    """DB 메타데이터(태그·위치·확정 인물)를 사진별 .xmp 사이드카로 묶어 ZIP 스트리밍
+    다운로드한다(Phase 7, doc/tagging_requirement.md "XMP export 상세 설계" 절).
+    원본과 동일한 상대 폴더 구조를 유지 — 원본 파일은 절대 수정하지 않는다.
+
+    admin_image_auth(Bearer 또는 admin_img_session 쿠키)를 쓰는 이유: 관리자 UI에서
+    JS blob 다운로드 없이 단순 <a href download> 링크로 트리거하기 위함 — /thumb,
+    /photo, /faces/{id}/crop과 동일한 패턴."""
+    async with db.execute(
+        """SELECT DISTINCT photo_path FROM (
+             SELECT photo_path FROM photo_tags
+             UNION
+             SELECT photo_path FROM photo_locations
+             UNION
+             SELECT f.photo_path FROM faces f
+               JOIN face_labels fl ON fl.face_id = f.id
+              WHERE fl.person_id IS NOT NULL
+           ) ORDER BY photo_path"""
+    ) as cur:
+        paths = [r["photo_path"] for r in await cur.fetchall()]
+
+    tags_map = await load_photo_tags(paths, db, XMP_EXPORT_TAG_SOURCES)
+    locations_map = await load_locations(paths, db)
+    regions_map = await load_confirmed_regions(paths, db)
+    # width/height는 mwg-rs:Regions 정규화에만 쓰인다 — 확정 얼굴이 있는 사진만
+    # 조회해 라이브러리 전체 규모의 EXIF 재확인(NAS I/O 폭주)을 피한다.
+    meta_map = await load_photo_meta(list(regions_map.keys()), app_db)
+
+    # items의 각 content는 완성된 문자열이 아니라 xmp_bytes_iter()가 반환하는
+    # 제너레이터 — zipstream이 실제 인코딩할 때(스트리밍 중, 한 항목씩)까지 본문
+    # 생성을 미뤄서 45,000장 규모에서도 전체를 한꺼번에 메모리에 올리지 않는다.
+    items: list[tuple[str, object]] = []
+    seen_arcnames: set[str] = set()
+    for p in paths:
+        # tags_map[p]는 source별로 나뉜 dict — dc:subject는 소스 구분 없이 전체를
+        # 합친다(XMP export는 정보 패널과 달리 프라이버시 구분이 없는 개인 백업용).
+        # 여러 source에 같은 텍스트가 있을 수 있어(예: 위치 "서울" + 폴더명 "서울")
+        # 순서를 유지한 채 중복을 제거한다.
+        seen: set[str] = set()
+        tags: list[str] = []
+        for source in XMP_EXPORT_TAG_SOURCES:
+            for t in tags_map.get(p, {}).get(source, []):
+                if t not in seen:
+                    seen.add(t)
+                    tags.append(t)
+
+        regions = regions_map.get(p, [])
+        location = locations_map.get(p)
+        meta = meta_map.get(p, {})
+        width, height = meta.get("width"), meta.get("height")
+        if not has_exportable_content(tags, regions, location, width, height):
+            continue
+        # 확장자만 .xmp로 바꾼 stem은 photo_path와 달리 유일하지 않다(RAW+JPEG처럼
+        # 같은 폴더에 스템이 같은 파일 쌍이 있으면 충돌) — 충돌 시 원본 파일명 전체에
+        # .xmp를 붙여 photo_path 유일성을 그대로 물려받는 이름으로 대체.
+        arcname = os.path.splitext(p)[0] + ".xmp"
+        if arcname in seen_arcnames:
+            arcname = p + ".xmp"
+        seen_arcnames.add(arcname)
+        items.append((arcname, xmp_bytes_iter(tags, regions, location, width, height)))
+
+    filename = f"lumisshow-xmp-export-{datetime.now():%Y%m%d}.zip"
+    return StreamingResponse(
+        zip_generator_from_content(items),
+        media_type="application/zip",
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(filename)}"},
+    )

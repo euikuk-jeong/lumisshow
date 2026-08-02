@@ -158,6 +158,17 @@ function renderSettingsForm(settings) {
         </div>
       </div>
 
+      <!-- XMP 내보내기 -->
+      <div class="settings-section card" id="xmp-export-section" style="display:none">
+        <div class="settings-section-header">
+          <p class="section-title">XMP 메타데이터 내보내기</p>
+          <p class="text-muted text-sm">태그·인물·위치 정보를 사진별 .xmp 사이드카로 묶어 ZIP 다운로드 (원본과 동일한 폴더 구조 유지, 원본 사진은 수정하지 않음)</p>
+        </div>
+        <div class="settings-actions">
+          <a href="/api/admin/tags/xmp-export" class="btn btn-ghost btn-sm" download>⬇ XMP 전체 내보내기</a>
+        </div>
+      </div>
+
       <!-- 슬라이드쇼 기본값 -->
       <div class="settings-section card">
         <div class="settings-section-header">
@@ -224,18 +235,20 @@ function renderSettingsForm(settings) {
   initAiScanSection();
 }
 
-/* ── AI 야간 스캔 시각 ──────────────────────────────────── */
+/* ── AI 야간 스캔 시각 (+ XMP 내보내기 섹션도 같은 ai.db 가용성 조건으로 노출) ── */
 async function initAiScanSection() {
   const section = document.getElementById('ai-scan-section');
+  const xmpSection = document.getElementById('xmp-export-section');
   let current;
   try {
     current = await api.get('/api/admin/ai/settings');
   } catch {
-    return; // ai.db 미구성 등 — 섹션 숨김 유지
+    return; // ai.db 미구성 등 — 두 섹션 모두 숨김 유지
   }
   const select = document.getElementById('s-ai-scan-hour');
   if (current.scan_hour != null) select.value = String(current.scan_hour);
   section.style.display = '';
+  xmpSection.style.display = '';
 
   document.getElementById('btn-save-ai-scan').addEventListener('click', async () => {
     const btn = document.getElementById('btn-save-ai-scan');
