@@ -95,15 +95,24 @@ rename 후보가 전혀 없는(basename이 현재 PHOTO_ROOT 어디에도 없는
 
 ### Discord 알림 (daemon 모드 전용)
 `AI_DISCORD_WEBHOOK_URL` 설정 시 scan/rematch 완료 후 `notify.py`가 webhook으로 요약을
-전송한다(사진 수/얼굴 수/에러 수/경로 변경·삭제 승인 대기 건수/소요시간 + `BASE_URL`로
-만든 `/admin/people` 링크). daemon.py의 jobs 트리거 처리와 야간 자동 스캔 양쪽에서
-호출되며, `python -m ai_worker.main scan` CLI 직접 실행은 알림 대상이 아니다
-(터미널로 직접 결과를 보는 상황이라 불필요). 전송 실패는 로그만 남기고 삼켜 daemon
-루프에 영향 주지 않는다. `run_scan()`이 리포트하는 경로 변경/삭제 건수는 "이번 스캔의
-신규 발생분"이 아니라 `pending_path_repairs`/`pending_orphan_cleanups`의
-`status='pending'` **전체 누적 건수**다 — 두 테이블 모두 admin이 승인/거부하기 전까지
-ai.db에 영구 보관되므로 별도 이력 저장 없이 그대로 조회하면 된다(과거 스캔에서 쌓이고
-아직 처리 안 된 것도 포함).
+전송한다(사진 수/얼굴 수/위치·태그 반영 건수/폴더명 태깅 건수/에러 수/경로 변경·삭제
+승인 대기 건수/소요시간 + `BASE_URL`로 만든 `/admin/people` 링크). scan()은 얼굴 인식과
+GPS 위치·CLIP AI 태그·폴더명(Kiwi) 태깅을 사진 1장 단위로 함께 처리하는 단일 파이프라인
+(`pipeline.analyze_and_store()`)이라, 알림 요약도 얼굴 결과만이 아니라 이 값들을 전부
+포함한다. daemon.py의 jobs 트리거 처리와 야간 자동 스캔 양쪽에서 호출되며,
+`python -m ai_worker.main scan` CLI 직접 실행은 알림 대상이 아니다(터미널로 직접 결과를
+보는 상황이라 불필요). 전송 실패는 로그만 남기고 삼켜 daemon 루프에 영향 주지 않는다.
+`run_scan()`이 리포트하는 경로 변경/삭제 건수는 "이번 스캔의 신규 발생분"이 아니라
+`pending_path_repairs`/`pending_orphan_cleanups`의 `status='pending'` **전체 누적
+건수**다 — 두 테이블 모두 admin이 승인/거부하기 전까지 ai.db에 영구 보관되므로 별도
+이력 저장 없이 그대로 조회하면 된다(과거 스캔에서 쌓이고 아직 처리 안 된 것도 포함).
+
+`notify_scan_result()`는 **증분이 있을 때만** 전송한다(2026-08-02 사용자 피드백 — 매
+스캔 무조건 전송하면 증분 없는 날도 pending 누적치가 그대로 와서 소음이 됨). 이번
+스캔에서 새로 처리한 사진이 있거나(`photos`/`path_tagged` > 0) 경로 변경·삭제 승인
+대기 누적 건수가 직전 발송 시점과 달라졌을 때만 보낸다. 직전 발송값은 `ai_settings`가
+아니라 `$DATA_DIR/notify_state.json`에 저장한다 — `ai_settings`는 LumisShow 전용
+쓰기 영역(아래 "ai.db 쓰기 주체 분리" 참고)이라 워커 내부 상태를 거기 쓰면 안 된다.
 Discord 일반 메시지 본문은 `[텍스트](url)` 마크다운 링크를 렌더링하지 않음(임베드 전용) —
 raw URL을 그대로 붙여 자동 링크화에 의존한다.
 urllib 기본 User-Agent(`Python-urllib/x.x`)는 Discord(Cloudflare)가 403으로 차단하므로
