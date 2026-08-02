@@ -179,27 +179,29 @@ def run_tag_backfill(limit: int | None = None) -> dict:
         has_embedding = conn.execute(
             "SELECT 1 FROM photo_embeddings WHERE photo_path = ?", (rel_path,)
         ).fetchone() is not None
-        if has_embedding and pipeline.rescore_ai_tags_from_cache(conn, rel_path, clip_ctx):
-            summary["rescored"] += 1
-
         has_location = conn.execute(
             "SELECT 1 FROM photo_locations WHERE photo_path = ?", (rel_path,)
         ).fetchone() is not None
 
-        if not has_embedding or not has_location:
-            abs_path = os.path.join(root, rel_path)
-            try:
+        # rescore_ai_tags_from_cache와 backfill_photo를 하나의 try로 묶는다 — 캐시된
+        # 벡터가 손상된 경우(blob_to_embedding 실패 등) 한 장 때문에 전체 배치가
+        # 죽지 않고, 사진 1장 = 1 트랜잭션(resumable) 원칙을 그대로 지킨다.
+        try:
+            if has_embedding and pipeline.rescore_ai_tags_from_cache(conn, rel_path, clip_ctx):
+                summary["rescored"] += 1
+            if not has_embedding or not has_location:
+                abs_path = os.path.join(root, rel_path)
                 embedded, located = pipeline.backfill_photo(
                     conn, rel_path, abs_path, clip_ctx,
                     need_embedding=not has_embedding, need_location=not has_location,
                 )
-            except Exception:
-                log.exception("%s 처리 실패 — 건너뜀", rel_path)
-                summary["errors"] += 1
-                conn.commit()
-                continue
-            summary["embedded"] += int(embedded)
-            summary["located"] += int(located)
+                summary["embedded"] += int(embedded)
+                summary["located"] += int(located)
+        except Exception:
+            log.exception("%s 처리 실패 — 건너뜀", rel_path)
+            summary["errors"] += 1
+            conn.commit()
+            continue
 
         conn.commit()
         if i % 200 == 0:
