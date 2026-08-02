@@ -2,7 +2,7 @@
 
 import aiosqlite
 
-from backend.services.photo_tags import load_photo_tags
+from backend.services.photo_tags import load_photo_tags, search_tag_matched_paths
 
 
 async def _seed_tags(rows: list[tuple[str, str, str]]) -> None:
@@ -86,3 +86,56 @@ async def test_load_photo_tags_empty_sources_returns_empty_lists_only(client):
         db.row_factory = aiosqlite.Row
         result = await load_photo_tags(["2024/a.jpg"], db, ())
     assert result == {"2024/a.jpg": {}}
+
+
+# ── search_tag_matched_paths ─────────────────────────────────────────────
+
+
+async def test_search_tag_matched_paths_substring_match_across_sources(client):
+    await _seed_tags([
+        ("2024/a.jpg", "캠핑장", "ai"),
+        ("2024/b.jpg", "지우", "person"),
+        ("2024/c.jpg", "서울대공원", "path"),
+    ])
+    from backend.models.ai_database import _ai_db_path
+
+    async with aiosqlite.connect(_ai_db_path()) as db:
+        db.row_factory = aiosqlite.Row
+        assert await search_tag_matched_paths("캠핑", db) == {"2024/a.jpg"}
+        assert await search_tag_matched_paths("지우", db) == {"2024/b.jpg"}
+        assert await search_tag_matched_paths("서울", db) == {"2024/c.jpg"}
+
+
+async def test_search_tag_matched_paths_no_match_returns_empty_set(client):
+    await _seed_tags([("2024/a.jpg", "캠핑", "ai")])
+    from backend.models.ai_database import _ai_db_path
+
+    async with aiosqlite.connect(_ai_db_path()) as db:
+        db.row_factory = aiosqlite.Row
+        assert await search_tag_matched_paths("없는태그", db) == set()
+
+
+async def test_search_tag_matched_paths_deduplicates_multiple_tag_hits(client):
+    """한 사진이 여러 태그로 매칭돼도(예: 'ai'와 'path' 둘 다 검색어 포함) photo_path는
+    한 번만 나와야 한다(DISTINCT)."""
+    await _seed_tags([
+        ("2024/a.jpg", "캠핑", "ai"),
+        ("2024/a.jpg", "캠핑장", "path"),
+    ])
+    from backend.models.ai_database import _ai_db_path
+
+    async with aiosqlite.connect(_ai_db_path()) as db:
+        db.row_factory = aiosqlite.Row
+        result = await search_tag_matched_paths("캠핑", db)
+    assert result == {"2024/a.jpg"}
+
+
+async def test_search_tag_matched_paths_escapes_like_wildcards(client):
+    """검색어에 SQL LIKE 와일드카드(%, _)가 그대로 들어가도 리터럴로 취급돼야
+    한다 — 이스케이프 안 하면 '_'만 검색해도 모든 태그가 걸린다."""
+    await _seed_tags([("2024/a.jpg", "AXB", "ai")])
+    from backend.models.ai_database import _ai_db_path
+
+    async with aiosqlite.connect(_ai_db_path()) as db:
+        db.row_factory = aiosqlite.Row
+        assert await search_tag_matched_paths("_", db) == set()

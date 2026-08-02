@@ -9,12 +9,14 @@ from urllib.parse import quote
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import FileResponse
 
+from backend.models.ai_database import get_ai_db
 from backend.models.database import get_db
 from backend.models.schemas import BrowseResponse, FolderItem, PhotoItem, SearchResponse
 
 _AUDIO_EXTENSIONS = {'.mp3', '.flac', '.ogg', '.m4a', '.wav', '.aac', '.opus'}
 from backend.services.auth import admin_image_auth, get_current_admin
 from backend.services.photo_meta import load_photo_meta
+from backend.services.photo_tags import search_tag_matched_paths
 from backend.services.settings import get_settings
 from backend.services.thumbnail import IMAGE_EXTENSIONS, generate_thumbnail
 
@@ -190,6 +192,7 @@ async def search(
     size: int = Query(default=100, ge=1, le=500),
     _: str = Depends(get_current_admin),
     db=Depends(get_db),
+    ai_db=Depends(get_ai_db),
 ):
     root = _photo_root()
     settings = await get_settings(db)
@@ -206,7 +209,21 @@ async def search(
     all_basics = await asyncio.to_thread(_walk_all_photos_basic_cached, start_dir, root, hidden_paths)
     if q:
         ql = q.lower()
-        basics = [b for b in all_basics if ql in b[1].lower()]
+        # ai.db 조회 실패(미초기화 등)가 파일명 검색 자체를 막으면 안 됨 — 태그
+        # 매칭 없이 파일명 검색만으로 폴백(share.py Phase 6와 동일한 격리 원칙).
+        try:
+            tag_paths = await search_tag_matched_paths(q, ai_db)
+        except Exception:
+            tag_paths = set()
+        # tag_paths가 비어 있으면(태그 매칭 0건, 흔한 경우) 뒤 조건은 아예 평가 안 함 —
+        # os.path.relpath는 Windows에서 abspath 재계산(사실상 시스템 콜)이라 사진마다
+        # 부르면 비용이 큼. b[0]는 os.walk(start_dir)가 root 하위에서만 만든 경로라
+        # 슬라이싱만으로 relpath와 동일한 결과를 얻을 수 있어 relpath 호출 자체를 피함.
+        basics = [
+            b for b in all_basics
+            if ql in b[1].lower()
+            or (tag_paths and b[0][len(root) + 1:].replace("\\", "/") in tag_paths)
+        ]
     else:
         basics = all_basics
 

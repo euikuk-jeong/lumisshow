@@ -41,8 +41,10 @@ async def auth_client(tmp_path, monkeypatch, photo_root):
     monkeypatch.setenv("ADMIN_PASSWORD", "testpass")
     monkeypatch.setenv("JWT_SECRET", "testsecret")
 
+    from backend.models.ai_database import init_ai_db
     from backend.models.database import init_db
     await init_db()
+    await init_ai_db()
 
     from backend.main import app
 
@@ -147,6 +149,102 @@ async def test_search_pagination(auth_client):
 async def test_search_requires_auth(client):
     r = await client.get("/api/admin/search")
     assert r.status_code == 401
+
+
+# ── search: 태그 매칭 ─────────────────────────────────────────────────────────
+
+async def _seed_tag(tag: str, photo_path: str, source: str = "ai") -> None:
+    import aiosqlite
+
+    from backend.models.ai_database import _ai_db_path
+
+    async with aiosqlite.connect(_ai_db_path()) as db:
+        await db.execute(
+            "INSERT INTO photo_tags (photo_path, tag, source) VALUES (?, ?, ?)",
+            (photo_path, tag, source),
+        )
+        await db.commit()
+
+
+async def test_search_by_tag_matches_even_without_filename_hit(auth_client):
+    """파일명에는 없는 검색어라도 photo_tags에 매칭되면 결과에 포함돼야 한다."""
+    await _seed_tag("캠핑", "photo0.jpg")
+    r = await auth_client.get("/api/admin/search?q=캠핑")
+    data = r.json()
+    assert data["total"] == 1
+    assert data["items"][0]["name"] == "photo0.jpg"
+
+
+async def test_search_by_tag_matches_nested_photo(auth_client):
+    await _seed_tag("서울", "sub/nested.jpg", source="location")
+    r = await auth_client.get("/api/admin/search?q=서울")
+    data = r.json()
+    assert data["total"] == 1
+    assert data["items"][0]["name"] == "nested.jpg"
+
+
+async def test_search_combines_filename_and_tag_matches_without_duplicates(auth_client):
+    """검색어가 파일명과 태그 양쪽 모두에 걸려도(OR 조건 두 갈래가 같은 사진을
+    가리켜도) 중복 없이 한 번만 나와야 한다."""
+    await _seed_tag("photo0-야외", "photo0.jpg")
+    r = await auth_client.get("/api/admin/search?q=photo0")
+    data = r.json()
+    assert data["total"] == 1
+    assert data["items"][0]["name"] == "photo0.jpg"
+
+
+async def test_search_by_tag_within_folder_scope(auth_client):
+    """folder= 지정 시 tag_paths 비교가 root 기준 slice를 쓰므로(start_dir 기준이
+    아니라) folder 하위 사진도 정상 매칭돼야 한다."""
+    await _seed_tag("석양", "sub/nested.jpg")
+    r = await auth_client.get("/api/admin/search?q=석양&folder=sub")
+    data = r.json()
+    assert data["total"] == 1
+    assert data["items"][0]["name"] == "nested.jpg"
+
+
+async def test_search_by_tag_excludes_matches_outside_folder_scope(auth_client):
+    """태그는 매칭돼도 그 사진이 folder= 범위 밖(root 최상위)이면 결과에 없어야
+    한다 — 태그 매칭이 folder 스코프를 벗어나면 안 됨."""
+    await _seed_tag("석양", "photo0.jpg")
+    r = await auth_client.get("/api/admin/search?q=석양&folder=sub")
+    assert r.json()["total"] == 0
+
+
+async def test_search_by_tag_no_match_returns_empty(auth_client):
+    r = await auth_client.get("/api/admin/search?q=존재하지않는태그")
+    data = r.json()
+    assert data["total"] == 0
+
+
+async def test_search_survives_ai_db_failure(auth_client, monkeypatch):
+    """ai.db(photo_tags) 조회가 실패해도(예: 미초기화·잠김) 검색 자체는 500이 아니라
+    파일명 매칭만으로 정상 응답해야 한다(share.py Phase 6와 동일한 격리 원칙)."""
+    from backend.routers import admin_browse as admin_browse_module
+
+    async def _boom(*args, **kwargs):
+        raise RuntimeError("ai.db unavailable")
+
+    monkeypatch.setattr(admin_browse_module, "search_tag_matched_paths", _boom)
+
+    r = await auth_client.get("/api/admin/search?q=photo0")
+    assert r.status_code == 200
+    assert r.json()["total"] == 1
+
+
+async def test_search_by_tag_underscore_is_literal_not_wildcard(auth_client):
+    """SQL LIKE에서 '_'는 임의의 한 글자를 뜻하는 와일드카드 — 이스케이프 안 하면
+    '_'만 검색해도(앞뒤에 %가 붙어 사실상 "글자가 하나라도 있으면 매칭") 태그가
+    있는 사진이 전부 걸려버린다. 리터럴 '_'가 없는 태그는 매칭되면 안 됨."""
+    await _seed_tag("AXB", "photo0.jpg")
+    r = await auth_client.get("/api/admin/search?q=_")
+    assert r.json()["total"] == 0
+
+    await _seed_tag("A_B", "photo1.jpg")
+    r2 = await auth_client.get("/api/admin/search?q=_")
+    data = r2.json()
+    assert data["total"] == 1
+    assert data["items"][0]["name"] == "photo1.jpg"
 
 
 # ── thumb ─────────────────────────────────────────────────────────────────────

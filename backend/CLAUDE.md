@@ -51,7 +51,7 @@ pytest -v
 main.py              # FastAPI app, 미들웨어, 라우터 등록
 routers/
   auth.py            # POST /api/auth/login|logout, GET /api/auth/me
-  admin_browse.py    # GET /api/admin/browse|search|music
+  admin_browse.py    # GET /api/admin/browse|search|music. Phase 8: search()가 파일명 매칭 외 photo_tags 태그 매칭도 OR로 포함(services/photo_tags.py의 search_tag_matched_paths)
   admin_albums.py    # CRUD /api/admin/albums/*
   admin_links.py     # CRUD /api/admin/albums/{id}/links
   admin_people.py    # Phase 2: 인물 CRUD, 얼굴 라벨/교정, 인물 사진 상세(슬라이드쇼용), 크롭 서빙, AI 잡 트리거, 경로 복구 승인
@@ -65,7 +65,7 @@ models/
 services/
   thumbnail.py       # Pillow 썸네일 생성, EXIF 전체 메타 추출
   photo_meta.py      # photo_meta_cache 조회/적재 (load_photo_meta) — admin_browse/admin_albums/admin_people/share 공용
-  photo_tags.py      # Phase 6: photo_tags 일괄 조회 (load_photo_tags) — 정보 패널(i 버튼) 태그 노출용, 뷰어별 source 노출 범위(ADMIN_INFO_PANEL_SOURCES/SHARE_INFO_PANEL_SOURCES) 정의
+  photo_tags.py      # Phase 6: photo_tags 일괄 조회 (load_photo_tags) — 정보 패널(i 버튼) 태그 노출용, 뷰어별 source 노출 범위(ADMIN_INFO_PANEL_SOURCES/SHARE_INFO_PANEL_SOURCES) 정의. Phase 8: search_tag_matched_paths — 검색어를 태그에 포함하는 photo_path 조회(사진 탐색 검색용, source 구분 없음)
   xmp_export.py      # Phase 7: XMP 사이드카 생성 (build_xmp_content, load_locations, load_confirmed_regions) — dc:subject/mwg-rs:RegionList/Iptc4xmpExt:LocationCreated 매핑
   paths.py           # PHOTO_ROOT 하위 경로 resolve·containment 검증 (resolve_abs, assert_within_photo_root) — media/share 공용
   settings.py        # settings 테이블 조회 (get_settings, DEFAULTS) — admin_settings/admin_browse/admin_albums/share 공용
@@ -146,3 +146,11 @@ EXIF를 직접 수정한 경우 등 파일 내용이 캐시 이후 바뀐 경우
 - **`dc:subject`는 source 구분 없이 전체** — 정보 패널(`services/photo_tags.py`)과 달리 XMP export는 Admin 본인이 받는 개인 백업/이전용이라 뷰어별 프라이버시 분리가 필요 없음.
 - **인증은 `admin_image_auth`(Bearer 또는 `admin_img_session` 쿠키)** — `get_current_admin`(Bearer 전용)이 아닌 이유: Admin UI가 JS blob 다운로드 없이 단순 `<a href download>` 링크로 트리거하기 때문(`/thumb`, `/photo`, `/faces/{id}/crop`과 동일 패턴).
 - **XMP 패킷의 `xpacket begin` 속성값은 리터럴 BOM(U+FEFF) 한 글자**(XMP 스펙 요구사항) — 소스에 보이지 않는 문자를 직접 넣으면 편집 사고 위험이 커서 `chr(0xFEFF)`로 명시적으로 생성(`services/xmp_export.py`).
+
+### 사진 탐색 검색에 태그 매칭 추가 (Phase 8)
+`GET /api/admin/search`의 `q`가 기존 파일명 부분일치에 더해 `photo_tags` 태그 부분일치도 OR로 포함(`services/photo_tags.py`의 `search_tag_matched_paths`). doc/tagging_requirement.md의 `photo_tags` 미완료 항목 참고.
+
+- **경로(path) 매칭은 재도입하지 않음** — 과거 파일명 검색에 상대 경로 매칭을 추가했다가(PR #82) 태그 검색과 개념이 겹칠 수 있어 되돌린 적 있음(PR #83, doc/todo/todo.md). 이번 범위는 태그 매칭만이고, 경로 매칭 재검토는 범위 밖.
+- **source 구분 없이 전체 태그 대상** — 이 화면은 정보 패널처럼 노출 범위를 나눌 필요가 없는 Admin 전용 탐색기라, `person`(확정 인물명)·`location`까지 전부 검색 대상으로 포함해야 유용함.
+- **LIKE 와일드카드(`%`, `_`) 이스케이프 필수** — 검색어를 그대로 `LIKE '%' || q || '%'`에 넣으면 `_`(임의의 한 글자) 한 글자만 검색해도 태그가 있는 사진이 전부 걸린다(`search_tag_matched_paths()`가 `\`로 이스케이프).
+- **ai.db 조회 실패는 파일명 검색까지 막지 않음** — `search()`가 `search_tag_matched_paths()` 호출을 try/except로 감싸 실패 시 빈 집합으로 폴백(공유 링크 정보 패널의 ai.db 격리 원칙과 동일, Phase 6).
