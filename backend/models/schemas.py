@@ -220,6 +220,14 @@ class SharePhotoItem(BaseModel):
     flash: Optional[str]
     metering: Optional[str]
     exposure_mode: Optional[str]
+    # 정보 패널(i 버튼) 태그 노출용(Phase 6) — photo_tags를 source별로 분리한 리스트.
+    # 어느 source가 채워지는지는 호출자(admin_people.py/share.py)가 결정 — 공유
+    # 링크는 person_tags/location_tags를 항상 빈 리스트로 둔다(비노출 규칙).
+    person_tags: list[str] = []
+    location_tags: list[str] = []
+    ai_tags: list[str] = []
+    path_tags: list[str] = []
+    manual_tags: list[str] = []
 
 class SharePhotosResponse(BaseModel):
     photos: list[SharePhotoItem]
@@ -239,10 +247,15 @@ def build_share_photo_item(
     id: int, file_path: str, url: str,
     thumb_small_url: str, thumb_medium_url: str, thumb_large_url: str, meta: dict,
     include_file_path: bool = False,
+    tags: Optional[dict] = None,
 ) -> SharePhotoItem:
-    """EXIF meta dict → SharePhotoItem. share.py·admin_people.py 공용 빌더.
+    """EXIF meta dict → SharePhotoItem. share.py·admin_people.py·admin_ai_tags.py 공용 빌더.
 
-    include_file_path는 Admin 응답에서만 True — 공유 링크에 경로 구조 노출 방지."""
+    include_file_path는 Admin 응답에서만 True — 공유 링크에 경로 구조 노출 방지.
+    tags는 {source: [tag, ...]} 형태(services/photo_tags.py의 load_photo_tags() 반환값의
+    사진 1장분) — 호출자가 뷰어별로 어떤 source를 넘길지 이미 걸러서 전달한다(정보
+    패널 노출 범위, doc/tagging_requirement.md 참고). 생략하면 전부 빈 리스트."""
+    tags = tags or {}
     return SharePhotoItem(
         id=id,
         url=url,
@@ -251,6 +264,11 @@ def build_share_photo_item(
         thumb_large_url=thumb_large_url,
         filename=os.path.basename(file_path),
         file_path=file_path if include_file_path else None,
+        person_tags=tags.get("person", []),
+        location_tags=tags.get("location", []),
+        ai_tags=tags.get("ai", []),
+        path_tags=tags.get("path", []),
+        manual_tags=tags.get("manual", []),
         **{k: meta.get(k) for k in _EXIF_META_FIELDS},
     )
 

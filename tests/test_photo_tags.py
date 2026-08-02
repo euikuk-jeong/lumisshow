@@ -1,0 +1,88 @@
+"""backend/services/photo_tags.py 단위 테스트 — load_photo_tags() 일괄 조회."""
+
+import aiosqlite
+
+from backend.services.photo_tags import load_photo_tags
+
+
+async def _seed_tags(rows: list[tuple[str, str, str]]) -> None:
+    from backend.models.ai_database import _ai_db_path
+
+    async with aiosqlite.connect(_ai_db_path()) as db:
+        await db.executemany(
+            "INSERT INTO photo_tags (photo_path, tag, source) VALUES (?, ?, ?)", rows
+        )
+        await db.commit()
+
+
+async def test_load_photo_tags_groups_by_photo_and_source(client):
+    await _seed_tags([
+        ("2024/a.jpg", "캠핑", "ai"),
+        ("2024/a.jpg", "바다", "ai"),
+        ("2024/a.jpg", "서울대공원", "path"),
+        ("2024/b.jpg", "서울", "location"),
+    ])
+    from backend.models.ai_database import _ai_db_path
+
+    async with aiosqlite.connect(_ai_db_path()) as db:
+        db.row_factory = aiosqlite.Row
+        result = await load_photo_tags(
+            ["2024/a.jpg", "2024/b.jpg"], db, ("ai", "path", "location")
+        )
+
+    assert sorted(result["2024/a.jpg"]["ai"]) == ["바다", "캠핑"]
+    assert result["2024/a.jpg"]["path"] == ["서울대공원"]
+    assert result["2024/a.jpg"]["location"] == []
+    assert result["2024/b.jpg"]["location"] == ["서울"]
+    assert result["2024/b.jpg"]["ai"] == []
+
+
+async def test_load_photo_tags_excludes_sources_not_requested(client):
+    """person 태그가 있어도 sources에 'person'을 넘기지 않으면 결과 dict 자체에
+    그 키가 생기지 않는다 — 공유 링크가 person/location을 아예 조회하지 않는
+    것과 동일한 안전장치(요청하지 않은 데이터는 메모리에도 안 올라옴)."""
+    await _seed_tags([("2024/a.jpg", "지우", "person")])
+    from backend.models.ai_database import _ai_db_path
+
+    async with aiosqlite.connect(_ai_db_path()) as db:
+        db.row_factory = aiosqlite.Row
+        result = await load_photo_tags(["2024/a.jpg"], db, ("ai",))
+
+    assert result == {"2024/a.jpg": {"ai": []}}
+
+
+async def test_load_photo_tags_empty_paths_returns_empty_dict(client):
+    from backend.models.ai_database import _ai_db_path
+
+    async with aiosqlite.connect(_ai_db_path()) as db:
+        db.row_factory = aiosqlite.Row
+        result = await load_photo_tags([], db, ("ai", "manual"))
+    assert result == {}
+
+
+async def test_load_photo_tags_orders_location_city_before_country(client):
+    """SQLite 기본 collation(UTF-8 바이트 순)으로는 '대한민국'이 '서울'보다 먼저 와서
+    alphabetical 정렬이면 국가가 먼저 나온다 — id(삽입 순서) 정렬이라야
+    geocoder.sync_location_tag()가 city를 먼저 INSERT하는 순서와 일치해
+    doc/tagging_requirement.md 예시("서울, 대한민국")와 맞는다."""
+    await _seed_tags([
+        ("2024/a.jpg", "서울", "location"),   # city 먼저 삽입 (실제 sync_location_tag와 동일 순서)
+        ("2024/a.jpg", "대한민국", "location"),  # country
+    ])
+    from backend.models.ai_database import _ai_db_path
+
+    async with aiosqlite.connect(_ai_db_path()) as db:
+        db.row_factory = aiosqlite.Row
+        result = await load_photo_tags(["2024/a.jpg"], db, ("location",))
+
+    assert result["2024/a.jpg"]["location"] == ["서울", "대한민국"]
+
+
+async def test_load_photo_tags_empty_sources_returns_empty_lists_only(client):
+    await _seed_tags([("2024/a.jpg", "캠핑", "ai")])
+    from backend.models.ai_database import _ai_db_path
+
+    async with aiosqlite.connect(_ai_db_path()) as db:
+        db.row_factory = aiosqlite.Row
+        result = await load_photo_tags(["2024/a.jpg"], db, ())
+    assert result == {"2024/a.jpg": {}}

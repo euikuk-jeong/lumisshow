@@ -71,7 +71,9 @@ CSS animation 우선(GPU 가속). `EFFECTS` 배열에서 랜덤 선택. 수동 �
 트랙 변경/재생 시작 시 `.ss-music-toast`에 파일명(확장자 제거) 표시 → 3초 후 `visible` 클래스 제거로 페이드 아웃. `clearTimeout`으로 중복 호출 시 타이머 리셋.
 
 ### 정보 패널 (i 버튼)
-`renderInfoContent()` — 사진 EXIF 정보 + (음악 재생 중이면) 구분선 + 음악 섹션. 트랙 변경·음악 토글 시 `refreshInfoPanel()`로 실시간 갱신.
+`renderInfoContent()` — 사진 EXIF 정보 + 태그(Phase 6) + (음악 재생 중이면) 구분선 + 음악 섹션. 트랙 변경·음악 토글 시 `refreshInfoPanel()`로 실시간 갱신.
+
+태그 5개 행(인물/위치/태그/폴더명/직접 추가)은 `SharePhotoItem`의 `person_tags`/`location_tags`/`ai_tags`/`path_tags`/`manual_tags`를 그대로 표시 — 뷰어별 노출 범위(공유 링크는 person/location 비노출)는 백엔드(`services/photo_tags.py`)가 이미 걸러 보내므로 프론트에서 재분기하지 않는다.
 
 ### 음악 파일 선택 모달 (Admin)
 - `GET /api/admin/music` → 서버 목록 로드

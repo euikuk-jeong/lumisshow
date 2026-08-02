@@ -222,6 +222,58 @@ async def test_get_photos_empty_album(admin_client):
     assert data["photos"] == []
 
 
+async def test_get_photos_exposes_only_ai_path_manual_tags(admin_client):
+    """정보 패널(i 버튼) 노출용 — 공유 링크는 ai/path/manual만 노출하고 person/location은
+    데이터가 있어도 항상 빈 리스트여야 한다(doc/tagging_requirement.md 노출 범위 표,
+    프라이버시/오매칭 이슈로 얼굴 인식 자체가 승인 큐를 거치는 것과 동일한 이유)."""
+    import aiosqlite
+
+    from backend.models.ai_database import _ai_db_path
+
+    token = await _setup_link(admin_client, with_photos=True)
+    await _auth(admin_client, token)
+
+    async with aiosqlite.connect(_ai_db_path()) as db:
+        await db.execute(
+            "INSERT INTO photo_tags (photo_path, tag, source) VALUES "
+            "('a.jpg', '지우', 'person'), "
+            "('a.jpg', '서울', 'location'), "
+            "('a.jpg', '캠핑', 'ai'), "
+            "('a.jpg', '서울대공원', 'path'), "
+            "('a.jpg', '눈사람', 'manual')"
+        )
+        await db.commit()
+
+    photos = (await admin_client.get(f"/api/share/{token}/photos")).json()["photos"]
+    photo = next(p for p in photos if p["url"] == "/media/a.jpg")
+    assert photo["person_tags"] == []
+    assert photo["location_tags"] == []
+    assert photo["ai_tags"] == ["캠핑"]
+    assert photo["path_tags"] == ["서울대공원"]
+    assert photo["manual_tags"] == ["눈사람"]
+
+
+async def test_get_photos_survives_ai_db_failure(admin_client, monkeypatch):
+    """ai.db(photo_tags) 조회가 실패해도(예: 잠김·손상) 공유 앨범 조회 자체는
+    500이 아니라 200으로 응답해야 한다 — 태그만 빠지고 나머지는 정상 동작
+    (CLIP 태깅 실패가 얼굴 스캔을 막지 않는 best-effort 원칙과 동일)."""
+    from backend.routers import share as share_module
+
+    async def _boom(*args, **kwargs):
+        raise RuntimeError("ai.db unavailable")
+
+    monkeypatch.setattr(share_module, "load_photo_tags", _boom)
+
+    token = await _setup_link(admin_client, with_photos=True)
+    await _auth(admin_client, token)
+
+    r = await admin_client.get(f"/api/share/{token}/photos")
+    assert r.status_code == 200
+    photos = r.json()["photos"]
+    assert len(photos) == 2
+    assert all(p["ai_tags"] == [] for p in photos)
+
+
 # ── ZIP 다운로드 ──────────────────────────────────────────────────────────────
 
 async def test_download_zip_without_auth(admin_client):

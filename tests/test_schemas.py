@@ -1,6 +1,41 @@
 """backend/models/schemas.py 순수 헬퍼 테스트."""
 
-from backend.models.schemas import build_slideshow_defaults
+from backend.models.schemas import build_share_photo_item, build_slideshow_defaults
+
+_PHOTO_ITEM_ARGS = dict(
+    id=1,
+    file_path="2024/a.jpg",
+    url="/media/2024/a.jpg",
+    thumb_small_url="/thumb/2024/a.jpg?size=small",
+    thumb_medium_url="/thumb/2024/a.jpg?size=medium",
+    thumb_large_url="/thumb/2024/a.jpg?size=large",
+    meta={},
+)
+
+
+def test_build_share_photo_item_defaults_tags_to_empty_lists_when_omitted():
+    """tags 미지정(대부분의 기존 호출부는 여전히 안 넘김, 예: admin_ai_tags.py의
+    list_tag_photos)이어도 5개 필드 전부 빈 리스트로 채워져야 크래시 없이 스키마
+    검증을 통과한다."""
+    item = build_share_photo_item(**_PHOTO_ITEM_ARGS)
+    assert item.person_tags == []
+    assert item.location_tags == []
+    assert item.ai_tags == []
+    assert item.path_tags == []
+    assert item.manual_tags == []
+
+
+def test_build_share_photo_item_maps_tags_by_source():
+    item = build_share_photo_item(
+        **_PHOTO_ITEM_ARGS,
+        tags={"ai": ["캠핑", "바다"], "path": ["서울대공원"]},
+    )
+    assert item.ai_tags == ["캠핑", "바다"]
+    assert item.path_tags == ["서울대공원"]
+    # tags dict에 없는 source(person/location/manual)는 빈 리스트로 폴백
+    assert item.person_tags == []
+    assert item.location_tags == []
+    assert item.manual_tags == []
 
 _SV = {
     "slideshow_interval": 5,

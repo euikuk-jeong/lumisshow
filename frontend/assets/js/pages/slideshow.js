@@ -280,6 +280,7 @@ async function runSlideshow(src) {
   function formatInfo(photo) {
     const rows = [];
     const add = (label, value) => { if (value != null && value !== '') rows.push([label, String(value)]); };
+    const addList = (label, list) => { if (list && list.length) rows.push([label, list.join(', ')]); };
 
     add('Filename', photo.filename);
     if (photo.taken_at) {
@@ -299,6 +300,14 @@ async function runSlideshow(src) {
     add('Flash', photo.flash);
     add('Metering', photo.metering);
     add('Exposure Mode', photo.exposure_mode);
+    // 태그(Phase 6) — 백엔드가 뷰어별로 노출 가능한 source만 채워 보내므로(공유
+    // 링크는 person_tags/location_tags가 항상 빈 배열), 프론트에서 뷰어 종류를
+    // 다시 분기할 필요 없이 받은 대로 표시하면 된다.
+    addList('인물', photo.person_tags);
+    addList('위치', photo.location_tags);
+    addList('태그', photo.ai_tags);
+    addList('폴더명', photo.path_tags);
+    addList('직접 추가', photo.manual_tags);
 
     return rows.map(([l, v]) =>
       `<div class="ss-info-row"><span class="ss-info-label">${esc(l)}</span><span class="ss-info-value">${esc(v)}</span></div>`

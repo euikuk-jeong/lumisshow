@@ -7,6 +7,7 @@ from urllib.parse import quote
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from fastapi.responses import FileResponse, StreamingResponse
 
+from backend.models.ai_database import get_ai_db
 from backend.models.database import get_db
 from backend.models.schemas import (
     ShareAlbumResponse,
@@ -23,6 +24,7 @@ from backend.services.auth import (
 )
 from backend.services.paths import assert_within_photo_root, resolve_abs
 from backend.services.photo_meta import load_photo_meta
+from backend.services.photo_tags import SHARE_INFO_PANEL_SOURCES, load_photo_tags
 from backend.services.settings import get_settings
 from backend.services.thumbnail import generate_thumbnail
 from backend.services.zip_stream import zip_generator
@@ -307,6 +309,7 @@ async def get_photos(
     page: int = Query(default=1, ge=1),
     size: int = Query(default=0, ge=0),
     db=Depends(get_db),
+    ai_db=Depends(get_ai_db),
 ):
     verify_share_session_cookie(token, request.cookies.get(_COOKIE_NAME))
     await _get_valid_link(token, db)
@@ -338,7 +341,16 @@ async def get_photos(
         rows = await cur.fetchall()
 
     # photo_meta_cache에서 IN 쿼리로 일괄 조회 (미스는 EXIF 읽어 캐시)
-    cached = await load_photo_meta([r["file_path"] for r in rows], db)
+    file_paths = [r["file_path"] for r in rows]
+    cached = await load_photo_meta(file_paths, db)
+    # ai.db(photo_tags) 조회 실패는 공유 앨범 조회 자체를 막으면 안 된다 — 이 엔드포인트는
+    # 원래 app.db만 썼는데 정보 패널 태그 노출(Phase 6)로 ai.db 의존이 새로 생겼다.
+    # CLIP 태깅 실패가 얼굴 스캔을 막지 않는 것(pipeline.py의 best-effort 원칙)과 같은
+    # 이유로, 태그가 안 붙는 건 감수해도 앨범 자체가 안 열리는 건 안 된다.
+    try:
+        tags_map = await load_photo_tags(file_paths, ai_db, SHARE_INFO_PANEL_SOURCES)
+    except Exception:
+        tags_map = {}
 
     photos = [
         build_share_photo_item(
@@ -349,6 +361,7 @@ async def get_photos(
             thumb_medium_url=f"/thumb/{quote(r['file_path'])}?size=medium",
             thumb_large_url=f"/thumb/{quote(r['file_path'])}?size=large",
             meta=cached.get(r["file_path"], {}),
+            tags=tags_map.get(r["file_path"]),
         )
         for r in rows
     ]

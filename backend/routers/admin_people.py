@@ -34,6 +34,7 @@ from backend.models.schemas import (
 from backend.services.auth import admin_image_auth, get_current_admin
 from backend.services.paths import build_filename_index
 from backend.services.photo_meta import load_photo_meta
+from backend.services.photo_tags import ADMIN_INFO_PANEL_SOURCES, load_photo_tags
 from backend.services.settings import get_settings
 
 router = APIRouter(prefix="/api/admin", tags=["admin-people"])
@@ -698,6 +699,7 @@ async def list_person_photos_detail(
     paths = all_paths[offset: offset + size]
 
     meta_map = await load_photo_meta(paths, app_db)
+    tags_map = await load_photo_tags(paths, db, ADMIN_INFO_PANEL_SOURCES)
     photos = [
         build_share_photo_item(
             id=offset + i,
@@ -708,6 +710,7 @@ async def list_person_photos_detail(
             thumb_large_url=f"/api/admin/thumb?path={quote(p)}&size=large",
             meta=meta_map.get(p, {}),
             include_file_path=True,  # Admin 전용 — 프론트 정렬·라이트박스용
+            tags=tags_map.get(p),
         )
         for i, p in enumerate(paths)
     ]
