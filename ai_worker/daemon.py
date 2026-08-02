@@ -67,7 +67,12 @@ def finish_job(conn: sqlite3.Connection, job_id: int, status: str) -> None:
 
 
 def run_daemon() -> None:
-    from ai_worker.main import run_rematch, run_review_ignored, run_scan  # 순환 import 방지용 lazy
+    from ai_worker.main import (  # 순환 import 방지용 lazy
+        run_rematch,
+        run_review_ignored,
+        run_scan,
+        run_tag_backfill,
+    )
 
     conn = db.connect()
     stale = reset_stale_jobs(conn)
@@ -96,6 +101,8 @@ def run_daemon() -> None:
                     notify.notify_rematch_result(run_rematch())
                 elif job_type == "review_ignored":
                     run_review_ignored(target_person_id)
+                elif job_type == "tag_backfill":
+                    notify.notify_tag_backfill_result(run_tag_backfill())
                 else:
                     raise ValueError(f"알 수 없는 잡 타입: {job_type}")
                 finish_job(conn, job_id, "done")

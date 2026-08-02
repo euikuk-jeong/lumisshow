@@ -1002,6 +1002,21 @@ async def test_ai_status_and_jobs(admin_client):
     assert stats["recent_jobs"][0]["status"] == "pending"
 
 
+async def test_tag_backfill_job_create_and_dedup(admin_client):
+    """AI 태그 재계산(tag_backfill)도 scan/rematch와 동일한 일반 잡 생성·중복
+    방지 경로를 탄다 — 전용 엔드포인트 없이 기존 POST /api/admin/ai/jobs 재사용."""
+    r = await admin_client.post("/api/admin/ai/jobs", json={"type": "tag_backfill"})
+    assert r.status_code == 201 and r.json()["duplicated"] is False
+    job_id = r.json()["id"]
+
+    r = await admin_client.post("/api/admin/ai/jobs", json={"type": "tag_backfill"})
+    assert r.json() == {"id": job_id, "type": "tag_backfill", "duplicated": True}
+
+    stats = (await admin_client.get("/api/admin/ai/status")).json()
+    assert stats["recent_jobs"][0]["type"] == "tag_backfill"
+    assert stats["recent_jobs"][0]["status"] == "pending"
+
+
 async def test_ai_status_unassigned_excludes_labeled_and_matched(admin_client):
     """미분류(unassigned)는 라벨도 매칭도 없는 얼굴만 센다."""
     face_ids = await _seed_faces(3)

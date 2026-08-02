@@ -606,7 +606,7 @@ def test_analyze_and_store_keeps_stale_ai_tags_when_clip_ctx_none(conn):
 # ── CLIP 사물/장면 태깅 (tag_vocab / tagger) ─────────────────────────
 
 
-def test_tag_vocab_has_82_unique_entries():
+def test_tag_vocab_has_80_unique_entries():
     assert len(tag_vocab.TAG_VOCAB) == 80
     labels = [e["label"] for e in tag_vocab.TAG_VOCAB]
     prompts = [e["prompt"] for e in tag_vocab.TAG_VOCAB]
@@ -716,6 +716,242 @@ def test_ensure_models_skips_download_when_files_already_exist(tmp_path, monkeyp
 
     assert result_dir == clip_dir
     assert calls == []  # 이미 존재하는 파일은 재다운로드하지 않음
+
+
+# ── tag-backfill ─────────────────────────────────────────────────────
+
+
+def test_rescore_ai_tags_from_cache_reuses_embedding_without_reencoding(conn, monkeypatch):
+    """이미 저장된 임베딩을 재사용해 재채점만 한다 — embed_image가 호출되면 안 된다
+    (재인코딩 없음이 photo_embeddings를 캐시해두는 핵심 이유)."""
+    monkeypatch.setattr(tag_vocab, "TAG_VOCAB", [
+        {"prompt": "a photo of camping", "label": "캠핑"},
+        {"prompt": "a photo of the sea", "label": "바다"},
+    ])
+    embed = np.array([1.0, 0.0], dtype=np.float32)
+    conn.execute(
+        "INSERT INTO photo_embeddings (photo_path, embedding) VALUES (?, ?)",
+        ("2024/a.jpg", matcher.embedding_to_blob(embed)),
+    )
+    conn.commit()
+
+    class _BoomTagger:
+        def embed_image(self, img):
+            raise AssertionError("재인코딩하면 안 됨")
+
+    clip_ctx = tagger.ClipTaggingContext(
+        tagger=_BoomTagger(),
+        text_embeds=np.array([[1.0, 0.0], [0.0, 1.0]], dtype=np.float32),
+        threshold=0.5,
+    )
+    ok = pipeline.rescore_ai_tags_from_cache(conn, "2024/a.jpg", clip_ctx)
+    assert ok is True
+    tags = {
+        r["tag"] for r in conn.execute(
+            "SELECT tag FROM photo_tags WHERE photo_path = '2024/a.jpg' AND source = 'ai'"
+        )
+    }
+    assert tags == {"캠핑"}
+
+
+def test_rescore_ai_tags_from_cache_no_embedding_returns_false(conn):
+    clip_ctx = tagger.ClipTaggingContext(
+        tagger=None, text_embeds=np.zeros((0, 512), dtype=np.float32), threshold=0.24,
+    )
+    assert pipeline.rescore_ai_tags_from_cache(conn, "2024/missing.jpg", clip_ctx) is False
+
+
+def test_rescore_ai_tags_from_cache_none_ctx_returns_false(conn):
+    assert pipeline.rescore_ai_tags_from_cache(conn, "2024/a.jpg", None) is False
+
+
+def test_backfill_photo_fills_embedding_and_location(tmp_path, conn, monkeypatch):
+    from PIL import Image
+
+    img_path = tmp_path / "photo.jpg"
+    Image.new("RGB", (10, 10), (200, 100, 50)).save(img_path)
+
+    monkeypatch.setattr(pipeline, "_extract_gps", lambda raw: (37.5665, 126.978))
+    monkeypatch.setattr(geocoder, "reverse_geocode", lambda lat, lon: ("Seoul", "대한민국"))
+    monkeypatch.setattr(tag_vocab, "TAG_VOCAB", [{"prompt": "a photo of camping", "label": "캠핑"}])
+
+    clip_ctx = tagger.ClipTaggingContext(
+        tagger=_StubClipTagger(np.array([1.0], dtype=np.float32)),
+        text_embeds=np.array([[1.0]], dtype=np.float32),
+        threshold=0.5,
+    )
+    embedded, located = pipeline.backfill_photo(
+        conn, "2024/photo.jpg", str(img_path), clip_ctx,
+        need_embedding=True, need_location=True,
+    )
+    assert (embedded, located) == (True, True)
+    assert conn.execute(
+        "SELECT COUNT(*) FROM photo_embeddings WHERE photo_path = '2024/photo.jpg'"
+    ).fetchone()[0] == 1
+    loc = conn.execute(
+        "SELECT city, country FROM photo_locations WHERE photo_path = '2024/photo.jpg'"
+    ).fetchone()
+    assert (loc["city"], loc["country"]) == ("Seoul", "대한민국")
+
+
+def test_backfill_photo_skips_when_not_needed(tmp_path, conn):
+    from PIL import Image
+
+    img_path = tmp_path / "photo.jpg"
+    Image.new("RGB", (10, 10)).save(img_path)
+
+    embedded, located = pipeline.backfill_photo(
+        conn, "2024/photo.jpg", str(img_path), None,
+        need_embedding=False, need_location=False,
+    )
+    assert (embedded, located) == (False, False)
+
+
+def test_run_tag_backfill_embeds_new_rescopes_cached_and_skips_errors(conn, monkeypatch):
+    """photo_embeddings 없는 사진은 새로 인코딩, 있는 사진은 캐시로 재채점만(파일을
+    열지 않음), status='error' 사진은 대상에서 제외된다."""
+    from ai_worker import main
+
+    monkeypatch.setattr(tag_vocab, "TAG_VOCAB", [
+        {"prompt": "a photo of camping", "label": "캠핑"},
+        {"prompt": "a photo of the sea", "label": "바다"},
+    ])
+
+    class _FakeClipTagger:
+        def embed_texts(self, prompts):
+            return np.array([[1.0, 0.0], [0.0, 1.0]], dtype=np.float32)
+
+        def embed_image(self, img):
+            return np.array([1.0, 0.0], dtype=np.float32)
+
+    monkeypatch.setattr(tagger, "ClipTagger", _FakeClipTagger)
+    monkeypatch.setattr(scanner, "tag_paths_from_folder_names", lambda conn: 0)
+
+    from PIL import Image
+
+    photo_root = os.getenv("PHOTO_ROOT")
+    os.makedirs(os.path.join(photo_root, "2024"), exist_ok=True)
+    Image.new("RGB", (10, 10)).save(os.path.join(photo_root, "2024", "a.jpg"))
+    # b.jpg는 일부러 만들지 않는다 — embedding+location이 이미 있으면 파일을
+    # 열 필요가 없어야 하므로, 파일이 없어도 에러 없이 통과해야 이를 증명한다.
+
+    conn.execute(
+        "INSERT INTO photos_analyzed (path, mtime, status) VALUES ('2024/a.jpg', 1.0, 'done')"
+    )
+    conn.execute(
+        "INSERT INTO photos_analyzed (path, mtime, status) VALUES ('2024/b.jpg', 1.0, 'done')"
+    )
+    conn.execute(
+        "INSERT INTO photo_embeddings (photo_path, embedding) VALUES ('2024/b.jpg', ?)",
+        (matcher.embedding_to_blob(np.array([0.0, 1.0], dtype=np.float32)),),
+    )
+    conn.execute(
+        "INSERT INTO photo_locations (photo_path, city, country) VALUES "
+        "('2024/b.jpg', 'Seoul', '대한민국')"
+    )
+    conn.execute(
+        "INSERT INTO photos_analyzed (path, mtime, status) VALUES ('2024/c.jpg', 1.0, 'error')"
+    )
+    conn.commit()
+
+    summary = main.run_tag_backfill()
+
+    assert summary["photos"] == 2  # c.jpg(error)는 제외
+    assert summary["embedded"] == 1
+    assert summary["rescored"] == 1
+    assert summary["errors"] == 0  # b.jpg 파일이 없어도 열 필요가 없어 에러가 나면 안 됨
+
+    a_tags = {
+        r["tag"] for r in conn.execute(
+            "SELECT tag FROM photo_tags WHERE photo_path = '2024/a.jpg' AND source = 'ai'"
+        )
+    }
+    b_tags = {
+        r["tag"] for r in conn.execute(
+            "SELECT tag FROM photo_tags WHERE photo_path = '2024/b.jpg' AND source = 'ai'"
+        )
+    }
+    assert a_tags == {"캠핑"}
+    assert b_tags == {"바다"}
+
+
+def test_run_tag_backfill_no_targets_skips_model_loading(conn, monkeypatch):
+    from ai_worker import main
+
+    monkeypatch.setattr(scanner, "tag_paths_from_folder_names", lambda conn: 0)
+
+    class _BoomTagger:
+        def __init__(self):
+            raise AssertionError("대상이 없으면 CLIP 모델을 로딩하면 안 됨")
+
+    monkeypatch.setattr(tagger, "ClipTagger", _BoomTagger)
+    summary = main.run_tag_backfill()
+    assert summary["photos"] == 0
+
+
+def test_run_tag_backfill_fills_missing_location_end_to_end(conn, monkeypatch):
+    """has_location=False → need_location=True 배선이 실제로 photo_locations를
+    채우는지 확인한다(개별 backfill_photo는 별도 테스트로 이미 검증했지만, 루프의
+    has_location 조회 → need_location 전달 경로는 여기서만 exercise된다)."""
+    from ai_worker import main
+
+    monkeypatch.setattr(tag_vocab, "TAG_VOCAB", [{"prompt": "a photo of camping", "label": "캠핑"}])
+
+    class _FakeClipTagger:
+        def embed_texts(self, prompts):
+            return np.array([[1.0]], dtype=np.float32)
+
+        def embed_image(self, img):
+            return np.array([1.0], dtype=np.float32)
+
+    monkeypatch.setattr(tagger, "ClipTagger", _FakeClipTagger)
+    monkeypatch.setattr(scanner, "tag_paths_from_folder_names", lambda conn: 0)
+    monkeypatch.setattr(pipeline, "_extract_gps", lambda raw: (37.5665, 126.978))
+    monkeypatch.setattr(geocoder, "reverse_geocode", lambda lat, lon: ("Seoul", "대한민국"))
+
+    from PIL import Image
+
+    photo_root = os.getenv("PHOTO_ROOT")
+    os.makedirs(os.path.join(photo_root, "2024"), exist_ok=True)
+    Image.new("RGB", (10, 10)).save(os.path.join(photo_root, "2024", "a.jpg"))
+
+    conn.execute(
+        "INSERT INTO photos_analyzed (path, mtime, status) VALUES ('2024/a.jpg', 1.0, 'done')"
+    )
+    conn.commit()
+
+    summary = main.run_tag_backfill()
+
+    assert summary["located"] == 1
+    loc = conn.execute(
+        "SELECT city, country FROM photo_locations WHERE photo_path = '2024/a.jpg'"
+    ).fetchone()
+    assert (loc["city"], loc["country"]) == ("Seoul", "대한민국")
+
+
+def test_run_tag_backfill_skips_when_photo_root_unmounted(conn, monkeypatch, tmp_path):
+    """PHOTO_ROOT가 마운트 해제(빈 디렉터리 또는 미존재)된 상태에서는 대상이 있어도
+    CLIP 모델 로딩/파일 열기 없이 즉시 건너뛴다 — scan()의 pending_photos() 보호와
+    동일한 취지."""
+    from ai_worker import main
+
+    monkeypatch.setattr(scanner, "tag_paths_from_folder_names", lambda conn: 0)
+
+    class _BoomTagger:
+        def __init__(self):
+            raise AssertionError("마운트 해제 상태면 CLIP 모델을 로딩하면 안 됨")
+
+    monkeypatch.setattr(tagger, "ClipTagger", _BoomTagger)
+
+    conn.execute(
+        "INSERT INTO photos_analyzed (path, mtime, status) VALUES ('2024/a.jpg', 1.0, 'done')"
+    )
+    conn.commit()
+
+    # conn 픽스처가 만든 PHOTO_ROOT는 이미 빈 디렉터리 상태 — 파일을 하나도 넣지 않는다.
+    summary = main.run_tag_backfill()
+    assert summary["embedded"] == 0
+    assert summary["errors"] == 0
 
 
 # ── matcher ───────────────────────────────────────────────────────────
@@ -1068,6 +1304,39 @@ def test_notify_send_succeeds_on_first_try_without_retry(monkeypatch):
 
     assert len(attempts) == 1
     assert slept == []
+
+
+def test_notify_tag_backfill_result_formats_summary(monkeypatch):
+    """run_tag_backfill()이 반환하는 summary dict의 키(photos/embedded/rescored/
+    located/errors/path_tagged/elapsed)가 notify_tag_backfill_result의 f-string과
+    어긋나면 KeyError가 나야 하는데, 이걸 잡아줄 테스트가 없었다 — 키 이름을
+    바꾸는 리팩토링이 있어도 여기서 바로 드러나게 한다."""
+    from ai_worker import notify
+
+    monkeypatch.setenv("AI_DISCORD_WEBHOOK_URL", "https://example.invalid/webhook")
+    monkeypatch.setenv("BASE_URL", "http://example.test:9999")
+
+    sent = {}
+
+    def fake_urlopen(req, timeout=None):
+        import json
+        sent["content"] = json.loads(req.data)["content"]
+
+    monkeypatch.setattr(notify.urllib.request, "urlopen", fake_urlopen)
+
+    notify.notify_tag_backfill_result({
+        "photos": 5, "embedded": 2, "rescored": 3, "located": 1,
+        "errors": 0, "path_tagged": 4, "elapsed": 12.3,
+    })
+
+    assert "사진 5장 대상" in sent["content"]
+    assert "신규 임베딩 2장" in sent["content"]
+    assert "재채점 3장" in sent["content"]
+    assert "위치보완 1장" in sent["content"]
+    assert "에러 0건" in sent["content"]
+    assert "폴더명 태깅 4장" in sent["content"]
+    assert "소요 12초" in sent["content"]
+    assert "http://example.test:9999/admin/people" in sent["content"]
 
 
 def test_notify_scan_result_includes_admin_people_link(monkeypatch):

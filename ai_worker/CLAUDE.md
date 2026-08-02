@@ -17,8 +17,10 @@ LumisShow 본체는 ai.db를 읽어 인물 앨범 기능을 제공한다 (M3).
 pip install -r ai_worker/requirements.txt
 
 # 환경변수: PHOTO_ROOT, DATA_DIR (LumisShow와 동일 값 공유)
-python -m ai_worker.main scan      # 증분 스캔 → 분석 → 매칭 (1회)
-python -m ai_worker.main rematch   # 등록 셋 변경 후 전체 재매칭
+python -m ai_worker.main scan          # 증분 스캔 → 분석 → 매칭 (1회)
+python -m ai_worker.main rematch       # 등록 셋 변경 후 전체 재매칭
+python -m ai_worker.main tag-backfill  # AI 태그/위치 재계산 (어휘·threshold 변경 후,
+                                        # 또는 이 기능 도입 이전 사진 소급 적용)
 
 # 라벨링/평가 (M1 정답 셋)
 python -m ai_worker.tools.label_sheet             # $DATA_DIR/label_sheet.html 생성
@@ -171,7 +173,7 @@ new_path 폴더명으로 다시 채운다. `location`/`ai`/`manual`/`person` 태
 `photo_embeddings`는 사진 콘텐츠 자체 정보라 경로가 바뀌어도 유효하므로 그대로
 `UPDATE`한다.
 
-### 사물/장면 태깅 (CLIP, `tagger.py`/`tag_vocab.py`) — 신규/변경 사진만, 기존 4.5만 장은 Phase 4 대상
+### 사물/장면 태깅 (CLIP, `tagger.py`/`tag_vocab.py`) — scan()은 신규/변경 사진만
 `pipeline.analyze_and_store()`가 얼굴 검출과 같은 이미지(이미 exif_transpose까지
 끝난 것)로 CLIP 이미지 임베딩을 계산해 `photo_embeddings`에 캐시하고,
 `tag_vocab.TAG_VOCAB`(80개, 텍스트 임베딩은 `run_scan()`에서 스캔당 1회만 계산해
@@ -183,8 +185,9 @@ new_path 폴더명으로 다시 채운다. `location`/`ai`/`manual`/`person` 태
 폴더명 파싱이나 GPS의 KD-tree 조회와 비교가 안 되는 비용) 이미 분석된 기존
 4.5만 장까지 매 스캔 조용히 재인코딩하면 "가벼운 증분 스캔"이 예측 불가능하게
 느려진다. 기존 물량 소급 처리와, `tag_vocab.py`/threshold 변경 후 재채점은
-Phase 4의 `tag-backfill`(전용 CLI + Admin 잡)이 담당하도록 의도적으로 미룸 —
-**Phase 3 배포 직후에는 기존 사진에 `source='ai'` 태그가 전혀 없다.**
+아래 `tag-backfill`(전용 CLI + Admin 잡)이 담당한다 — `scan()`(daemon 야간
+자동 스캔 포함)만으로는 이 기능 도입 이전 사진에 `source='ai'` 태그가 영원히
+안 생긴다.
 
 CLIP 모델(`Xenova/clip-vit-base-patch32`, transformers.js용 ONNX 변환본,
 openai/clip-vit-base-patch32와 동일 MIT 라이선스)은 8-bit 양자화판(vision+text
@@ -210,6 +213,42 @@ Content-Length와 실제 수신 바이트 수를 비교해 불완전 응답을 �
 CLIP 로딩(모델 다운로드 포함) 실패는 얼굴 인식과 무관한 별도 기능이라 그
 스캔은 얼굴 인식만 수행하고 계속 진행한다(best-effort, `run_scan()`에서
 예외를 삼킴).
+
+### AI 태그 재계산 (`tag-backfill`) — CLIP/위치 소급 처리 전용 배치
+`python -m ai_worker.main tag-backfill` (`main.run_tag_backfill()`) 또는
+Admin이 `POST /api/admin/ai/jobs`에 `{"type": "tag_backfill"}`을 큐잉하면
+daemon이 폴링해 실행한다 — `scan`/`rematch`와 동일한 일반 잡 생성·중복방지·
+`GET /ai/status`의 `recent_jobs` 경로를 그대로 타므로 `admin_ai_tags.py` 같은
+전용 라우터가 필요 없었다(`_JOB_TYPES`에 `tag_backfill` 추가만으로 충분).
+
+`scan()`의 `pending_photos()`(mtime 기반)와 달리 `photos_analyzed`
+**전체**(`status='done'`, 얼굴 분석 자체가 실패한 `error` 행은 같은 파일을
+CLIP도 못 열 가능성이 높아 제외)를 대상으로 하는 명시적 배치 작업이다 —
+admin이 어휘/threshold를 바꾼 뒤, 또는 이 기능 도입 이전 사진에 소급
+적용하고 싶을 때 의도적으로 실행한다. 사진마다:
+
+- `photo_embeddings`가 있으면 `pipeline.rescore_ai_tags_from_cache()`로
+  **재인코딩 없이** 캐시된 벡터만 재사용해 현재 어휘/threshold로 재채점 —
+  이게 `photo_embeddings`를 캐시해두는 핵심 이유(어휘 확장이 전체 재인코딩
+  없이 벡터 비교만으로 끝남). 이미지 파일을 열지 않는다.
+- `photo_embeddings`/`photo_locations` 중 하나라도 없으면 그때만
+  `pipeline.backfill_photo()`가 파일을 1번 열어 부족한 것만 채운다(둘 다
+  있으면 파일에 아예 접근하지 않음).
+- 폴더명(Kiwi) 태깅은 이미 커버리지 방식이라 `scan()`에서 이미 다루지만,
+  `scan` 없이 `tag-backfill`만 단독 실행할 가능성을 대비해 여기서도
+  `scanner.tag_paths_from_folder_names()`를 호출한다(idempotent).
+
+`scan()`의 `pending_photos()`는 walk 결과가 0인데 과거 분석 이력이 있으면
+마운트 해제로 보고 스캔 전체를 건너뛴다. `tag-backfill`은 walk 없이
+`photos_analyzed`를 그대로 신뢰하므로, 같은 상황에서 대상 전부가
+`Image.open()` 예외로 떨어져 로그를 뒤덮는 것을 막기 위해 대상 목록을 구한
+직후 `PHOTO_ROOT`가 존재하고 비어있지 않은지 확인하고, 아니면 즉시 건너뛴다
+(CLIP 모델도 로딩하지 않음).
+
+완료 시 `notify.notify_tag_backfill_result()`로 Discord 알림(신규 임베딩/
+재채점/위치보완/에러 건수 + 폴더명 태깅 건수 + 소요시간). Admin UI 버튼은
+아직 없음(Admin 태그 관리 화면과 함께 후속 phase 예정) — 지금은 CLI 또는
+`POST /api/admin/ai/jobs`를 직접 호출해야 한다.
 
 ### 경로 규약
 `faces.photo_path`, `photos_analyzed.path`는 **PHOTO_ROOT 상대 경로 + `/` 구분자**

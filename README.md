@@ -132,6 +132,7 @@ docker compose -f docker/docker-compose.yml up -d
 | `TZ` | | AI 워커 야간 스캔 시각 기준 타임존 (기본 `Asia/Seoul`) |
 | `AI_SCAN_HOUR` | | AI 워커 야간 자동 스캔 시각 0~23 (기본 `2`) |
 | `AI_MATCH_THRESHOLD` | | 얼굴 매칭 cosine 임계값 (기본 `0.45`) |
+| `AI_TAG_THRESHOLD` | | AI 태그(CLIP zero-shot) 부여 cosine 임계값 (기본 `0.24`) |
 
 `ADMIN_PASSWORD` 또는 `ADMIN_PASSWORD_HASH` 중 하나는 반드시 설정해야 합니다.
 

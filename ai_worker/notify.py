@@ -38,6 +38,18 @@ def notify_rematch_result(summary: dict) -> None:
     )
 
 
+def notify_tag_backfill_result(summary: dict) -> None:
+    _send(
+        "**LumisShow AI 태그 재계산 완료**\n"
+        f"사진 {summary['photos']}장 대상 (신규 임베딩 {summary['embedded']}장, "
+        f"재채점 {summary['rescored']}장, 위치보완 {summary['located']}장, "
+        f"에러 {summary['errors']}건)\n"
+        f"폴더명 태깅 {summary['path_tagged']}장\n"
+        f"소요 {summary['elapsed']:.0f}초\n"
+        f"{_admin_people_url()}"
+    )
+
+
 def _send(content: str) -> None:
     url = config.discord_webhook_url()
     if not url:
