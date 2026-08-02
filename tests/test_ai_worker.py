@@ -606,7 +606,7 @@ def test_analyze_and_store_keeps_stale_ai_tags_when_clip_ctx_none(conn):
 # ── CLIP 사물/장면 태깅 (tag_vocab / tagger) ─────────────────────────
 
 
-def test_tag_vocab_has_82_unique_entries():
+def test_tag_vocab_has_80_unique_entries():
     assert len(tag_vocab.TAG_VOCAB) == 80
     labels = [e["label"] for e in tag_vocab.TAG_VOCAB]
     prompts = [e["prompt"] for e in tag_vocab.TAG_VOCAB]
@@ -1304,6 +1304,39 @@ def test_notify_send_succeeds_on_first_try_without_retry(monkeypatch):
 
     assert len(attempts) == 1
     assert slept == []
+
+
+def test_notify_tag_backfill_result_formats_summary(monkeypatch):
+    """run_tag_backfill()이 반환하는 summary dict의 키(photos/embedded/rescored/
+    located/errors/path_tagged/elapsed)가 notify_tag_backfill_result의 f-string과
+    어긋나면 KeyError가 나야 하는데, 이걸 잡아줄 테스트가 없었다 — 키 이름을
+    바꾸는 리팩토링이 있어도 여기서 바로 드러나게 한다."""
+    from ai_worker import notify
+
+    monkeypatch.setenv("AI_DISCORD_WEBHOOK_URL", "https://example.invalid/webhook")
+    monkeypatch.setenv("BASE_URL", "http://example.test:9999")
+
+    sent = {}
+
+    def fake_urlopen(req, timeout=None):
+        import json
+        sent["content"] = json.loads(req.data)["content"]
+
+    monkeypatch.setattr(notify.urllib.request, "urlopen", fake_urlopen)
+
+    notify.notify_tag_backfill_result({
+        "photos": 5, "embedded": 2, "rescored": 3, "located": 1,
+        "errors": 0, "path_tagged": 4, "elapsed": 12.3,
+    })
+
+    assert "사진 5장 대상" in sent["content"]
+    assert "신규 임베딩 2장" in sent["content"]
+    assert "재채점 3장" in sent["content"]
+    assert "위치보완 1장" in sent["content"]
+    assert "에러 0건" in sent["content"]
+    assert "폴더명 태깅 4장" in sent["content"]
+    assert "소요 12초" in sent["content"]
+    assert "http://example.test:9999/admin/people" in sent["content"]
 
 
 def test_notify_scan_result_includes_admin_people_link(monkeypatch):
