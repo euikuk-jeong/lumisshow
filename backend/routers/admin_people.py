@@ -275,12 +275,19 @@ async def _apply_path_repair(db, photo_root: str, old_path: str, new_path: str) 
         "UPDATE faces SET photo_path = ? WHERE photo_path = ?",
         (new_path, old_path),
     )
-    # photo_tags: 사진 콘텐츠 자체 정보(현재 존재하는 source 전부)는 경로가 바뀌어도
-    # 유효하므로 photo_path만 갱신한다. source='path'(폴더명 유래)가 도입되면 그건
-    # 폴더가 바뀐 순간 무효가 되므로 여기서 예외 처리가 추가로 필요하다.
+    # photo_tags: 사진 콘텐츠 자체 정보(location/ai/manual/person)는 경로가 바뀌어도
+    # 유효하므로 photo_path만 갱신한다. source='path'(폴더명 유래)는 폴더가 바뀐
+    # 순간 무효이므로 지우기만 한다 — Kiwi 재계산은 ai_worker 전용 의존성이라
+    # backend에서 실행할 수 없다. new_path는 다음 워커 스캔의
+    # scanner.tag_paths_from_folder_names()가 커버리지 방식으로 자연히 채운다
+    # (path 태그가 없는 사진만 대상으로 삼으므로).
     await db.execute(
-        "UPDATE photo_tags SET photo_path = ? WHERE photo_path = ?",
+        "UPDATE photo_tags SET photo_path = ? WHERE photo_path = ? AND source != 'path'",
         (new_path, old_path),
+    )
+    await db.execute(
+        "DELETE FROM photo_tags WHERE photo_path = ? AND source = 'path'",
+        (old_path,),
     )
 
 
@@ -378,11 +385,13 @@ async def approve_all_path_repairs(
 
 
 async def _apply_orphan_cleanup(db, app_db, path: str) -> None:
-    """path의 photos_analyzed/faces(ai.db) 행을 삭제하고, photo_meta_cache(app.db)에
-    같은 경로 캐시가 있으면 함께 삭제한다(없어도 무방 — best-effort)."""
+    """path의 photos_analyzed/faces/photo_tags/photo_locations(ai.db) 행을 삭제하고,
+    photo_meta_cache(app.db)에 같은 경로 캐시가 있으면 함께 삭제한다(없어도 무방 —
+    best-effort)."""
     await db.execute("DELETE FROM faces WHERE photo_path = ?", (path,))
     await db.execute("DELETE FROM photos_analyzed WHERE path = ?", (path,))
     await db.execute("DELETE FROM photo_tags WHERE photo_path = ?", (path,))
+    await db.execute("DELETE FROM photo_locations WHERE photo_path = ?", (path,))
     await app_db.execute("DELETE FROM photo_meta_cache WHERE file_path = ?", (path,))
     await app_db.commit()
 

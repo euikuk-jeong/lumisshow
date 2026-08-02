@@ -7,7 +7,7 @@ import time
 import numpy as np
 import pytest
 
-from ai_worker import db, matcher, scanner
+from ai_worker import db, geocoder, matcher, pipeline, scanner
 
 
 @pytest.fixture
@@ -44,7 +44,7 @@ def test_db_creates_tables(conn):
     }
     assert {"photos_analyzed", "faces", "face_matches", "persons", "face_labels",
             "jobs", "ignored_review_candidates", "pending_path_repairs",
-            "pending_orphan_cleanups"} <= tables
+            "pending_orphan_cleanups", "photo_tags", "photo_locations"} <= tables
 
 
 def test_db_creates_person_indexes(conn):
@@ -253,6 +253,249 @@ def test_scanner_aborts_when_root_unreachable(conn, tmp_path):
     assert conn.execute(
         "SELECT COUNT(*) FROM photos_analyzed"
     ).fetchone()[0] == 1  # 오인 삭제/변경 없이 그대로 유지
+
+
+# ── 폴더명 태깅 (Kiwi) ───────────────────────────────────────────────
+
+
+class _FakeToken:
+    def __init__(self, form: str, tag: str) -> None:
+        self.form = form
+        self.tag = tag
+
+
+class _CountingKiwi:
+    """kiwipiepy 설치 없이 scanner의 폴더 단위 캐싱·필터링 로직만 검증하기 위한 스텁."""
+
+    def __init__(self, mapping: dict[str, list[_FakeToken]]) -> None:
+        self._mapping = mapping
+        self.calls = 0
+
+    def tokenize(self, text: str) -> list[_FakeToken]:
+        self.calls += 1
+        return self._mapping.get(text, [])
+
+
+def test_extract_folder_nouns_filters_short_and_dedups(monkeypatch):
+    fake = _CountingKiwi({
+        "20250511_서울대공원캠핑장_f": [
+            _FakeToken("서울대공원", "NNP"), _FakeToken("캠핑", "NNG"), _FakeToken("장", "NNG"),
+        ],
+        "부산부산": [_FakeToken("부산", "NNP"), _FakeToken("부산", "NNP")],
+        "IMG_2024": [_FakeToken("IMG", "SL"), _FakeToken("2024", "SN")],
+    })
+    monkeypatch.setattr(scanner, "_get_kiwi", lambda: fake)
+
+    assert scanner.extract_folder_nouns("20250511_서울대공원캠핑장_f") == ["서울대공원", "캠핑"]
+    assert scanner.extract_folder_nouns("부산부산") == ["부산"]  # 중복 제거
+    assert scanner.extract_folder_nouns("IMG_2024") == []  # 명사 없음(SL/SN만)
+
+
+def test_tag_paths_from_folder_names_covers_untagged_photos_and_caches_per_folder(conn, monkeypatch):
+    fake = _CountingKiwi({"캠핑장": [_FakeToken("캠핑", "NNG")]})
+    monkeypatch.setattr(scanner, "_get_kiwi", lambda: fake)
+
+    conn.execute("INSERT INTO photos_analyzed (path, mtime) VALUES ('2024/캠핑장/a.jpg', 0)")
+    conn.execute("INSERT INTO photos_analyzed (path, mtime) VALUES ('2024/캠핑장/b.jpg', 0)")
+    conn.commit()
+
+    tagged = scanner.tag_paths_from_folder_names(conn)
+    assert tagged == 2
+    assert fake.calls == 1  # 같은 폴더는 1회만 Kiwi 호출(폴더 단위 캐싱)
+
+    rows = conn.execute(
+        "SELECT photo_path FROM photo_tags WHERE tag = '캠핑' AND source = 'path'"
+    ).fetchall()
+    assert {r["photo_path"] for r in rows} == {"2024/캠핑장/a.jpg", "2024/캠핑장/b.jpg"}
+
+    # 이미 path 태그가 있는 사진은 커버리지 대상에서 빠진다 — 재실행해도 재호출 없음
+    assert scanner.tag_paths_from_folder_names(conn) == 0
+    assert fake.calls == 1
+
+
+def test_tag_paths_from_folder_names_retries_zero_noun_folders_every_scan(conn, monkeypatch):
+    """순수 영문/숫자 폴더처럼 명사가 하나도 안 나오면 태그 행이 생기지 않아 커버리지
+    쿼리가 매 스캔 다시 대상으로 잡는다 — 의도된 동작(비용이 낮아 최적화 보류)."""
+    fake = _CountingKiwi({"IMG_2024": []})
+    monkeypatch.setattr(scanner, "_get_kiwi", lambda: fake)
+    conn.execute("INSERT INTO photos_analyzed (path, mtime) VALUES ('2024/IMG_2024/a.jpg', 0)")
+    conn.commit()
+
+    assert scanner.tag_paths_from_folder_names(conn) == 1
+    assert conn.execute("SELECT COUNT(*) FROM photo_tags").fetchone()[0] == 0
+
+    assert scanner.tag_paths_from_folder_names(conn) == 1
+    assert fake.calls == 2
+
+
+def test_tag_paths_from_folder_names_no_pending_returns_zero(conn):
+    assert scanner.tag_paths_from_folder_names(conn) == 0
+
+
+# ── GPS 위치 태깅 (geocoder) ─────────────────────────────────────────
+
+
+class _FakeExif(dict):
+    def __init__(self, base: dict, gps_ifd: dict) -> None:
+        super().__init__(base)
+        self._gps_ifd = gps_ifd
+
+    def get_ifd(self, tag):
+        return self._gps_ifd
+
+
+class _FakeImg:
+    def __init__(self, base: dict, gps_ifd: dict) -> None:
+        self._exif = _FakeExif(base, gps_ifd)
+
+    def getexif(self):
+        return self._exif
+
+
+def test_extract_gps_none_without_exif():
+    assert pipeline._extract_gps(_FakeImg({}, {})) is None
+
+
+def test_extract_gps_none_without_gps_ifd():
+    assert pipeline._extract_gps(_FakeImg({0x0112: 1}, {})) is None
+
+
+def test_extract_gps_parses_north_east_as_positive():
+    img = _FakeImg({0x0112: 1}, {1: "N", 2: (37.0, 33.0, 0.0), 3: "E", 4: (127.0, 0.0, 0.0)})
+    lat, lon = pipeline._extract_gps(img)
+    assert lat == pytest.approx(37.55, abs=0.01)
+    assert lon == pytest.approx(127.0, abs=0.01)
+
+
+def test_extract_gps_parses_south_west_as_negative():
+    img = _FakeImg({0x0112: 1}, {1: "S", 2: (37.0, 0.0, 0.0), 3: "W", 4: (127.0, 0.0, 0.0)})
+    lat, lon = pipeline._extract_gps(img)
+    assert lat < 0
+    assert lon < 0
+
+
+def test_extract_gps_none_on_malformed_values():
+    img = _FakeImg({0x0112: 1}, {1: "N", 2: (37.0,), 3: "E", 4: (127.0, 0.0, 0.0)})
+    assert pipeline._extract_gps(img) is None
+
+
+def test_reverse_geocode_maps_country_code_to_korean(monkeypatch):
+    class _FakeGeocoder:
+        def query(self, coords):
+            return [{"name": "Seoul", "cc": "KR"}]
+
+    monkeypatch.setattr(geocoder, "_get_geocoder", lambda: _FakeGeocoder())
+    city, country = geocoder.reverse_geocode(37.5665, 126.978)
+    assert city == "Seoul"
+    assert country == "대한민국"
+
+
+def test_reverse_geocode_falls_back_to_raw_code_when_unmapped(monkeypatch):
+    class _FakeGeocoder:
+        def query(self, coords):
+            return [{"name": "Nowhere", "cc": "ZZ"}]
+
+    monkeypatch.setattr(geocoder, "_get_geocoder", lambda: _FakeGeocoder())
+    city, country = geocoder.reverse_geocode(0.0, 0.0)
+    assert city == "Nowhere"
+    assert country == "ZZ"
+
+
+def test_sync_location_tag_creates_city_and_country_rows(conn):
+    conn.execute(
+        "INSERT INTO photo_locations (photo_path, city, country) VALUES (?, ?, ?)",
+        ("2024/a.jpg", "Seoul", "대한민국"),
+    )
+    geocoder.sync_location_tag(conn, "2024/a.jpg")
+    tags = {
+        r["tag"] for r in conn.execute(
+            "SELECT tag FROM photo_tags WHERE photo_path = ? AND source = 'location'",
+            ("2024/a.jpg",),
+        )
+    }
+    assert tags == {"Seoul", "대한민국"}
+
+
+def test_sync_location_tag_removes_tags_when_location_row_missing(conn):
+    conn.execute(
+        "INSERT INTO photo_tags (photo_path, tag, source) VALUES ('2024/a.jpg', 'Seoul', 'location')"
+    )
+    conn.commit()
+    geocoder.sync_location_tag(conn, "2024/a.jpg")
+    assert conn.execute(
+        "SELECT COUNT(*) FROM photo_tags WHERE photo_path = '2024/a.jpg' AND source = 'location'"
+    ).fetchone()[0] == 0
+
+
+def test_pipeline_update_location_upserts_then_clears_on_no_gps(conn, monkeypatch):
+    monkeypatch.setattr(geocoder, "reverse_geocode", lambda lat, lon: ("Seoul", "대한민국"))
+
+    pipeline._update_location(conn, "2024/a.jpg", (37.5, 127.0))
+    row = conn.execute(
+        "SELECT city, country FROM photo_locations WHERE photo_path = '2024/a.jpg'"
+    ).fetchone()
+    assert (row["city"], row["country"]) == ("Seoul", "대한민국")
+    tags = {
+        r["tag"] for r in conn.execute(
+            "SELECT tag FROM photo_tags WHERE photo_path = '2024/a.jpg' AND source = 'location'"
+        )
+    }
+    assert tags == {"Seoul", "대한민국"}
+
+    # 재분석 시 GPS가 사라진 경우(EXIF 수정 등) — 기존 위치/태그도 함께 정리돼야 한다
+    pipeline._update_location(conn, "2024/a.jpg", None)
+    assert conn.execute(
+        "SELECT COUNT(*) FROM photo_locations WHERE photo_path = '2024/a.jpg'"
+    ).fetchone()[0] == 0
+    assert conn.execute(
+        "SELECT COUNT(*) FROM photo_tags WHERE photo_path = '2024/a.jpg' AND source = 'location'"
+    ).fetchone()[0] == 0
+
+
+def test_pipeline_update_location_swallows_geocode_errors(conn, monkeypatch):
+    def _boom(lat, lon):
+        raise RuntimeError("offline data missing")
+
+    monkeypatch.setattr(geocoder, "reverse_geocode", _boom)
+    pipeline._update_location(conn, "2024/a.jpg", (37.5, 127.0))  # 예외가 밖으로 전파되면 안 됨
+    assert conn.execute(
+        "SELECT COUNT(*) FROM photo_locations WHERE photo_path = '2024/a.jpg'"
+    ).fetchone()[0] == 0
+
+
+def test_analyze_and_store_persists_location_from_stub_pipeline(conn, monkeypatch):
+    """pipeline.analyze()가 (faces, img, gps) 3-tuple을 반환하도록 바뀐 계약과
+    analyze_and_store의 언패킹·photo_locations/photo_tags 기록까지 실제 함수
+    경로로 검증(insightface 없이 스텁 파이프라인 사용)."""
+    from PIL import Image
+
+    monkeypatch.setattr(geocoder, "reverse_geocode", lambda lat, lon: ("Seoul", "대한민국"))
+
+    class _StubPipeline:
+        def analyze(self, path):
+            return [], Image.new("RGB", (1, 1)), (37.5665, 126.978)
+
+    face_count, ok = pipeline.analyze_and_store(
+        _StubPipeline(), conn, "2024/a.jpg", 123.0, enrollment={}, threshold=0.45
+    )
+    assert (face_count, ok) == (0, True)
+
+    row = conn.execute(
+        "SELECT status, face_count FROM photos_analyzed WHERE path = '2024/a.jpg'"
+    ).fetchone()
+    assert (row["status"], row["face_count"]) == ("done", 0)
+
+    loc = conn.execute(
+        "SELECT city, country FROM photo_locations WHERE photo_path = '2024/a.jpg'"
+    ).fetchone()
+    assert (loc["city"], loc["country"]) == ("Seoul", "대한민국")
+
+    tags = {
+        r["tag"] for r in conn.execute(
+            "SELECT tag FROM photo_tags WHERE photo_path = '2024/a.jpg' AND source = 'location'"
+        )
+    }
+    assert tags == {"Seoul", "대한민국"}
 
 
 # ── matcher ───────────────────────────────────────────────────────────
@@ -551,7 +794,7 @@ def test_run_scan_empty_pending_skips_pipeline(conn):
     summary = main.run_scan()
     assert summary == {
         "photos": 0, "faces": 0, "errors": 0,
-        "renamed": 0, "orphaned": 0, "elapsed": 0.0,
+        "renamed": 0, "orphaned": 0, "elapsed": 0.0, "path_tagged": 0,
     }
 
 

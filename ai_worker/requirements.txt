@@ -3,3 +3,5 @@ Pillow>=10.0
 insightface>=0.7.3
 onnxruntime>=1.17
 opencv-python-headless>=4.9
+reverse_geocoder>=1.5
+kiwipiepy>=0.20

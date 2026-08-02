@@ -38,5 +38,5 @@ jobs:
       # cv2 ImportError 류 런타임 문제를 빌드 단계에서 잡기 위한 최소 검증 (v1.0.2 사례)
       - name: Smoke test ai worker image
         run: |
-          docker run --rm lumisshow-ai:check python -c "import cv2, insightface; print('cv2', cv2.__version__)"
+          docker run --rm lumisshow-ai:check python -c "import cv2, insightface, kiwipiepy, reverse_geocoder; print('cv2', cv2.__version__)"
           docker image ls lumisshow-ai:check

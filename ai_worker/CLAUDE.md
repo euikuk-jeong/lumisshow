@@ -33,15 +33,16 @@ python -m ai_worker.tools.label_helper export labels.csv
 ## 파일 구조
 
 ```
-config.py    # 환경변수 (AI_MATCH_THRESHOLD, AI_DET_SIZE, AI_SCAN_HOUR...)
-daemon.py    # 데몬 모드: 야간 자동 스캔 + jobs 큐 폴링, stale 잡 복구
-db.py        # ai.db 스키마/연결 (sqlite3 동기, WAL)
-scanner.py   # PHOTO_ROOT 증분 스캔 (path+mtime, @eaDir 제외)
-pipeline.py  # InsightFace lazy 로드, 사진 1장 분석→기록 (1장=1커밋, resumable)
-matcher.py   # cosine 매칭 (numpy brute-force), 임베딩 BLOB 변환
-notify.py    # Discord webhook 알림 (AI_DISCORD_WEBHOOK_URL)
-main.py      # CLI: scan(--limit) | rematch | daemon
-tools/       # label_helper.py (CSV 라벨링), eval.py (precision/recall)
+config.py     # 환경변수 (AI_MATCH_THRESHOLD, AI_DET_SIZE, AI_SCAN_HOUR...)
+daemon.py     # 데몬 모드: 야간 자동 스캔 + jobs 큐 폴링, stale 잡 복구
+db.py         # ai.db 스키마/연결 (sqlite3 동기, WAL)
+scanner.py    # PHOTO_ROOT 증분 스캔(path+mtime, @eaDir 제외) + 폴더명 Kiwi 태깅(커버리지 방식)
+pipeline.py   # InsightFace lazy 로드, 사진 1장 분석→기록(1장=1커밋, resumable), GPS EXIF 추출
+geocoder.py   # GPS→(도시,국가) 역지오코딩(reverse_geocoder, 오프라인), photo_tags(location) 동기화
+matcher.py    # cosine 매칭 (numpy brute-force), 임베딩 BLOB 변환
+notify.py     # Discord webhook 알림 (AI_DISCORD_WEBHOOK_URL)
+main.py       # CLI: scan(--limit) | rematch | daemon
+tools/        # label_helper.py (CSV 라벨링), eval.py (precision/recall)
 ```
 
 ## 핵심 설계 결정
@@ -124,6 +125,42 @@ GPS `location='서울'` + 폴더명 `path='서울'`).
 삭제될 수 있다. 기존(이 컬럼 도입 이전) face_labels 분은 `init_ai_db()`의
 `INSERT ... ON CONFLICT DO NOTHING` 소급 쿼리로 1회성 backfill한다(매 시작마다
 실행해도 idempotent).
+
+### GPS 위치 태깅 (`geocoder.py`) — 오프라인, 도시는 영문·국가만 한국어
+`pipeline.FacePipeline.analyze()`가 `ImageOps.exif_transpose()` 호출 **전**
+원본 이미지에서 GPS EXIF를 읽는다(transpose 이후 이미지는 exif가 유실될 수 있음).
+좌표가 있으면 `geocoder.reverse_geocode()`(reverse_geocoder, GeoNames 기반 오프라인
+KD-tree)로 (도시, 국가)를 얻어 `photo_locations`(정본)에 기록하고,
+`geocoder.sync_location_tag()`가 `photo_tags(source='location')`에 city/country를
+각각 별도 행으로 복제한다(하나로 합치면 "서울" 단독 검색이 안 됨). GPS가 없거나
+역지오코딩이 실패하면(둘 다 best-effort — 얼굴 분석 성공 여부에 영향 없음)
+`photo_locations` 행을 지운다.
+
+도시명은 reverse_geocoder가 주는 로마자(예: "Seoul") 그대로 쓴다 — 오프라인으로
+한국어 도시명을 구할 저비용 방법이 없다(2026-08-02 확인). 국가는 ISO 3166-1
+alpha-2 코드를 `geocoder._COUNTRY_NAMES_KO` 정적 매핑으로 한국어 국가명으로
+바꾼다(매핑에 없으면 코드 그대로 폴백).
+
+`RGeocoder`는 인스턴스 생성마다 ~30MB CSV를 다시 읽고 KD-tree를 재구축하므로
+(`reverse_geocoder.search()`가 매 호출 새 인스턴스를 만듦) 모듈 전역에 1회만
+만들어 재사용한다(`_get_geocoder()`). `mode=1`(단일 스레드)을 써서 `mode=2`가
+요구하는 `if __name__ == "__main__":` 가드 없이도 워커 루프 안에서 안전하게 호출한다.
+
+### 폴더명 태깅 (Kiwi, `scanner.py`) — 커버리지 방식, mtime과 무관
+`scanner.tag_paths_from_folder_names()`는 `photo_tags`에 `source='path'` 행이
+하나도 없는 `photos_analyzed` 사진만 골라 바로 위 폴더명 1단계를 Kiwi 형태소
+분석기(명사 NNG/NNP만, 1음절은 접미 파편으로 보고 제외)로 분석해 태깅한다.
+`pending_photos()`(mtime 기반)와 완전히 독립적으로 동작 — 이 기능 도입 이전
+사진(기존 4.5만 장)이나 경로복구 승인 이후(아래 참고) new_path도 다음 스캔에서
+자연히 채워진다. 같은 폴더는 1회만 Kiwi를 실행해 재사용(폴더 단위 캐싱).
+명사가 하나도 안 나오는 폴더(순수 영문/숫자 등)의 사진은 태그가 영원히 안
+생겨 매 스캔 재시도되는데, Kiwi 호출 자체가 저렴해 감수하기로 함(최적화 보류).
+
+`admin_people.py`의 `_apply_path_repair`(경로복구 승인)는 `source='path'` 태그를
+new_path로 갱신하지 않고 **지우기만** 한다 — Kiwi는 워커 전용 무거운 의존성이라
+backend에서 재계산할 수 없기 때문. 지운 뒤 다음 워커 스캔의 커버리지 로직이
+new_path 폴더명으로 다시 채운다. `location`/`ai`/`manual`/`person` 태그는 사진
+콘텐츠 자체 정보라 경로가 바뀌어도 유효하므로 그대로 `UPDATE`한다.
 
 ### 경로 규약
 `faces.photo_path`, `photos_analyzed.path`는 **PHOTO_ROOT 상대 경로 + `/` 구분자**
