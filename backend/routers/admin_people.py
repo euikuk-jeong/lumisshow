@@ -289,6 +289,11 @@ async def _apply_path_repair(db, photo_root: str, old_path: str, new_path: str) 
         "DELETE FROM photo_tags WHERE photo_path = ? AND source = 'path'",
         (old_path,),
     )
+    # photo_embeddings(CLIP 이미지 벡터)도 사진 콘텐츠 자체 정보라 photo_path만 갱신.
+    await db.execute(
+        "UPDATE photo_embeddings SET photo_path = ? WHERE photo_path = ?",
+        (new_path, old_path),
+    )
 
 
 @router.get("/people/path-repairs")
@@ -385,13 +390,14 @@ async def approve_all_path_repairs(
 
 
 async def _apply_orphan_cleanup(db, app_db, path: str) -> None:
-    """path의 photos_analyzed/faces/photo_tags/photo_locations(ai.db) 행을 삭제하고,
-    photo_meta_cache(app.db)에 같은 경로 캐시가 있으면 함께 삭제한다(없어도 무방 —
-    best-effort)."""
+    """path의 photos_analyzed/faces/photo_tags/photo_locations/photo_embeddings
+    (ai.db) 행을 삭제하고, photo_meta_cache(app.db)에 같은 경로 캐시가 있으면 함께
+    삭제한다(없어도 무방 — best-effort)."""
     await db.execute("DELETE FROM faces WHERE photo_path = ?", (path,))
     await db.execute("DELETE FROM photos_analyzed WHERE path = ?", (path,))
     await db.execute("DELETE FROM photo_tags WHERE photo_path = ?", (path,))
     await db.execute("DELETE FROM photo_locations WHERE photo_path = ?", (path,))
+    await db.execute("DELETE FROM photo_embeddings WHERE photo_path = ?", (path,))
     await app_db.execute("DELETE FROM photo_meta_cache WHERE file_path = ?", (path,))
     await app_db.commit()
 

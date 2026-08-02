@@ -13,7 +13,8 @@ from dataclasses import dataclass
 import numpy as np
 from PIL import ExifTags, Image, ImageOps
 
-from ai_worker import config, geocoder, matcher
+from ai_worker import config, geocoder, matcher, tag_vocab
+from ai_worker.tagger import ClipTaggingContext
 
 _logger = logging.getLogger(__name__)
 
@@ -150,6 +151,48 @@ def _update_location(
     geocoder.sync_location_tag(conn, rel_path)
 
 
+def _update_ai_tags(
+    conn: sqlite3.Connection,
+    rel_path: str,
+    img: Image.Image,
+    clip_ctx: ClipTaggingContext | None,
+) -> None:
+    """CLIP 임베딩을 photo_embeddings에 저장하고, 어휘 텍스트 임베딩과의 코사인
+    유사도가 threshold 이상인 태그를 photo_tags(source='ai')에 기록한다.
+
+    재분석 시 기존 'ai' 태그는 지우고 현재 어휘/threshold 기준으로 다시 채점한다
+    (photo_embeddings는 그대로 재사용 없이 매번 새로 인코딩 — 사진 콘텐츠가 바뀌었을
+    수 있는 재분석 상황이라 캐시를 신뢰할 수 없음). clip_ctx가 없거나(CLIP 모델
+    로딩 실패) 임베딩 자체가 실패하면 기존 'ai' 태그를 그대로 둔 채 아무 것도 하지
+    않는다 — best-effort지만, Kiwi/GPS와 달리 CLIP은 재실패 시 다음 스캔에서도
+    자동으로 다시 채워지지 않는(coverage 방식이 아닌) 유일한 트랙이라 지우기만 하고
+    못 채우면 영구 유실이 된다. 조금 낡은 태그가 남는 쪽이 안전하다."""
+    if clip_ctx is None:
+        return
+    try:
+        embed = clip_ctx.tagger.embed_image(img)
+    except Exception:
+        _logger.exception("%s CLIP 임베딩 실패", rel_path)
+        return
+
+    conn.execute("DELETE FROM photo_tags WHERE photo_path = ? AND source = 'ai'", (rel_path,))
+    conn.execute(
+        """INSERT INTO photo_embeddings (photo_path, embedding) VALUES (?, ?)
+           ON CONFLICT(photo_path) DO UPDATE SET
+             embedding=excluded.embedding, updated_at=CURRENT_TIMESTAMP""",
+        (rel_path, matcher.embedding_to_blob(embed)),
+    )
+    sims = clip_ctx.text_embeds @ embed
+    for i, sim in enumerate(sims):
+        if sim >= clip_ctx.threshold:
+            conn.execute(
+                """INSERT INTO photo_tags (photo_path, tag, source, confidence)
+                   VALUES (?, ?, 'ai', ?)
+                   ON CONFLICT(photo_path, tag, source) DO NOTHING""",
+                (rel_path, tag_vocab.TAG_VOCAB[i]["label"], float(sim)),
+            )
+
+
 def analyze_and_store(
     pipeline: FacePipeline,
     conn: sqlite3.Connection,
@@ -157,9 +200,10 @@ def analyze_and_store(
     mtime: float,
     enrollment: dict[int, np.ndarray],
     threshold: float,
+    clip_ctx: ClipTaggingContext | None = None,
 ) -> tuple[int, bool]:
-    """사진 1장 분석 → faces/face_matches/photos_analyzed/photo_locations 기록
-    (1장 = 1커밋, resumable).
+    """사진 1장 분석 → faces/face_matches/photos_analyzed/photo_locations/
+    photo_embeddings 기록 (1장 = 1커밋, resumable).
 
     재분석(mtime 변경) 시 기존 얼굴 행은 삭제 후 새로 기록.
     (검출된 얼굴 수, 성공 여부)를 반환. 실패 시 status='error'로 기록하고 (0, False) 반환.
@@ -200,6 +244,7 @@ def analyze_and_store(
             )
 
     _update_location(conn, rel_path, gps)
+    _update_ai_tags(conn, rel_path, img, clip_ctx)
 
     conn.execute(
         """INSERT INTO photos_analyzed (path, mtime, face_count, status)

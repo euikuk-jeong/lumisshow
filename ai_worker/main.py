@@ -30,6 +30,8 @@ def _pending_orphan_count(conn) -> int:
 
 def run_scan(limit: int | None = None) -> dict:
     from ai_worker.pipeline import FacePipeline, analyze_and_store
+    from ai_worker.tag_vocab import TAG_VOCAB
+    from ai_worker.tagger import ClipTagger, ClipTaggingContext, tag_threshold_setting
 
     conn = db.connect()
     root = config.photo_root()
@@ -65,12 +67,27 @@ def run_scan(limit: int | None = None) -> dict:
     threshold = config.match_threshold()
     log.info("등록 인물 %d명, threshold=%.2f", len(enrollment), threshold)
 
+    # CLIP 태깅은 얼굴 인식과 별개 기능이라, 모델 다운로드/로딩이 실패해도(네트워크
+    # 불안정 등) 얼굴 분석 자체는 계속 진행한다 — best-effort.
+    clip_ctx = None
+    try:
+        log.info("CLIP 태깅 모델 로딩 중...")
+        clip_tagger = ClipTagger()
+        tag_threshold = tag_threshold_setting(conn)
+        text_embeds = clip_tagger.embed_texts([e["prompt"] for e in TAG_VOCAB])
+        clip_ctx = ClipTaggingContext(
+            tagger=clip_tagger, text_embeds=text_embeds, threshold=tag_threshold
+        )
+        log.info("CLIP 태깅 준비 완료 (어휘 %d개, threshold=%.2f)", len(TAG_VOCAB), tag_threshold)
+    except Exception:
+        log.exception("CLIP 태깅 모델 로딩 실패 — 이번 스캔은 얼굴 인식만 수행")
+
     start = time.monotonic()
     total_faces = 0
     errors = 0
     for i, (rel_path, mtime) in enumerate(pending, 1):
         face_count, ok = analyze_and_store(
-            pipeline, conn, rel_path, mtime, enrollment, threshold
+            pipeline, conn, rel_path, mtime, enrollment, threshold, clip_ctx=clip_ctx,
         )
         total_faces += face_count
         if not ok:

@@ -293,6 +293,11 @@ async def test_people_repair_approve_deletes_path_tags_but_keeps_content_tags(ad
             "('old_dir/photo.jpg', '캠핑', 'path'), "
             "('old_dir/photo.jpg', '서울', 'location')"
         )
+        await db.execute(
+            "INSERT INTO photo_embeddings (photo_path, embedding) VALUES "
+            "('old_dir/photo.jpg', ?)",
+            (b"\x00" * 8,),
+        )
         await db.commit()
 
     (photo_root / "new_dir").mkdir()
@@ -308,7 +313,11 @@ async def test_people_repair_approve_deletes_path_tags_but_keeps_content_tags(ad
         db.row_factory = aiosqlite.Row
         async with db.execute("SELECT tag, source, photo_path FROM photo_tags") as cur:
             rows = [dict(r) for r in await cur.fetchall()]
+        async with db.execute("SELECT photo_path FROM photo_embeddings") as cur:
+            embedding_rows = await cur.fetchall()
     assert rows == [{"tag": "서울", "source": "location", "photo_path": "new_dir/photo.jpg"}]
+    # photo_embeddings(CLIP 벡터)도 콘텐츠 자체 정보라 photo_path만 갱신돼야 한다
+    assert [r["photo_path"] for r in embedding_rows] == ["new_dir/photo.jpg"]
 
 
 async def test_people_repair_ambiguous(admin_client):
@@ -389,7 +398,7 @@ async def test_people_repair_ambiguous_not_queued_as_orphan(admin_client):
 
 async def test_orphan_cleanup_approve_deletes_ai_and_cache_rows(admin_client):
     """승인 시 faces(→face_labels/face_matches 캐스케이드)·photos_analyzed·
-    photo_meta_cache·photo_tags·photo_locations가 모두 삭제돼야 한다."""
+    photo_meta_cache·photo_tags·photo_locations·photo_embeddings가 모두 삭제돼야 한다."""
     from backend.models.ai_database import _ai_db_path
 
     await _seed_analyzed("ghost/missing.jpg")
@@ -399,6 +408,11 @@ async def test_orphan_cleanup_approve_deletes_ai_and_cache_rows(admin_client):
         await db.execute(
             "INSERT INTO photo_locations (photo_path, city, country) VALUES "
             "('ghost/missing.jpg', 'Seoul', '대한민국')"
+        )
+        await db.execute(
+            "INSERT INTO photo_embeddings (photo_path, embedding) VALUES "
+            "('ghost/missing.jpg', ?)",
+            (b"\x00" * 8,),
         )
         await db.commit()
 
@@ -429,6 +443,8 @@ async def test_orphan_cleanup_approve_deletes_ai_and_cache_rows(admin_client):
         async with db.execute("SELECT COUNT(*) FROM photo_tags") as cur:
             assert (await cur.fetchone())[0] == 0
         async with db.execute("SELECT COUNT(*) FROM photo_locations") as cur:
+            assert (await cur.fetchone())[0] == 0
+        async with db.execute("SELECT COUNT(*) FROM photo_embeddings") as cur:
             assert (await cur.fetchone())[0] == 0
 
     async with aiosqlite.connect(_db_path()) as db:

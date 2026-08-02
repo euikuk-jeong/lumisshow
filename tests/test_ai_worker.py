@@ -7,7 +7,7 @@ import time
 import numpy as np
 import pytest
 
-from ai_worker import db, geocoder, matcher, pipeline, scanner
+from ai_worker import db, geocoder, matcher, pipeline, scanner, tag_vocab, tagger
 
 
 @pytest.fixture
@@ -44,7 +44,8 @@ def test_db_creates_tables(conn):
     }
     assert {"photos_analyzed", "faces", "face_matches", "persons", "face_labels",
             "jobs", "ignored_review_candidates", "pending_path_repairs",
-            "pending_orphan_cleanups", "photo_tags", "photo_locations"} <= tables
+            "pending_orphan_cleanups", "photo_tags", "photo_locations",
+            "photo_embeddings"} <= tables
 
 
 def test_db_creates_person_indexes(conn):
@@ -463,20 +464,40 @@ def test_pipeline_update_location_swallows_geocode_errors(conn, monkeypatch):
     ).fetchone()[0] == 0
 
 
+class _StubClipTagger:
+    def __init__(self, embed: np.ndarray) -> None:
+        self._embed = embed
+
+    def embed_image(self, img) -> np.ndarray:
+        return self._embed
+
+
 def test_analyze_and_store_persists_location_from_stub_pipeline(conn, monkeypatch):
     """pipeline.analyze()가 (faces, img, gps) 3-tuple을 반환하도록 바뀐 계약과
-    analyze_and_store의 언패킹·photo_locations/photo_tags 기록까지 실제 함수
-    경로로 검증(insightface 없이 스텁 파이프라인 사용)."""
+    analyze_and_store의 언패킹·photo_locations/photo_tags/photo_embeddings 기록까지
+    실제 함수 경로로 검증(insightface/CLIP 모델 없이 스텁 사용)."""
     from PIL import Image
 
     monkeypatch.setattr(geocoder, "reverse_geocode", lambda lat, lon: ("Seoul", "대한민국"))
+    monkeypatch.setattr(tag_vocab, "TAG_VOCAB", [
+        {"prompt": "a photo of camping", "label": "캠핑"},
+        {"prompt": "a photo of the sea", "label": "바다"},
+    ])
 
     class _StubPipeline:
         def analyze(self, path):
             return [], Image.new("RGB", (1, 1)), (37.5665, 126.978)
 
+    # "캠핑" 축과 완전히 일치하는 벡터 — threshold(0.5) 이상은 "캠핑"만
+    clip_ctx = tagger.ClipTaggingContext(
+        tagger=_StubClipTagger(np.array([1.0, 0.0], dtype=np.float32)),
+        text_embeds=np.array([[1.0, 0.0], [0.0, 1.0]], dtype=np.float32),
+        threshold=0.5,
+    )
+
     face_count, ok = pipeline.analyze_and_store(
-        _StubPipeline(), conn, "2024/a.jpg", 123.0, enrollment={}, threshold=0.45
+        _StubPipeline(), conn, "2024/a.jpg", 123.0, enrollment={}, threshold=0.45,
+        clip_ctx=clip_ctx,
     )
     assert (face_count, ok) == (0, True)
 
@@ -496,6 +517,205 @@ def test_analyze_and_store_persists_location_from_stub_pipeline(conn, monkeypatc
         )
     }
     assert tags == {"Seoul", "대한민국"}
+
+    assert conn.execute(
+        "SELECT COUNT(*) FROM photo_embeddings WHERE photo_path = '2024/a.jpg'"
+    ).fetchone()[0] == 1
+    ai_tags = {
+        r["tag"] for r in conn.execute(
+            "SELECT tag FROM photo_tags WHERE photo_path = '2024/a.jpg' AND source = 'ai'"
+        )
+    }
+    assert ai_tags == {"캠핑"}  # sim("바다")=0.0 < threshold(0.5)
+
+    # 재분석 시 이번엔 "바다" 축과 일치 — 기존 'ai' 태그(캠핑)는 지워지고 바다로 교체
+    clip_ctx.tagger = _StubClipTagger(np.array([0.0, 1.0], dtype=np.float32))
+    pipeline.analyze_and_store(
+        _StubPipeline(), conn, "2024/a.jpg", 124.0, enrollment={}, threshold=0.45,
+        clip_ctx=clip_ctx,
+    )
+    ai_tags = {
+        r["tag"] for r in conn.execute(
+            "SELECT tag FROM photo_tags WHERE photo_path = '2024/a.jpg' AND source = 'ai'"
+        )
+    }
+    assert ai_tags == {"바다"}
+
+
+def _seed_ai_tag(conn, photo_path: str, tag: str = "캠핑") -> None:
+    conn.execute(
+        "INSERT INTO photo_tags (photo_path, tag, source) VALUES (?, ?, 'ai')",
+        (photo_path, tag),
+    )
+    conn.commit()
+
+
+def test_analyze_and_store_keeps_stale_ai_tags_on_embed_failure(conn):
+    """CLIP 임베딩이 예외를 던져도(모델 손상 등) 얼굴 분석 결과는 그대로 보존돼야
+    한다 — best-effort. Kiwi/GPS와 달리 CLIP은 다음 스캔에서 자동으로 다시 채워지지
+    않는(coverage 방식이 아닌) 트랙이라, 실패 시 기존 'ai' 태그를 지우면 안 된다
+    (지우기만 하고 못 채우면 영구 유실)."""
+    from PIL import Image
+
+    _seed_ai_tag(conn, "2024/a.jpg")
+
+    class _StubPipeline:
+        def analyze(self, path):
+            return [], Image.new("RGB", (1, 1)), None
+
+    class _BoomTagger:
+        def embed_image(self, img):
+            raise RuntimeError("corrupt model")
+
+    clip_ctx = tagger.ClipTaggingContext(
+        tagger=_BoomTagger(), text_embeds=np.zeros((0, 512), dtype=np.float32), threshold=0.24,
+    )
+    face_count, ok = pipeline.analyze_and_store(
+        _StubPipeline(), conn, "2024/a.jpg", 123.0, enrollment={}, threshold=0.45,
+        clip_ctx=clip_ctx,
+    )
+    assert (face_count, ok) == (0, True)
+    assert conn.execute(
+        "SELECT COUNT(*) FROM photo_embeddings WHERE photo_path = '2024/a.jpg'"
+    ).fetchone()[0] == 0
+    assert conn.execute(
+        "SELECT tag FROM photo_tags WHERE photo_path = '2024/a.jpg' AND source = 'ai'"
+    ).fetchone()["tag"] == "캠핑"
+
+
+def test_analyze_and_store_keeps_stale_ai_tags_when_clip_ctx_none(conn):
+    """clip_ctx=None(이번 스캔에서 CLIP 모델 로딩 자체가 실패)일 때도 기존 'ai'
+    태그를 지우면 안 된다 — 위 테스트와 동일한 이유."""
+    from PIL import Image
+
+    _seed_ai_tag(conn, "2024/a.jpg")
+
+    class _StubPipeline:
+        def analyze(self, path):
+            return [], Image.new("RGB", (1, 1)), None
+
+    pipeline.analyze_and_store(
+        _StubPipeline(), conn, "2024/a.jpg", 123.0, enrollment={}, threshold=0.45,
+        clip_ctx=None,
+    )
+    assert conn.execute(
+        "SELECT tag FROM photo_tags WHERE photo_path = '2024/a.jpg' AND source = 'ai'"
+    ).fetchone()["tag"] == "캠핑"
+
+
+# ── CLIP 사물/장면 태깅 (tag_vocab / tagger) ─────────────────────────
+
+
+def test_tag_vocab_has_82_unique_entries():
+    assert len(tag_vocab.TAG_VOCAB) == 80
+    labels = [e["label"] for e in tag_vocab.TAG_VOCAB]
+    prompts = [e["prompt"] for e in tag_vocab.TAG_VOCAB]
+    assert len(set(labels)) == len(labels)
+    assert len(set(prompts)) == len(prompts)
+    assert all(e["prompt"] and e["label"] for e in tag_vocab.TAG_VOCAB)
+
+
+def test_preprocess_image_output_shape():
+    from PIL import Image
+
+    img = Image.new("RGB", (640, 480), (10, 20, 30))
+    out = tagger._preprocess_image(img)
+    assert out.shape == (1, 3, 224, 224)
+    assert out.dtype == np.float32
+
+
+def test_preprocess_image_handles_non_rgb_and_small_images():
+    from PIL import Image
+
+    img = Image.new("L", (100, 300))  # 그레이스케일 + 짧은 변 224 미만
+    out = tagger._preprocess_image(img)
+    assert out.shape == (1, 3, 224, 224)
+
+
+def test_tag_threshold_setting_db_overrides_env(conn, monkeypatch):
+    monkeypatch.setenv("AI_TAG_THRESHOLD", "0.30")
+    assert tagger.tag_threshold_setting(conn) == 0.30
+
+    conn.execute(
+        "INSERT INTO ai_settings (key, value) VALUES ('tag_threshold', '0.22')"
+    )
+    conn.commit()
+    assert tagger.tag_threshold_setting(conn) == 0.22
+
+
+def test_tag_threshold_setting_ignores_invalid_db_value(conn, monkeypatch):
+    monkeypatch.setenv("AI_TAG_THRESHOLD", "0.24")
+    conn.execute(
+        "INSERT INTO ai_settings (key, value) VALUES ('tag_threshold', 'not-a-number')"
+    )
+    conn.commit()
+    assert tagger.tag_threshold_setting(conn) == 0.24
+
+
+def test_download_detects_truncated_response_and_cleans_up_part_file(tmp_path, monkeypatch):
+    import io
+
+    class _FakeResponse(io.BytesIO):
+        headers = {"Content-Length": "100"}  # 실제 바디(아래)보다 큰 값 → 불완전 응답
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    monkeypatch.setattr(
+        tagger.urllib.request, "urlopen", lambda url, timeout=60: _FakeResponse(b"short body")
+    )
+    dest = str(tmp_path / "model.onnx")
+
+    with pytest.raises(OSError):
+        tagger._download("http://example.invalid/model.onnx", dest)
+
+    assert not os.path.exists(dest)
+    assert not os.path.exists(dest + ".part")
+
+
+def test_download_succeeds_and_renames_part_file(tmp_path, monkeypatch):
+    import io
+
+    body = b"complete model bytes"
+
+    class _FakeResponse(io.BytesIO):
+        headers = {"Content-Length": str(len(body))}
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    monkeypatch.setattr(
+        tagger.urllib.request, "urlopen", lambda url, timeout=60: _FakeResponse(body)
+    )
+    dest = str(tmp_path / "model.onnx")
+    tagger._download("http://example.invalid/model.onnx", dest)
+
+    assert os.path.exists(dest)
+    assert not os.path.exists(dest + ".part")
+    with open(dest, "rb") as f:
+        assert f.read() == body
+
+
+def test_ensure_models_skips_download_when_files_already_exist(tmp_path, monkeypatch):
+    monkeypatch.setenv("DATA_DIR", str(tmp_path / "data"))
+    clip_dir = os.path.join(str(tmp_path / "data"), "models", "clip")
+    os.makedirs(clip_dir, exist_ok=True)
+    for filename in tagger._MODEL_FILES:
+        with open(os.path.join(clip_dir, filename), "wb") as f:
+            f.write(b"cached")
+
+    calls = []
+    monkeypatch.setattr(tagger, "_download", lambda url, dest: calls.append(dest))
+    result_dir = tagger._ensure_models()
+
+    assert result_dir == clip_dir
+    assert calls == []  # 이미 존재하는 파일은 재다운로드하지 않음
 
 
 # ── matcher ───────────────────────────────────────────────────────────

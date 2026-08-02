@@ -133,6 +133,14 @@ CREATE TABLE IF NOT EXISTS photo_locations (
     source     TEXT NOT NULL DEFAULT 'exif_gps',  -- exif_gps | manual
     tagged_at  DATETIME DEFAULT CURRENT_TIMESTAMP
 );
+
+-- CLIP 이미지 임베딩 캐시(float32 512차원). 태그 어휘(tag_vocab.py)나 threshold가
+-- 바뀌어도 이미지 재인코딩 없이 저장된 벡터로 재채점하기 위함(Phase 4 tag-backfill).
+CREATE TABLE IF NOT EXISTS photo_embeddings (
+    photo_path TEXT PRIMARY KEY,
+    embedding  BLOB NOT NULL,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
 """
 
 
