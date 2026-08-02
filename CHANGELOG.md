@@ -7,6 +7,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-08-02
+
+AI 태그/위치/장면 인식 관리 기능. 사진 속 사물·장면을 CLIP zero-shot으로 자동
+인식해 태그를 붙이고, GPS·폴더명 기반 위치·이벤트 태그를 자동 기록하며,
+Admin이 태그를 관리하고 슬라이드쇼 정보 패널·사진 탐색 검색·XMP 사이드카
+내보내기에서 활용할 수 있게 되었다.
+
+### Added
+- **CLIP 기반 사물·장면 자동 태깅**: `clip-vit-base-patch32`(ONNX, zero-shot
+  멀티라벨)로 사진 분석 시마다 82개 수동 큐레이션 어휘(사람/구도·동물·음식·
+  탈것·생활용품·자연/실외·실내장소·날씨·이벤트·액티비티 10개 카테고리) 중
+  임계값 이상 매칭되는 태그를 자동 부여. 이미지 임베딩을 `photo_embeddings`에
+  캐시해 어휘·임계값이 바뀌어도 전체 재분석 없이 벡터 비교만으로 소급 적용
+  가능 (`ai_worker/tagger.py`, `ai_worker/tag_vocab.py`)
+- **GPS 위치 자동 태깅**: EXIF GPS를 오프라인 리버스 지오코딩(`reverse_geocoder`)
+  으로 도시/국가로 변환해 `photo_locations`에 기록 (`ai_worker/geocoder.py`)
+- **폴더명 기반 자유 텍스트 태깅**: 상위 폴더명을 한국어 형태소분석기(Kiwi,
+  오프라인)로 분석해 지명·활동명 등을 자동 태깅 — GPS 유무와 무관하게 항상
+  실행돼 GPS 있는 사진도 폴더명의 이벤트 정보(생일파티·가족여행 등)가 함께
+  붙는다 (`ai_worker/scanner.py`)
+- **기존 사진 소급 재계산(`tag-backfill`)**: CLI
+  (`python -m ai_worker.main tag-backfill`)와 Admin 설정 화면 버튼으로 이미
+  분석된 사진 전체에 태그·위치·폴더명 태깅을 소급 적용 — 어휘/임계값 변경
+  후에도 기존 사진에 반영 가능 (`ai_worker/main.py`)
+- **Admin 태그 관리 화면** (`/admin/tags`): 태그 목록(source별 필터·검색),
+  태그별 사진 그리드, 개별 삭제, 이름 일괄 변경, 수동 태그 추가(자유 텍스트가
+  아닌 어휘 목록 중 선택) (`admin_ai_tags.py`, `admin-tags.js`)
+- **정보 패널(i 버튼) 태그 노출**: 슬라이드쇼 EXIF 정보 패널에 인물·위치·태그·
+  폴더명·직접 추가 태그를 표시 — 공유 링크는 AI/폴더명/수동 태그만, Admin은
+  위치·확정 인물명까지 전체 노출(오매칭·프라이버시 이슈로 얼굴 인식과 동일한
+  경계 유지) (`services/photo_tags.py`, `slideshow.js`)
+- **XMP 사이드카 export**: Admin 설정 화면에서 태그·위치·확정 인물 전체를
+  사진별 `.xmp` 사이드카로 묶어 원본과 동일한 폴더 구조의 ZIP으로 스트리밍
+  다운로드 — Lightroom·digiKam 등 외부 툴이 읽을 수 있는 XMP/MWG 표준 필드
+  (`dc:subject`/`mwg-rs:RegionList`/`Iptc4xmpExt:LocationCreated`)로 매핑,
+  원본 사진은 절대 수정하지 않음 (`services/xmp_export.py`)
+- **사진 탐색 검색에 태그 매칭 추가**: 파일명 검색에 더해 태그(인물·위치·AI·
+  수동·폴더명 전체)로도 검색 가능 (`admin_browse.py`)
+- **인물 라벨 ↔ 태그 자동 동기화**: 얼굴 인물 확정/이름 변경/삭제 시
+  `photo_tags(source='person')`가 자동으로 함께 갱신 (`admin_people.py`)
+- **`AI_TAG_THRESHOLD` 환경변수 추가**: CLIP 태그 부여 cosine 임계값(기본
+  `0.24`), Admin 설정 화면에서도 조정 가능
+
 ## [1.16.1] - 2026-08-02
 
 ### Added
@@ -930,7 +973,8 @@ Phase 2 — AI 얼굴 인식 스마트 앨범. NAS 로컬 AI(InsightFace)로 사
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v1.16.1...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v2.0.0...HEAD
+[2.0.0]: https://github.com/euikuk-jeong/lumisshow/compare/v1.16.1...v2.0.0
 [1.16.1]: https://github.com/euikuk-jeong/lumisshow/compare/v1.16.0...v1.16.1
 [1.16.0]: https://github.com/euikuk-jeong/lumisshow/compare/v1.15.4...v1.16.0
 [1.15.4]: https://github.com/euikuk-jeong/lumisshow/compare/v1.15.3...v1.15.4
