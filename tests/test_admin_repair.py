@@ -261,6 +261,18 @@ async def test_people_repair_approve_applies_and_preserves_label(admin_client):
     r = await admin_client.get("/api/admin/people/path-repairs")
     assert r.json()["repairs"] == []
 
+    # photo_tags(source='person')도 new_path로 함께 갱신돼야 한다
+    from backend.models.ai_database import _ai_db_path
+
+    async with aiosqlite.connect(_ai_db_path()) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute(
+            "SELECT photo_path FROM photo_tags WHERE source = 'person' AND person_id = ?",
+            (person_id,),
+        ) as cur:
+            rows = await cur.fetchall()
+    assert [r["photo_path"] for r in rows] == ["new_dir/photo.jpg"]
+
 
 async def test_people_repair_ambiguous(admin_client):
     photo_root = Path(os.getenv("PHOTO_ROOT"))
@@ -340,7 +352,7 @@ async def test_people_repair_ambiguous_not_queued_as_orphan(admin_client):
 
 async def test_orphan_cleanup_approve_deletes_ai_and_cache_rows(admin_client):
     """승인 시 faces(→face_labels/face_matches 캐스케이드)·photos_analyzed·
-    photo_meta_cache가 모두 삭제돼야 한다."""
+    photo_meta_cache·photo_tags가 모두 삭제돼야 한다."""
     await _seed_analyzed("ghost/missing.jpg")
     face_id = await _seed_face_row("ghost/missing.jpg")
     await _seed_photo_meta_cache("ghost/missing.jpg")
@@ -369,6 +381,8 @@ async def test_orphan_cleanup_approve_deletes_ai_and_cache_rows(admin_client):
         async with db.execute("SELECT COUNT(*) FROM face_labels") as cur:
             assert (await cur.fetchone())[0] == 0
         async with db.execute("SELECT COUNT(*) FROM pending_orphan_cleanups") as cur:
+            assert (await cur.fetchone())[0] == 0
+        async with db.execute("SELECT COUNT(*) FROM photo_tags") as cur:
             assert (await cur.fetchone())[0] == 0
 
     async with aiosqlite.connect(_db_path()) as db:

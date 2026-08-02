@@ -51,6 +51,21 @@ async def _seed_match(face_id: int, person_id: int, score: float = 0.8) -> None:
         await db.commit()
 
 
+async def _person_tags(person_id: int | None = None) -> list[dict]:
+    """photo_tags(source='person') 행 조회 (person_id 지정 시 필터)."""
+    from backend.models.ai_database import _ai_db_path
+
+    async with aiosqlite.connect(_ai_db_path()) as db:
+        db.row_factory = aiosqlite.Row
+        sql = "SELECT photo_path, tag, person_id FROM photo_tags WHERE source = 'person'"
+        params: tuple = ()
+        if person_id is not None:
+            sql += " AND person_id = ?"
+            params = (person_id,)
+        async with db.execute(sql, params) as cur:
+            return [dict(r) for r in await cur.fetchall()]
+
+
 # ── 스키마 ────────────────────────────────────────────────────────────
 
 
@@ -64,6 +79,72 @@ async def test_init_ai_db_creates_person_indexes(client):
     assert {
         "idx_faces_photo", "idx_face_matches_person", "idx_face_labels_person", "idx_persons_name",
     } <= indexes
+
+
+async def test_init_ai_db_backfills_person_tags_for_preexisting_labels(client):
+    """photo_tags 도입 이전부터 있던 face_labels는 이벤트 동기화를 거친 적이 없으므로,
+    init_ai_db()가 1회성으로 소급 채워야 한다(재실행해도 idempotent)."""
+    from backend.models.ai_database import _ai_db_path, init_ai_db
+
+    async with aiosqlite.connect(_ai_db_path()) as db:
+        cur = await db.execute(
+            "INSERT INTO faces (photo_path, bbox, det_score, embedding) VALUES (?, ?, ?, ?)",
+            ("2024/legacy.jpg", "[0,0,10,10]", 0.9, b"\x00" * 8),
+        )
+        face_id = cur.lastrowid
+        cur = await db.execute("INSERT INTO persons (name) VALUES ('레거시')")
+        person_id = cur.lastrowid
+        await db.execute(
+            "INSERT INTO face_labels (face_id, person_id) VALUES (?, ?)", (face_id, person_id)
+        )
+        await db.commit()
+
+    await init_ai_db()
+    await init_ai_db()  # 재실행해도 중복 없이 idempotent해야 함
+
+    async with aiosqlite.connect(_ai_db_path()) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute(
+            "SELECT photo_path, tag, person_id FROM photo_tags WHERE source = 'person'"
+        ) as cur:
+            rows = [dict(r) for r in await cur.fetchall()]
+    assert rows == [{"photo_path": "2024/legacy.jpg", "tag": "레거시", "person_id": person_id}]
+
+
+async def test_init_ai_db_removes_orphaned_person_tags_after_worker_reanalysis(client):
+    """워커가 mtime 변경으로 사진을 재분석하면 faces가 DELETE(FK CASCADE로
+    face_labels도 함께 삭제)되지만 워커는 photo_tags를 건드리지 않는다 —
+    init_ai_db()가 이 반대 방향 불일치도 정리해야 한다."""
+    from backend.models.ai_database import _ai_db_path, init_ai_db
+
+    async with aiosqlite.connect(_ai_db_path()) as db:
+        cur = await db.execute(
+            "INSERT INTO faces (photo_path, bbox, det_score, embedding) VALUES (?, ?, ?, ?)",
+            ("2024/reanalyzed.jpg", "[0,0,10,10]", 0.9, b"\x00" * 8),
+        )
+        face_id = cur.lastrowid
+        cur = await db.execute("INSERT INTO persons (name) VALUES ('철수')")
+        person_id = cur.lastrowid
+        await db.execute(
+            "INSERT INTO face_labels (face_id, person_id) VALUES (?, ?)", (face_id, person_id)
+        )
+        await db.commit()
+
+    await init_ai_db()  # 정상 backfill로 person 태그가 생긴다
+
+    async with aiosqlite.connect(_ai_db_path()) as db:
+        await db.execute("PRAGMA foreign_keys = ON")
+        # 워커의 재분석 시뮬레이션: faces DELETE → FK CASCADE로 face_labels도 삭제
+        await db.execute("DELETE FROM faces WHERE id = ?", (face_id,))
+        await db.commit()
+
+    await init_ai_db()
+
+    async with aiosqlite.connect(_ai_db_path()) as db:
+        async with db.execute(
+            "SELECT COUNT(*) FROM photo_tags WHERE source = 'person'"
+        ) as cur:
+            assert (await cur.fetchone())[0] == 0
 
 
 # ── 인물 CRUD ─────────────────────────────────────────────────────────
@@ -714,6 +795,169 @@ async def test_delete_label_undo(admin_client):
     assert r.status_code == 204
     faces = (await admin_client.get(f"/api/admin/people/{pid}/faces")).json()["faces"]
     assert faces == []
+
+
+# ── photo_tags(source='person') 동기화 ──────────────────────────────
+
+
+async def test_set_face_label_syncs_person_tag(admin_client):
+    face_ids = await _seed_faces(1)
+    pid = (await admin_client.post("/api/admin/people", json={"name": "지우"})).json()["id"]
+
+    await admin_client.post(f"/api/admin/faces/{face_ids[0]}/label", json={"person_id": pid})
+    tags = await _person_tags(pid)
+    assert tags == [{"photo_path": "2024/photo_0.jpg", "tag": "지우", "person_id": pid}]
+
+    # 다른 인물로 재라벨 — 이전 인물 태그는 사라지고 새 인물 태그가 붙는다
+    pid2 = (await admin_client.post("/api/admin/people", json={"name": "철수"})).json()["id"]
+    await admin_client.post(f"/api/admin/faces/{face_ids[0]}/label", json={"person_id": pid2})
+    assert await _person_tags(pid) == []
+    assert await _person_tags(pid2) == [
+        {"photo_path": "2024/photo_0.jpg", "tag": "철수", "person_id": pid2}
+    ]
+
+    # 무시(person_id=null) 처리 시 태그도 제거
+    await admin_client.post(f"/api/admin/faces/{face_ids[0]}/label", json={"person_id": None})
+    assert await _person_tags(pid2) == []
+
+
+async def test_face_label_keeps_tag_while_other_face_same_person_same_photo_remains(admin_client):
+    """같은 사진에 같은 인물의 얼굴이 2개 있을 때, 하나만 라벨 변경/해제해도
+    다른 얼굴이 그 인물을 가리키는 동안은 태그가 유지돼야 한다."""
+    from backend.models.ai_database import _ai_db_path
+
+    async with aiosqlite.connect(_ai_db_path()) as db:
+        ids = []
+        for _ in range(2):
+            cur = await db.execute(
+                "INSERT INTO faces (photo_path, bbox, det_score, embedding) VALUES (?, ?, ?, ?)",
+                ("2024/group.jpg", "[0,0,10,10]", 0.9, b"\x00" * 8),
+            )
+            ids.append(cur.lastrowid)
+        await db.commit()
+    face_a, face_b = ids
+
+    pid = (await admin_client.post("/api/admin/people", json={"name": "지우"})).json()["id"]
+    await admin_client.post(f"/api/admin/faces/{face_a}/label", json={"person_id": pid})
+    await admin_client.post(f"/api/admin/faces/{face_b}/label", json={"person_id": pid})
+    assert await _person_tags(pid) == [
+        {"photo_path": "2024/group.jpg", "tag": "지우", "person_id": pid}
+    ]
+
+    # face_a 라벨만 해제 — face_b가 아직 이 인물을 가리키므로 태그는 유지
+    r = await admin_client.delete(f"/api/admin/faces/{face_a}/label")
+    assert r.status_code == 204
+    assert await _person_tags(pid) == [
+        {"photo_path": "2024/group.jpg", "tag": "지우", "person_id": pid}
+    ]
+
+    # 마지막 남은 face_b도 해제 — 그제서야 태그 제거
+    r = await admin_client.delete(f"/api/admin/faces/{face_b}/label")
+    assert r.status_code == 204
+    assert await _person_tags(pid) == []
+
+
+async def test_batch_label_and_unlabel_sync_person_tags(admin_client):
+    face_ids = await _seed_faces(3)
+    pid = (await admin_client.post("/api/admin/people", json={"name": "지우"})).json()["id"]
+
+    await admin_client.post(
+        "/api/admin/faces/batch-label", json={"face_ids": face_ids, "person_id": pid}
+    )
+    assert {t["photo_path"] for t in await _person_tags(pid)} == {
+        "2024/photo_0.jpg", "2024/photo_1.jpg", "2024/photo_2.jpg",
+    }
+
+    # 재배치: 두 얼굴만 다른 인물로 이동
+    pid2 = (await admin_client.post("/api/admin/people", json={"name": "철수"})).json()["id"]
+    await admin_client.post(
+        "/api/admin/faces/batch-label", json={"face_ids": face_ids[:2], "person_id": pid2}
+    )
+    assert {t["photo_path"] for t in await _person_tags(pid)} == {"2024/photo_2.jpg"}
+    assert {t["photo_path"] for t in await _person_tags(pid2)} == {
+        "2024/photo_0.jpg", "2024/photo_1.jpg",
+    }
+
+    # 일괄 라벨 해제
+    await admin_client.post(
+        "/api/admin/faces/batch-unlabel", json={"face_ids": face_ids}
+    )
+    assert await _person_tags(pid) == []
+    assert await _person_tags(pid2) == []
+
+
+async def test_unlabel_person_photo_syncs_tag(admin_client):
+    face_ids = await _seed_faces(1)
+    pid = (await admin_client.post("/api/admin/people", json={"name": "지우"})).json()["id"]
+    await admin_client.post(f"/api/admin/faces/{face_ids[0]}/label", json={"person_id": pid})
+    assert await _person_tags(pid) != []
+
+    await admin_client.delete(
+        f"/api/admin/people/{pid}/photo-label", params={"path": "2024/photo_0.jpg"}
+    )
+    assert await _person_tags(pid) == []
+
+
+async def test_confirm_matched_by_score_syncs_tag(admin_client):
+    face_ids = await _seed_faces(2)
+    pid = (await admin_client.post("/api/admin/people", json={"name": "지우"})).json()["id"]
+    await _seed_match(face_ids[0], pid, 0.9)
+    await _seed_match(face_ids[1], pid, 0.5)
+
+    await admin_client.post(
+        f"/api/admin/people/{pid}/confirm-matched", json={"min_score": 0.8}
+    )
+    assert await _person_tags(pid) == [
+        {"photo_path": "2024/photo_0.jpg", "tag": "지우", "person_id": pid}
+    ]
+
+
+async def test_rename_person_updates_photo_tags(admin_client):
+    face_ids = await _seed_faces(1)
+    pid = (await admin_client.post("/api/admin/people", json={"name": "지우"})).json()["id"]
+    await admin_client.post(f"/api/admin/faces/{face_ids[0]}/label", json={"person_id": pid})
+
+    await admin_client.put(f"/api/admin/people/{pid}", json={"name": "정지우"})
+    tags = await _person_tags(pid)
+    assert tags == [{"photo_path": "2024/photo_0.jpg", "tag": "정지우", "person_id": pid}]
+
+
+async def test_rename_person_clears_stale_conflicting_tag_from_deleted_person(admin_client):
+    """persons.name의 전역 UNIQUE는 '살아있는' 인물끼리만 보장한다 — 재시작(init_ai_db)
+    전이라 photo_tags에는 이미 삭제된 인물(person_id=9999, persons row 없음)의 동명
+    태그가 같은 사진에 남아있을 수 있다. 이 경우에도 rename이 UNIQUE(photo_path, tag,
+    source) 충돌 없이 성공하고 태그가 새 이름으로 옮겨가야 한다."""
+    from backend.models.ai_database import _ai_db_path
+
+    face_ids = await _seed_faces(1)
+    photo_path = "2024/photo_0.jpg"
+    pid = (await admin_client.post("/api/admin/people", json={"name": "지우"})).json()["id"]
+    await admin_client.post(f"/api/admin/faces/{face_ids[0]}/label", json={"person_id": pid})
+
+    async with aiosqlite.connect(_ai_db_path()) as db:
+        await db.execute(
+            """INSERT INTO photo_tags (photo_path, tag, source, person_id)
+               VALUES (?, '철수', 'person', 9999)""",
+            (photo_path,),
+        )
+        await db.commit()
+
+    r = await admin_client.put(f"/api/admin/people/{pid}", json={"name": "철수"})
+    assert r.status_code == 200
+
+    tags = await _person_tags(pid)
+    assert tags == [{"photo_path": photo_path, "tag": "철수", "person_id": pid}]
+    assert await _person_tags(9999) == []
+
+
+async def test_delete_person_removes_photo_tags(admin_client):
+    face_ids = await _seed_faces(1)
+    pid = (await admin_client.post("/api/admin/people", json={"name": "지우"})).json()["id"]
+    await admin_client.post(f"/api/admin/faces/{face_ids[0]}/label", json={"person_id": pid})
+    assert await _person_tags(pid) != []
+
+    await admin_client.delete(f"/api/admin/people/{pid}")
+    assert await _person_tags(pid) == []
 
 
 # ── 크롭 서빙 ─────────────────────────────────────────────────────────
