@@ -7,6 +7,11 @@
  *   deleteConfirmMsg       → string    삭제 확인 메시지 (기본 '이 사진을 앨범에서 제외하시겠습니까?')
  *   getSelectionState(path)→ { isSelected, selectedCount, totalCount }
  *   onToggleSelect(path)   → void      선택 토글 콜백
+ *   extraAction            → { label, onClick(path) }  범용 추가 버튼(삭제/커버가 아닌
+ *                             동작용, 예: 태그 관리 화면의 "+ 태그 추가"). onClick은
+ *                             자체적으로 로딩/에러 처리를 책임진다(delete/cover처럼
+ *                             공통 disable·에러 alert 래핑을 하지 않음 — 버튼을 다시
+ *                             누를 수 있는 채로 두는 게 태그 추가 같은 반복 동작에 더 맞음).
  */
 import { startedInEdgeZone, resolveSwipeDirection } from './touch-gesture.js';
 
@@ -14,7 +19,7 @@ export function openLightbox(paths, startIdx, options = {}) {
   const localPaths = [...paths];
   let idx = startIdx;
 
-  const hasActions   = options.onSetCover || options.onDelete;
+  const hasActions   = options.onSetCover || options.onDelete || options.extraAction;
   const hasSelection = !!options.getSelectionState;
   const hasFooter    = hasActions || hasSelection;
 
@@ -32,8 +37,9 @@ export function openLightbox(paths, startIdx, options = {}) {
           <span class="lb-sel-count" id="lb-sel-count"></span>
         </div>` : '<div></div>'}
         ${hasActions ? `<div class="lightbox-actions">
-          ${options.onSetCover ? '<button class="lightbox-action-btn" id="lb-btn-cover">커버로 설정</button>' : ''}
-          ${options.onDelete   ? `<button class="lightbox-action-btn lightbox-action-danger" id="lb-btn-delete">${options.deleteLabel || '앨범에서 삭제'}</button>` : ''}
+          ${options.onSetCover  ? '<button class="lightbox-action-btn" id="lb-btn-cover">커버로 설정</button>' : ''}
+          ${options.extraAction ? `<button class="lightbox-action-btn" id="lb-btn-extra">${options.extraAction.label}</button>` : ''}
+          ${options.onDelete    ? `<button class="lightbox-action-btn lightbox-action-danger" id="lb-btn-delete">${options.deleteLabel || '앨범에서 삭제'}</button>` : ''}
         </div>` : ''}
       </div>` : ''}
     </div>
@@ -158,6 +164,7 @@ export function openLightbox(paths, startIdx, options = {}) {
   const nextBtn   = overlay.querySelector('.lightbox-next');
   const coverBtn  = overlay.querySelector('#lb-btn-cover');
   const deleteBtn = overlay.querySelector('#lb-btn-delete');
+  const extraBtn  = overlay.querySelector('#lb-btn-extra');
   const selBtn    = overlay.querySelector('#lb-btn-select');
   const selCountEl = overlay.querySelector('#lb-sel-count');
 
@@ -252,6 +259,10 @@ export function openLightbox(paths, startIdx, options = {}) {
         deleteBtn.disabled = false;
       }
     });
+  }
+
+  if (extraBtn) {
+    extraBtn.addEventListener('click', () => options.extraAction.onClick(localPaths[idx]));
   }
 
   show(startIdx);
