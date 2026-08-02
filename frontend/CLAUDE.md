@@ -25,7 +25,7 @@ assets/js/
     admin-login.js                # 로그인 폼
     admin-albums.js               # 앨범 목록
     admin-album-edit.js           # 앨범 편집 (사진·음악·공유링크)
-    admin-browse.js               # 사진 탐색기 (폴더 트리, 다중 선택)
+    admin-browse.js               # 사진 탐색기 (폴더 트리, 다중 선택). Phase 8: 검색창이 파일명/태그 겸용(플레이스홀더만 변경, 매칭 로직은 백엔드)
     admin-people.js               # Phase 2: 인물 목록·미분류 얼굴 지정·AI 잡 트리거
     admin-person-detail.js        # Phase 2: 인물 상세 (추정 얼굴 교정, 인물 앨범 생성)
     admin-person-photos.js        # Phase 2: 인물 전체 사진 — 확정 얼굴만, 그리드/리스트/날짜별 보기·정렬 (라이트박스·슬라이드쇼 진입)

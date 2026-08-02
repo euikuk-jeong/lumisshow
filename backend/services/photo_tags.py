@@ -42,3 +42,17 @@ async def load_photo_tags(
             for row in await cur.fetchall():
                 result[row["photo_path"]][row["source"]].append(row["tag"])
     return result
+
+
+async def search_tag_matched_paths(query: str, db) -> set[str]:
+    """query를 부분 문자열로 포함하는 tag가 있는 photo_path 집합(source 구분 없이
+    전부) — Admin 사진 탐색 검색(admin_browse.py)이 파일명 검색과 OR로 합쳐 쓴다.
+    source를 안 가리는 이유: 검색은 노출 범위 통제가 필요한 화면(정보 패널)이
+    아니라 Admin 본인만 보는 탐색기이므로, person(확정 인물명)·location까지 전부
+    검색 대상이어야 유용하다."""
+    like = "%" + query.translate(str.maketrans({"\\": "\\\\", "%": "\\%", "_": "\\_"})) + "%"
+    async with db.execute(
+        "SELECT DISTINCT photo_path FROM photo_tags WHERE tag LIKE ? ESCAPE '\\'",
+        (like,),
+    ) as cur:
+        return {r["photo_path"] for r in await cur.fetchall()}

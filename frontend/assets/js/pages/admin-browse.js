@@ -15,7 +15,7 @@ export async function renderAdminBrowse() {
       <h1 class="page-title">사진 탐색${albumId ? ' — 추가할 사진 선택' : ''}</h1>
     </div>
     <div class="browse-toolbar">
-      <input id="search-input" type="text" class="form-input browse-search" placeholder="파일명으로 검색...">
+      <input id="search-input" type="text" class="form-input browse-search" placeholder="파일명/태그로 검색...">
       <button class="btn btn-ghost btn-sm" id="btn-search">검색</button>
       <button class="btn btn-ghost btn-sm" id="btn-clear-search" style="display:none">초기화</button>
       <div class="browse-toolbar-right">
