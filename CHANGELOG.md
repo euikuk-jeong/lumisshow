@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.1] - 2026-08-03
+
+### Fixed
+- **AI 스캔 결과 Discord 알림, 증분 있을 때만 발송**: 매 스캔 완료 시 무조건
+  전송해 증분 없는 날도 pending 누적 총건수가 그대로 오던 소음 문제 수정 —
+  이번 스캔의 신규 처리량이나 경로 변경·삭제 승인 대기 누적치가 직전 발송
+  시점과 달라졌을 때만 발송. 얼굴 인식과 함께 처리되는 GPS 위치·CLIP AI
+  태그·폴더명 태깅 결과도 알림에 함께 노출 (`ai_worker/notify.py`)
+
 ## [2.0.0] - 2026-08-02
 
 AI 태그/위치/장면 인식 관리 기능. 사진 속 사물·장면을 CLIP zero-shot으로 자동
@@ -973,7 +982,8 @@ Phase 2 — AI 얼굴 인식 스마트 앨범. NAS 로컬 AI(InsightFace)로 사
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v2.0.0...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v2.0.1...HEAD
+[2.0.1]: https://github.com/euikuk-jeong/lumisshow/compare/v2.0.0...v2.0.1
 [2.0.0]: https://github.com/euikuk-jeong/lumisshow/compare/v1.16.1...v2.0.0
 [1.16.1]: https://github.com/euikuk-jeong/lumisshow/compare/v1.16.0...v1.16.1
 [1.16.0]: https://github.com/euikuk-jeong/lumisshow/compare/v1.15.4...v1.16.0
