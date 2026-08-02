@@ -55,6 +55,7 @@ routers/
   admin_albums.py    # CRUD /api/admin/albums/*
   admin_links.py     # CRUD /api/admin/albums/{id}/links
   admin_people.py    # Phase 2: 인물 CRUD, 얼굴 라벨/교정, 인물 사진 상세(슬라이드쇼용), 크롭 서빙, AI 잡 트리거, 경로 복구 승인
+  admin_ai_tags.py   # Phase 5: 태그 목록/사진 그리드/삭제/일괄이름변경/수동태그추가 (photo_tags 기반, person·location은 조회만 또는 미노출)
   share.py           # GET|POST /api/share/{token}/*
   media.py           # /thumb/, /media/, /music/{token}?index=N 서빙
 models/
@@ -68,6 +69,7 @@ services/
   settings.py        # settings 테이블 조회 (get_settings, DEFAULTS) — admin_settings/admin_browse/admin_albums/share 공용
   auth.py            # JWT 생성/검증, bcrypt 해시 (ADMIN_PASSWORD_HASH 지원), admin_image_auth (이미지 서빙 인증)
   zip_stream.py      # 스트리밍 ZIP 생성
+  tag_vocab.py       # Phase 5: 수동 태그 추가용 어휘 목록 — ai_worker/tag_vocab.py의 label만 복제(컨테이너 분리로 코드 공유 불가, 어휘 바뀌면 양쪽 동기화 필요)
 ```
 
 ---

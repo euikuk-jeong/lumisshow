@@ -13,6 +13,7 @@ export function renderAdminShell(mainHTML, activePath = '') {
           <a href="/admin" class="${activePath === '/admin' ? 'active' : ''}" data-link>앨범</a>
           <a href="/admin/browse" class="${activePath === '/admin/browse' ? 'active' : ''}" data-link>사진 탐색</a>
           <a href="/admin/people" class="${activePath === '/admin/people' ? 'active' : ''}" data-link>인물</a>
+          <a href="/admin/tags" class="${activePath === '/admin/tags' ? 'active' : ''}" data-link>태그</a>
           <a href="/admin/settings" class="${activePath === '/admin/settings' ? 'active' : ''}" data-link>설정</a>
           <button class="btn btn-ghost btn-sm" id="btn-logout">로그아웃</button>
         </div>
