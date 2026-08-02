@@ -49,7 +49,7 @@ def run_scan(limit: int | None = None) -> dict:
         log.info("--limit %d: 랜덤 샘플 %d장만 처리", limit, len(pending))
 
     summary = {
-        "photos": len(pending), "faces": 0, "errors": 0,
+        "photos": len(pending), "faces": 0, "errors": 0, "located": 0, "tagged": 0,
         "renamed": renamed, "orphaned": orphaned, "elapsed": 0.0,
     }
 
@@ -88,13 +88,19 @@ def run_scan(limit: int | None = None) -> dict:
     start = time.monotonic()
     total_faces = 0
     errors = 0
+    located = 0
+    tagged = 0
     for i, (rel_path, mtime) in enumerate(pending, 1):
-        face_count, ok = analyze_and_store(
+        face_count, ok, was_located, was_tagged = analyze_and_store(
             pipeline, conn, rel_path, mtime, enrollment, threshold, clip_ctx=clip_ctx,
         )
         total_faces += face_count
         if not ok:
             errors += 1
+        if was_located:
+            located += 1
+        if was_tagged:
+            tagged += 1
         if i % 100 == 0:
             elapsed = time.monotonic() - start
             log.info(
@@ -107,6 +113,8 @@ def run_scan(limit: int | None = None) -> dict:
 
     summary["faces"] = total_faces
     summary["errors"] = errors
+    summary["located"] = located
+    summary["tagged"] = tagged
     summary["elapsed"] = elapsed
     return summary
 

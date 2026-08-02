@@ -123,11 +123,12 @@ def save_face_crop(img: Image.Image, face: DetectedFace, face_id: int) -> None:
 
 def _update_location(
     conn: sqlite3.Connection, rel_path: str, gps: tuple[float, float] | None
-) -> None:
+) -> bool:
     """GPS가 있으면 역지오코딩 후 photo_locations를 갱신, 없으면(또는 조회 실패) 기존
     행을 지운다 — 재분석 시 이전엔 있던 GPS가 사라진 경우도 반영해야 하기 때문.
     photo_tags(source='location') 동기화는 항상 geocoder.sync_location_tag가 맡는다.
-    역지오코딩 자체의 실패는 얼굴 분석 성공 여부에 영향을 주지 않는다(best-effort)."""
+    역지오코딩 자체의 실패는 얼굴 분석 성공 여부에 영향을 주지 않는다(best-effort).
+    위치가 실제로 기록됐는지(city/country 확보) 여부를 반환 — 스캔 결과 집계용."""
     if gps is not None:
         try:
             city, country = geocoder.reverse_geocode(*gps)
@@ -149,6 +150,7 @@ def _update_location(
     else:
         conn.execute("DELETE FROM photo_locations WHERE photo_path = ?", (rel_path,))
     geocoder.sync_location_tag(conn, rel_path)
+    return bool(city or country)
 
 
 def _score_and_store_ai_tags(
@@ -176,7 +178,7 @@ def _update_ai_tags(
     rel_path: str,
     img: Image.Image,
     clip_ctx: ClipTaggingContext | None,
-) -> None:
+) -> bool:
     """이미지를 새로 인코딩해 photo_embeddings에 저장하고 photo_tags(source='ai')를
     갱신한다(scan 경로 — 사진 콘텐츠가 바뀌었을 수 있는 재분석 상황이라 캐시를
     신뢰할 수 없어 매번 새로 인코딩). 어휘/threshold만 바뀌고 이미지는 그대로인
@@ -186,14 +188,14 @@ def _update_ai_tags(
     그대로 둔 채 아무 것도 하지 않는다 — best-effort지만, Kiwi/GPS와 달리 CLIP은
     실패 시 다음 스캔에서도 자동으로 다시 채워지지 않는(coverage 방식이 아닌)
     유일한 트랙이라 지우기만 하고 못 채우면 영구 유실이 된다. 조금 낡은 태그가
-    남는 쪽이 안전하다."""
+    남는 쪽이 안전하다. 임베딩을 새로 반영했는지 여부를 반환 — 스캔 결과 집계용."""
     if clip_ctx is None:
-        return
+        return False
     try:
         embed = clip_ctx.tagger.embed_image(img)
     except Exception:
         _logger.exception("%s CLIP 임베딩 실패", rel_path)
-        return
+        return False
 
     conn.execute(
         """INSERT INTO photo_embeddings (photo_path, embedding) VALUES (?, ?)
@@ -202,6 +204,7 @@ def _update_ai_tags(
         (rel_path, matcher.embedding_to_blob(embed)),
     )
     _score_and_store_ai_tags(conn, rel_path, embed, clip_ctx)
+    return True
 
 
 def rescore_ai_tags_from_cache(
@@ -268,12 +271,13 @@ def analyze_and_store(
     enrollment: dict[int, np.ndarray],
     threshold: float,
     clip_ctx: ClipTaggingContext | None = None,
-) -> tuple[int, bool]:
+) -> tuple[int, bool, bool, bool]:
     """사진 1장 분석 → faces/face_matches/photos_analyzed/photo_locations/
     photo_embeddings 기록 (1장 = 1커밋, resumable).
 
     재분석(mtime 변경) 시 기존 얼굴 행은 삭제 후 새로 기록.
-    (검출된 얼굴 수, 성공 여부)를 반환. 실패 시 status='error'로 기록하고 (0, False) 반환.
+    (검출된 얼굴 수, 성공 여부, 위치 반영 여부, AI 태그 반영 여부)를 반환.
+    실패 시 status='error'로 기록하고 (0, False, False, False) 반환.
     """
     abs_path = os.path.join(config.photo_root(), rel_path)
     try:
@@ -288,7 +292,7 @@ def analyze_and_store(
             (rel_path, mtime),
         )
         conn.commit()
-        return 0, False
+        return 0, False, False, False
 
     conn.execute("DELETE FROM faces WHERE photo_path = ?", (rel_path,))
     for face in faces:
@@ -310,8 +314,8 @@ def analyze_and_store(
                 (face_id, result[0], result[1]),
             )
 
-    _update_location(conn, rel_path, gps)
-    _update_ai_tags(conn, rel_path, img, clip_ctx)
+    located = _update_location(conn, rel_path, gps)
+    tagged = _update_ai_tags(conn, rel_path, img, clip_ctx)
 
     conn.execute(
         """INSERT INTO photos_analyzed (path, mtime, face_count, status)
@@ -322,4 +326,4 @@ def analyze_and_store(
         (rel_path, mtime, len(faces)),
     )
     conn.commit()
-    return len(faces), True
+    return len(faces), True, located, tagged

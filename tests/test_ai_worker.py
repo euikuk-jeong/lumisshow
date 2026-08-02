@@ -495,11 +495,11 @@ def test_analyze_and_store_persists_location_from_stub_pipeline(conn, monkeypatc
         threshold=0.5,
     )
 
-    face_count, ok = pipeline.analyze_and_store(
+    face_count, ok, located, tagged = pipeline.analyze_and_store(
         _StubPipeline(), conn, "2024/a.jpg", 123.0, enrollment={}, threshold=0.45,
         clip_ctx=clip_ctx,
     )
-    assert (face_count, ok) == (0, True)
+    assert (face_count, ok, located, tagged) == (0, True, True, True)
 
     row = conn.execute(
         "SELECT status, face_count FROM photos_analyzed WHERE path = '2024/a.jpg'"
@@ -570,11 +570,11 @@ def test_analyze_and_store_keeps_stale_ai_tags_on_embed_failure(conn):
     clip_ctx = tagger.ClipTaggingContext(
         tagger=_BoomTagger(), text_embeds=np.zeros((0, 512), dtype=np.float32), threshold=0.24,
     )
-    face_count, ok = pipeline.analyze_and_store(
+    face_count, ok, located, tagged = pipeline.analyze_and_store(
         _StubPipeline(), conn, "2024/a.jpg", 123.0, enrollment={}, threshold=0.45,
         clip_ctx=clip_ctx,
     )
-    assert (face_count, ok) == (0, True)
+    assert (face_count, ok, located, tagged) == (0, True, False, False)
     assert conn.execute(
         "SELECT COUNT(*) FROM photo_embeddings WHERE photo_path = '2024/a.jpg'"
     ).fetchone()[0] == 0
@@ -1249,7 +1249,7 @@ def test_run_scan_empty_pending_skips_pipeline(conn):
 
     summary = main.run_scan()
     assert summary == {
-        "photos": 0, "faces": 0, "errors": 0,
+        "photos": 0, "faces": 0, "errors": 0, "located": 0, "tagged": 0,
         "renamed": 0, "orphaned": 0, "elapsed": 0.0, "path_tagged": 0,
     }
 
@@ -1339,9 +1339,19 @@ def test_notify_tag_backfill_result_formats_summary(monkeypatch):
     assert "http://example.test:9999/admin/people" in sent["content"]
 
 
-def test_notify_scan_result_includes_admin_people_link(monkeypatch):
+def _scan_summary(**overrides) -> dict:
+    base = {
+        "photos": 3, "faces": 2, "errors": 0, "located": 1, "tagged": 2,
+        "path_tagged": 0, "renamed": 1, "orphaned": 0, "elapsed": 1.5,
+    }
+    base.update(overrides)
+    return base
+
+
+def test_notify_scan_result_includes_admin_people_link(tmp_path, monkeypatch):
     from ai_worker import notify
 
+    monkeypatch.setenv("DATA_DIR", str(tmp_path / "data"))
     monkeypatch.setenv("AI_DISCORD_WEBHOOK_URL", "https://example.invalid/webhook")
     monkeypatch.setenv("BASE_URL", "http://example.test:9999")
 
@@ -1353,8 +1363,49 @@ def test_notify_scan_result_includes_admin_people_link(monkeypatch):
 
     monkeypatch.setattr(notify.urllib.request, "urlopen", fake_urlopen)
 
-    notify.notify_scan_result(
-        {"photos": 3, "faces": 2, "errors": 0, "renamed": 1, "orphaned": 0, "elapsed": 1.5}
-    )
+    notify.notify_scan_result(_scan_summary())
 
     assert "http://example.test:9999/admin/people" in sent["content"]
+    assert "위치 1건" in sent["content"]
+    assert "태그 2건" in sent["content"]
+
+
+def test_notify_scan_result_skips_when_no_increment(tmp_path, monkeypatch):
+    """이번 스캔이 아무것도 처리하지 않았고(photos=0, path_tagged=0) 경로 변경·
+    삭제 승인 대기 누적치도 직전 발송값과 같으면 webhook을 보내지 않아야 한다
+    (2026-08-02 사용자 피드백: 증분 없는 날도 매번 알림이 와서 소음이 됨)."""
+    from ai_worker import notify
+
+    monkeypatch.setenv("DATA_DIR", str(tmp_path / "data"))
+    monkeypatch.setenv("AI_DISCORD_WEBHOOK_URL", "https://example.invalid/webhook")
+
+    calls = []
+    monkeypatch.setattr(notify.urllib.request, "urlopen", lambda *a, **k: calls.append(1))
+
+    # 최초 발송 — 상태 파일이 없으므로(직전 발송값 없음) 무조건 보낸다.
+    notify.notify_scan_result(
+        _scan_summary(photos=0, faces=0, located=0, tagged=0, path_tagged=0,
+                      renamed=1, orphaned=0)
+    )
+    assert len(calls) == 1
+
+    # 증분 없이 재실행 — renamed/orphaned도 직전 발송값과 동일 → 스킵.
+    notify.notify_scan_result(
+        _scan_summary(photos=0, faces=0, located=0, tagged=0, path_tagged=0,
+                      renamed=1, orphaned=0)
+    )
+    assert len(calls) == 1
+
+    # renamed pending 누적치가 늘어남 → 다시 보낸다.
+    notify.notify_scan_result(
+        _scan_summary(photos=0, faces=0, located=0, tagged=0, path_tagged=0,
+                      renamed=2, orphaned=0)
+    )
+    assert len(calls) == 2
+
+    # 처리한 사진이 있으면(photos>0) pending 변화가 없어도 보낸다.
+    notify.notify_scan_result(
+        _scan_summary(photos=5, faces=1, located=0, tagged=0, path_tagged=0,
+                      renamed=2, orphaned=0)
+    )
+    assert len(calls) == 3
