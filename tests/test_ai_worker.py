@@ -603,6 +603,255 @@ def test_analyze_and_store_keeps_stale_ai_tags_when_clip_ctx_none(conn):
     ).fetchone()["tag"] == "캠핑"
 
 
+# ── 카테고리 on/off (얼굴/위치/폴더명/사물) ──────────────────────────
+
+
+def _make_jpeg(photo_root: str, rel_path: str) -> None:
+    from PIL import Image
+
+    abs_path = os.path.join(photo_root, rel_path)
+    os.makedirs(os.path.dirname(abs_path), exist_ok=True)
+    Image.new("RGB", (10, 10)).save(abs_path)
+
+
+def test_analyze_and_store_face_disabled_preserves_existing_faces(conn):
+    """pipeline=None(얼굴 인식 꺼짐)이면 얼굴 검출을 건너뛰고 기존 faces/face_matches를
+    건드리지 않는다(DELETE도 안 함) — 끄면 새로 생성만 안 할 뿐 기존 데이터는 보존.
+
+    반환하는 얼굴 수(face_count)는 "이번 스캔에서 새로 검출한 수"를 뜻하므로 항상 0 —
+    기존에 남아있던 얼굴 수를 여기 섞으면 재분석할 때마다 실제 검출량과 무관하게
+    summary["faces"]/Discord 알림 숫자가 부풀어 오른다. photos_analyzed.face_count는
+    별개로 현재 남아있는 행 수(1)를 그대로 기록해야 한다."""
+    _make_jpeg(os.getenv("PHOTO_ROOT"), "2024/a.jpg")
+    face_id = _insert_face(conn, "2024/a.jpg", _unit_vec(0))
+    conn.commit()
+
+    face_count, ok, located, tagged = pipeline.analyze_and_store(
+        None, conn, "2024/a.jpg", 123.0, enrollment={}, threshold=0.45,
+    )
+    assert (face_count, ok, located, tagged) == (0, True, False, False)
+    assert conn.execute(
+        "SELECT COUNT(*) FROM faces WHERE photo_path = '2024/a.jpg'"
+    ).fetchone()[0] == 1
+    assert conn.execute(
+        "SELECT id FROM faces WHERE photo_path = '2024/a.jpg'"
+    ).fetchone()["id"] == face_id
+    assert conn.execute(
+        "SELECT face_count FROM photos_analyzed WHERE path = '2024/a.jpg'"
+    ).fetchone()["face_count"] == 1
+
+
+def test_analyze_and_store_face_disabled_skips_new_detection(conn):
+    """얼굴 인식이 꺼진 상태로 처음 분석되는 사진은 얼굴 0개로 기록되고
+    photos_analyzed는 정상적으로 'done'으로 남아야 한다(재스캔 무한 루프 방지)."""
+    _make_jpeg(os.getenv("PHOTO_ROOT"), "2024/b.jpg")
+
+    face_count, ok, located, tagged = pipeline.analyze_and_store(
+        None, conn, "2024/b.jpg", 123.0, enrollment={}, threshold=0.45,
+    )
+    assert (face_count, ok, located, tagged) == (0, True, False, False)
+    assert conn.execute(
+        "SELECT COUNT(*) FROM faces WHERE photo_path = '2024/b.jpg'"
+    ).fetchone()[0] == 0
+    row = conn.execute(
+        "SELECT status, face_count FROM photos_analyzed WHERE path = '2024/b.jpg'"
+    ).fetchone()
+    assert (row["status"], row["face_count"]) == ("done", 0)
+
+
+def test_analyze_and_store_location_disabled_preserves_existing_location(conn, monkeypatch):
+    """location_enabled=False면 GPS가 있어도 역지오코딩을 호출하지 않고 기존
+    photo_locations를 보존해야 한다."""
+    from PIL import Image
+
+    conn.execute(
+        "INSERT INTO photo_locations (photo_path, city, country) VALUES "
+        "('2024/a.jpg', 'Seoul', '대한민국')"
+    )
+    conn.commit()
+
+    class _StubPipeline:
+        def analyze(self, path):
+            return [], Image.new("RGB", (1, 1)), (37.5665, 126.978)
+
+    def _boom(*a, **k):
+        raise AssertionError("location_enabled=False면 역지오코딩을 호출하면 안 됨")
+
+    monkeypatch.setattr(geocoder, "reverse_geocode", _boom)
+
+    face_count, ok, located, tagged = pipeline.analyze_and_store(
+        _StubPipeline(), conn, "2024/a.jpg", 123.0, enrollment={}, threshold=0.45,
+        location_enabled=False,
+    )
+    assert located is False
+    loc = conn.execute(
+        "SELECT city, country FROM photo_locations WHERE photo_path = '2024/a.jpg'"
+    ).fetchone()
+    assert (loc["city"], loc["country"]) == ("Seoul", "대한민국")
+
+
+def test_category_flags_default_all_enabled(conn):
+    from ai_worker import main
+
+    assert main.category_flags(conn) == {
+        "face_enabled": True, "location_enabled": True,
+        "path_enabled": True, "ai_tag_enabled": True,
+    }
+
+
+def test_category_flags_reads_off_values(conn):
+    from ai_worker import main
+
+    conn.execute("INSERT INTO ai_settings (key, value) VALUES ('face_enabled', '0')")
+    conn.execute("INSERT INTO ai_settings (key, value) VALUES ('ai_tag_enabled', '0')")
+    conn.commit()
+
+    assert main.category_flags(conn) == {
+        "face_enabled": False, "location_enabled": True,
+        "path_enabled": True, "ai_tag_enabled": False,
+    }
+
+
+def test_run_scan_respects_disabled_categories(conn, monkeypatch):
+    """face/ai_tag/path가 꺼지면 각각의 무거운 모델 로딩·처리를 아예 건너뛰고,
+    켜져 있는 위치(location)만 정상 반영돼야 한다. 대상 사진에 얼굴 인식이 켜져
+    있던 과거에 저장된 얼굴이 이미 있는 경우(재분석 시나리오)도 함께 검증한다 —
+    summary["faces"]가 "이번 스캔에서 새로 검출한 수"가 아니라 기존에 남아있던
+    수까지 합산해버리면, 재스캔할 때마다 실제 검출량과 무관하게 숫자가 부풀어
+    오르는 회귀가 생긴다."""
+    from ai_worker import main
+
+    conn.execute("INSERT INTO ai_settings (key, value) VALUES ('face_enabled', '0')")
+    conn.execute("INSERT INTO ai_settings (key, value) VALUES ('ai_tag_enabled', '0')")
+    conn.execute("INSERT INTO ai_settings (key, value) VALUES ('path_enabled', '0')")
+    conn.commit()
+
+    class _BoomFacePipeline:
+        def __init__(self):
+            raise AssertionError("face_enabled=0이면 FacePipeline을 로딩하면 안 됨")
+
+    monkeypatch.setattr(pipeline, "FacePipeline", _BoomFacePipeline)
+
+    class _BoomTagger:
+        def __init__(self):
+            raise AssertionError("ai_tag_enabled=0이면 ClipTagger를 로딩하면 안 됨")
+
+    monkeypatch.setattr(tagger, "ClipTagger", _BoomTagger)
+
+    def _boom_path_tag(conn):
+        raise AssertionError("path_enabled=0이면 폴더명 태깅을 호출하면 안 됨")
+
+    monkeypatch.setattr(scanner, "tag_paths_from_folder_names", _boom_path_tag)
+    monkeypatch.setattr(pipeline, "_extract_gps", lambda raw: (37.5665, 126.978))
+    monkeypatch.setattr(geocoder, "reverse_geocode", lambda lat, lon: ("Seoul", "대한민국"))
+
+    _make_jpeg(os.getenv("PHOTO_ROOT"), "2024/a.jpg")
+    _insert_face(conn, "2024/a.jpg", _unit_vec(0))  # 과거(얼굴 인식이 켜져 있을 때) 저장된 얼굴
+    conn.commit()
+
+    summary = main.run_scan()
+
+    assert summary["path_tagged"] == 0
+    assert summary["faces"] == 0  # 기존 얼굴이 있어도 "새로 검출"한 게 아니므로 0
+    assert summary["tagged"] == 0
+    assert summary["located"] == 1
+    assert conn.execute(
+        "SELECT COUNT(*) FROM faces WHERE photo_path = '2024/a.jpg'"
+    ).fetchone()[0] == 1  # 기존 얼굴은 삭제되지 않고 그대로 보존
+    loc = conn.execute(
+        "SELECT city FROM photo_locations WHERE photo_path = '2024/a.jpg'"
+    ).fetchone()
+    assert loc["city"] == "Seoul"
+
+
+def test_run_tag_backfill_respects_ai_tag_disabled(conn, monkeypatch):
+    """ai_tag_enabled=0이면 CLIP 모델을 로딩하지 않고, 이미 있는 photo_embeddings도
+    재채점하지 않아야 한다(끄면 새로 생성 안 함 원칙은 소급 처리에도 동일 적용)."""
+    from ai_worker import main
+
+    conn.execute("INSERT INTO ai_settings (key, value) VALUES ('ai_tag_enabled', '0')")
+    conn.execute(
+        "INSERT INTO photos_analyzed (path, mtime, status) VALUES ('2024/a.jpg', 1.0, 'done')"
+    )
+    conn.execute(
+        "INSERT INTO photo_embeddings (photo_path, embedding) VALUES ('2024/a.jpg', ?)",
+        (matcher.embedding_to_blob(_unit_vec(0)),),
+    )
+    conn.commit()
+
+    class _BoomTagger:
+        def __init__(self):
+            raise AssertionError("ai_tag_enabled=0이면 ClipTagger를 로딩하면 안 됨")
+
+    monkeypatch.setattr(tagger, "ClipTagger", _BoomTagger)
+    monkeypatch.setattr(scanner, "tag_paths_from_folder_names", lambda conn: 0)
+
+    summary = main.run_tag_backfill()
+    assert summary["embedded"] == 0
+    assert summary["rescored"] == 0
+
+
+def test_run_tag_backfill_respects_location_disabled(conn, monkeypatch):
+    """location_enabled=0이면 사물(AI 태그)은 정상 반영되지만 위치는 채우지 않는다."""
+    from ai_worker import main
+
+    conn.execute("INSERT INTO ai_settings (key, value) VALUES ('location_enabled', '0')")
+    conn.execute(
+        "INSERT INTO photos_analyzed (path, mtime, status) VALUES ('2024/a.jpg', 1.0, 'done')"
+    )
+    conn.commit()
+
+    monkeypatch.setattr(tag_vocab, "TAG_VOCAB", [{"prompt": "a photo of camping", "label": "캠핑"}])
+
+    class _FakeClipTagger:
+        def embed_texts(self, prompts):
+            return np.array([[1.0]], dtype=np.float32)
+
+        def embed_image(self, img):
+            return np.array([1.0], dtype=np.float32)
+
+    monkeypatch.setattr(tagger, "ClipTagger", _FakeClipTagger)
+    monkeypatch.setattr(scanner, "tag_paths_from_folder_names", lambda conn: 0)
+    monkeypatch.setattr(pipeline, "_extract_gps", lambda raw: (37.5665, 126.978))
+    monkeypatch.setattr(geocoder, "reverse_geocode", lambda lat, lon: ("Seoul", "대한민국"))
+
+    _make_jpeg(os.getenv("PHOTO_ROOT"), "2024/a.jpg")
+
+    summary = main.run_tag_backfill()
+    assert summary["located"] == 0
+    assert summary["embedded"] == 1
+    assert conn.execute(
+        "SELECT COUNT(*) FROM photo_locations WHERE photo_path = '2024/a.jpg'"
+    ).fetchone()[0] == 0
+
+
+def test_run_tag_backfill_skips_entirely_when_ai_tag_and_location_disabled(conn, monkeypatch):
+    """사물·위치가 둘 다 꺼지면 photos_analyzed 대상 조회·CLIP 로딩 없이 즉시 반환한다
+    (폴더명 태깅만 켜져 있으면 그 결과만 반영)."""
+    from ai_worker import main
+
+    conn.execute("INSERT INTO ai_settings (key, value) VALUES ('ai_tag_enabled', '0')")
+    conn.execute("INSERT INTO ai_settings (key, value) VALUES ('location_enabled', '0')")
+    conn.execute(
+        "INSERT INTO photos_analyzed (path, mtime, status) VALUES ('2024/a.jpg', 1.0, 'done')"
+    )
+    conn.commit()
+
+    monkeypatch.setattr(scanner, "tag_paths_from_folder_names", lambda conn: 3)
+
+    class _BoomTagger:
+        def __init__(self):
+            raise AssertionError("사물 인식이 꺼졌으면 CLIP을 로딩하면 안 됨")
+
+    monkeypatch.setattr(tagger, "ClipTagger", _BoomTagger)
+
+    summary = main.run_tag_backfill()
+    assert summary == {
+        "photos": 0, "embedded": 0, "rescored": 0, "located": 0,
+        "errors": 0, "path_tagged": 3, "elapsed": 0.0,
+    }
+
+
 # ── CLIP 사물/장면 태깅 (tag_vocab / tagger) ─────────────────────────
 
 

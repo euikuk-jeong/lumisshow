@@ -318,6 +318,12 @@ class JobCreate(BaseModel):
 class AiSettingsUpdate(BaseModel):
     scan_hour: Optional[int] = Field(default=None, ge=0, le=23)  # 야간 자동 스캔 시각 (로컬 TZ)
     tag_threshold: Optional[float] = Field(default=None, ge=0.0, le=1.0)  # CLIP 태그 부여 임계값
+    # 카테고리별 on/off (기본 true) — 끄면 워커가 다음 스캔부터 해당 카테고리를
+    # 새로 생성하지 않음. 기존 데이터는 삭제하지 않는다.
+    face_enabled: Optional[bool] = None
+    location_enabled: Optional[bool] = None
+    path_enabled: Optional[bool] = None
+    ai_tag_enabled: Optional[bool] = None
 
 
 # ── 태그 관리 (Phase 5) ───────────────────────────────────────────────────

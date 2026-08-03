@@ -136,6 +136,48 @@ function renderSettingsForm(settings) {
         </div>
       </div>
 
+      <!-- AI 인식 카테고리 on/off -->
+      <div class="settings-section card" id="ai-category-section" style="display:none">
+        <div class="settings-section-header">
+          <p class="section-title">AI 인식 카테고리</p>
+          <p class="text-muted text-sm">끄면 다음 스캔부터 해당 카테고리를 새로 생성하지 않음(기존 데이터는 삭제되지 않고 그대로 조회 가능) · 위치·사물은 다시 켠 뒤 "태그 관리" 화면의 AI 태그 재계산으로 밀린 부분을 소급 반영할 수 있음 · 얼굴 인식은 재계산 기능이 없어 꺼져 있는 동안 스캔된 사진은 다시 켜도 자동으로 소급 인식되지 않음(해당 사진이 재스캔 대상이 될 때만 인식됨)</p>
+        </div>
+        <div class="settings-group">
+          <div class="settings-item">
+            <label class="settings-label">얼굴 인식</label>
+            <select id="s-ai-face-enabled" class="form-input settings-select">
+              <option value="true">켬</option>
+              <option value="false">끔</option>
+            </select>
+          </div>
+          <div class="settings-item">
+            <label class="settings-label">장소(위치) 인식</label>
+            <select id="s-ai-location-enabled" class="form-input settings-select">
+              <option value="true">켬</option>
+              <option value="false">끔</option>
+            </select>
+          </div>
+          <div class="settings-item">
+            <label class="settings-label">폴더명 태깅</label>
+            <select id="s-ai-path-enabled" class="form-input settings-select">
+              <option value="true">켬</option>
+              <option value="false">끔</option>
+            </select>
+          </div>
+          <div class="settings-item">
+            <label class="settings-label">사물 인식(AI 태그)</label>
+            <select id="s-ai-tag-enabled" class="form-input settings-select">
+              <option value="true">켬</option>
+              <option value="false">끔</option>
+            </select>
+          </div>
+        </div>
+        <div class="settings-actions">
+          <button class="btn btn-primary btn-sm" id="btn-save-ai-category">저장</button>
+          <span id="ai-category-ok" class="text-success text-sm" style="display:none">저장됨 ✓</span>
+        </div>
+      </div>
+
       <!-- AI 야간 스캔 -->
       <div class="settings-section card" id="ai-scan-section" style="display:none">
         <div class="settings-section-header">
@@ -256,8 +298,10 @@ function renderSettingsForm(settings) {
   initAiScanSection();
 }
 
-/* ── AI 야간 스캔 시각 (+ AI 태그 인식·XMP 내보내기 섹션도 같은 ai.db 가용성 조건으로 노출) ── */
+/* ── AI 야간 스캔 시각 (+ AI 인식 카테고리·AI 태그 인식·XMP 내보내기 섹션도
+   같은 ai.db 가용성 조건으로 노출) ── */
 async function initAiScanSection() {
+  const categorySection = document.getElementById('ai-category-section');
   const section = document.getElementById('ai-scan-section');
   const tagSection = document.getElementById('ai-tag-section');
   const xmpSection = document.getElementById('xmp-export-section');
@@ -265,15 +309,44 @@ async function initAiScanSection() {
   try {
     current = await api.get('/api/admin/ai/settings');
   } catch {
-    return; // ai.db 미구성 등 — 세 섹션 모두 숨김 유지
+    return; // ai.db 미구성 등 — 네 섹션 모두 숨김 유지
   }
   const select = document.getElementById('s-ai-scan-hour');
   if (current.scan_hour != null) select.value = String(current.scan_hour);
   const thresholdInput = document.getElementById('s-ai-tag-threshold');
   if (current.tag_threshold != null) thresholdInput.value = String(current.tag_threshold);
+
+  const CATEGORY_FIELDS = [
+    ['s-ai-face-enabled', 'face_enabled'],
+    ['s-ai-location-enabled', 'location_enabled'],
+    ['s-ai-path-enabled', 'path_enabled'],
+    ['s-ai-tag-enabled', 'ai_tag_enabled'],
+  ];
+  for (const [id, key] of CATEGORY_FIELDS) {
+    document.getElementById(id).value = String(current[key] !== false);
+  }
+
+  categorySection.style.display = '';
   section.style.display = '';
   tagSection.style.display = '';
   xmpSection.style.display = '';
+
+  document.getElementById('btn-save-ai-category').addEventListener('click', async () => {
+    const btn = document.getElementById('btn-save-ai-category');
+    btn.disabled = true;
+    try {
+      const body = {};
+      for (const [id, key] of CATEGORY_FIELDS) {
+        body[key] = document.getElementById(id).value === 'true';
+      }
+      await api.patch('/api/admin/ai/settings', body);
+      showOk('ai-category-ok');
+    } catch (e) {
+      alert(e.message);
+    } finally {
+      btn.disabled = false;
+    }
+  });
 
   document.getElementById('btn-save-ai-scan').addEventListener('click', async () => {
     const btn = document.getElementById('btn-save-ai-scan');

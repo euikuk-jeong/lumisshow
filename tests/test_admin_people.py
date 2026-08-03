@@ -1197,25 +1197,32 @@ async def test_ignored_candidates_list_filters_and_orders(admin_client, client):
 
 # ── AI 설정 (야간 스캔 시각) ──────────────────────────────────────────
 
+# 카테고리 플래그는 키가 없으면 기본 true(이 기능 도입 이전과 동일 동작 유지).
+_DEFAULT_CATEGORY_FLAGS = {
+    "face_enabled": True, "location_enabled": True,
+    "path_enabled": True, "ai_tag_enabled": True,
+}
+
 
 async def test_ai_settings_get_and_update(admin_client, client):
-    # 미설정 시 null
+    # 미설정 시 null (카테고리 플래그는 기본 true)
     r = await admin_client.get("/api/admin/ai/settings")
     assert r.status_code == 200
-    assert r.json() == {"scan_hour": None, "tag_threshold": None}
+    assert r.json() == {"scan_hour": None, "tag_threshold": None, **_DEFAULT_CATEGORY_FLAGS}
 
     # 설정 저장 → 조회 반영
     r = await admin_client.patch("/api/admin/ai/settings", json={"scan_hour": 4})
     assert r.status_code == 200
-    assert r.json() == {"scan_hour": 4, "tag_threshold": None}
+    assert r.json() == {"scan_hour": 4, "tag_threshold": None, **_DEFAULT_CATEGORY_FLAGS}
     r = await admin_client.get("/api/admin/ai/settings")
-    assert r.json() == {"scan_hour": 4, "tag_threshold": None}
+    assert r.json() == {"scan_hour": 4, "tag_threshold": None, **_DEFAULT_CATEGORY_FLAGS}
 
     # 덮어쓰기
     await admin_client.patch("/api/admin/ai/settings", json={"scan_hour": 23})
     assert (await admin_client.get("/api/admin/ai/settings")).json() == {
         "scan_hour": 23,
         "tag_threshold": None,
+        **_DEFAULT_CATEGORY_FLAGS,
     }
 
     # 범위 밖 422
@@ -1236,12 +1243,12 @@ async def test_ai_settings_tag_threshold(admin_client):
     # 미설정 시 null, scan_hour와 독립적으로 갱신
     r = await admin_client.patch("/api/admin/ai/settings", json={"tag_threshold": 0.3})
     assert r.status_code == 200
-    assert r.json() == {"scan_hour": None, "tag_threshold": 0.3}
+    assert r.json() == {"scan_hour": None, "tag_threshold": 0.3, **_DEFAULT_CATEGORY_FLAGS}
 
     # scan_hour를 건드리지 않고 tag_threshold만 갱신
     await admin_client.patch("/api/admin/ai/settings", json={"scan_hour": 5})
     r = await admin_client.patch("/api/admin/ai/settings", json={"tag_threshold": 0.18})
-    assert r.json() == {"scan_hour": 5, "tag_threshold": 0.18}
+    assert r.json() == {"scan_hour": 5, "tag_threshold": 0.18, **_DEFAULT_CATEGORY_FLAGS}
 
     # 범위 밖 422
     r = await admin_client.patch("/api/admin/ai/settings", json={"tag_threshold": 1.5})
@@ -1252,4 +1259,35 @@ async def test_ai_settings_tag_threshold(admin_client):
     # body가 빈 객체면 값 변경 없이 현재 상태만 반환
     r = await admin_client.patch("/api/admin/ai/settings", json={})
     assert r.status_code == 200
-    assert r.json() == {"scan_hour": 5, "tag_threshold": 0.18}
+    assert r.json() == {"scan_hour": 5, "tag_threshold": 0.18, **_DEFAULT_CATEGORY_FLAGS}
+
+
+async def test_ai_settings_category_flags(admin_client):
+    # 기본값 — 전부 true
+    r = await admin_client.get("/api/admin/ai/settings")
+    assert r.json() == {"scan_hour": None, "tag_threshold": None, **_DEFAULT_CATEGORY_FLAGS}
+
+    # 하나만 끄기 — 나머지 키는 그대로 유지
+    r = await admin_client.patch("/api/admin/ai/settings", json={"face_enabled": False})
+    assert r.status_code == 200
+    assert r.json() == {
+        "scan_hour": None, "tag_threshold": None,
+        "face_enabled": False, "location_enabled": True,
+        "path_enabled": True, "ai_tag_enabled": True,
+    }
+
+    # 여러 개 동시에 끄기
+    r = await admin_client.patch(
+        "/api/admin/ai/settings",
+        json={"location_enabled": False, "path_enabled": False, "ai_tag_enabled": False},
+    )
+    assert r.json() == {
+        "scan_hour": None, "tag_threshold": None,
+        "face_enabled": False, "location_enabled": False,
+        "path_enabled": False, "ai_tag_enabled": False,
+    }
+
+    # 다시 켜기
+    r = await admin_client.patch("/api/admin/ai/settings", json={"face_enabled": True})
+    assert r.json()["face_enabled"] is True
+    assert r.json()["location_enabled"] is False  # 다른 플래그는 안 건드림
