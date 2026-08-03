@@ -314,19 +314,25 @@ def test_tag_paths_from_folder_names_covers_untagged_photos_and_caches_per_folde
     assert fake.calls == 1
 
 
-def test_tag_paths_from_folder_names_retries_zero_noun_folders_every_scan(conn, monkeypatch):
-    """순수 영문/숫자 폴더처럼 명사가 하나도 안 나오면 태그 행이 생기지 않아 커버리지
-    쿼리가 매 스캔 다시 대상으로 잡는다 — 의도된 동작(비용이 낮아 최적화 보류)."""
+def test_tag_paths_from_folder_names_marks_zero_noun_folders_done_without_retry(conn, monkeypatch):
+    """순수 영문/숫자 폴더처럼 명사가 하나도 안 나오면 태그 행은 안 생기지만
+    path_tag_done은 시도 여부만 보고 1로 표시되어 다음 스캔부터 재시도하지 않는다
+    (2026-08-04: photo_tags 행 존재 여부 기반 커버리지에서 path_tag_done 플래그
+    기반으로 전환 — 이전에는 이런 사진이 매 스캔 재시도되며 path_tagged 건수를
+    끝없이 부풀렸다)."""
     fake = _CountingKiwi({"IMG_2024": []})
     monkeypatch.setattr(scanner, "_get_kiwi", lambda: fake)
     conn.execute("INSERT INTO photos_analyzed (path, mtime) VALUES ('2024/IMG_2024/a.jpg', 0)")
     conn.commit()
 
-    assert scanner.tag_paths_from_folder_names(conn) == 1
+    assert scanner.tag_paths_from_folder_names(conn) == 0
     assert conn.execute("SELECT COUNT(*) FROM photo_tags").fetchone()[0] == 0
+    assert conn.execute(
+        "SELECT path_tag_done FROM photos_analyzed WHERE path = '2024/IMG_2024/a.jpg'"
+    ).fetchone()[0] == 1
 
-    assert scanner.tag_paths_from_folder_names(conn) == 1
-    assert fake.calls == 2
+    assert scanner.tag_paths_from_folder_names(conn) == 0
+    assert fake.calls == 1  # 재시도 없음 — Kiwi 다시 호출되지 않아야 함
 
 
 def test_tag_paths_from_folder_names_no_pending_returns_zero(conn):

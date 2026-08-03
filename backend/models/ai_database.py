@@ -35,11 +35,12 @@ _AI_DDL = """
 PRAGMA foreign_keys = ON;
 
 CREATE TABLE IF NOT EXISTS photos_analyzed (
-    path        TEXT PRIMARY KEY,
-    mtime       REAL NOT NULL,
-    analyzed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    face_count  INTEGER NOT NULL DEFAULT 0,
-    status      TEXT NOT NULL DEFAULT 'done'
+    path          TEXT PRIMARY KEY,
+    mtime         REAL NOT NULL,
+    analyzed_at   DATETIME DEFAULT CURRENT_TIMESTAMP,
+    face_count    INTEGER NOT NULL DEFAULT 0,
+    status        TEXT NOT NULL DEFAULT 'done',
+    path_tag_done INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS faces (
@@ -202,6 +203,14 @@ async def init_ai_db() -> None:
         # 기존 DB의 persons 테이블에는 cover_face_id 컬럼이 없을 수 있음
         try:
             await db.execute("ALTER TABLE persons ADD COLUMN cover_face_id INTEGER")
+            await db.commit()
+        except sqlite3.OperationalError:
+            pass  # 컬럼이 이미 존재함
+        # 기존 DB의 photos_analyzed 테이블에는 path_tag_done 컬럼이 없을 수 있음
+        try:
+            await db.execute(
+                "ALTER TABLE photos_analyzed ADD COLUMN path_tag_done INTEGER NOT NULL DEFAULT 0"
+            )
             await db.commit()
         except sqlite3.OperationalError:
             pass  # 컬럼이 이미 존재함

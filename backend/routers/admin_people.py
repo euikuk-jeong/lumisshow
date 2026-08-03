@@ -264,12 +264,12 @@ async def _apply_path_repair(db, photo_root: str, old_path: str, new_path: str) 
         new_mtime = None
     if new_mtime is not None:
         await db.execute(
-            "UPDATE photos_analyzed SET path = ?, mtime = ? WHERE path = ?",
+            "UPDATE photos_analyzed SET path = ?, mtime = ?, path_tag_done = 0 WHERE path = ?",
             (new_path, new_mtime, old_path),
         )
     else:
         await db.execute(
-            "UPDATE photos_analyzed SET path = ? WHERE path = ?",
+            "UPDATE photos_analyzed SET path = ?, path_tag_done = 0 WHERE path = ?",
             (new_path, old_path),
         )
     await db.execute(
@@ -279,9 +279,8 @@ async def _apply_path_repair(db, photo_root: str, old_path: str, new_path: str) 
     # photo_tags: 사진 콘텐츠 자체 정보(location/ai/manual/person)는 경로가 바뀌어도
     # 유효하므로 photo_path만 갱신한다. source='path'(폴더명 유래)는 폴더가 바뀐
     # 순간 무효이므로 지우기만 한다 — Kiwi 재계산은 ai_worker 전용 의존성이라
-    # backend에서 실행할 수 없다. new_path는 다음 워커 스캔의
-    # scanner.tag_paths_from_folder_names()가 커버리지 방식으로 자연히 채운다
-    # (path 태그가 없는 사진만 대상으로 삼으므로).
+    # backend에서 실행할 수 없다. 위에서 path_tag_done을 0으로 되돌렸으므로 new_path는
+    # 다음 워커 스캔의 scanner.tag_paths_from_folder_names()가 커버리지 방식으로 자연히 채운다.
     await db.execute(
         "UPDATE photo_tags SET photo_path = ? WHERE photo_path = ? AND source != 'path'",
         (new_path, old_path),

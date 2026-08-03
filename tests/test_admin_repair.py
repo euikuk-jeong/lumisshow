@@ -289,6 +289,9 @@ async def test_people_repair_approve_deletes_path_tags_but_keeps_content_tags(ad
 
     async with aiosqlite.connect(_ai_db_path()) as db:
         await db.execute(
+            "UPDATE photos_analyzed SET path_tag_done = 1 WHERE path = 'old_dir/photo.jpg'"
+        )
+        await db.execute(
             "INSERT INTO photo_tags (photo_path, tag, source) VALUES "
             "('old_dir/photo.jpg', '캠핑', 'path'), "
             "('old_dir/photo.jpg', '서울', 'location')"
@@ -315,9 +318,15 @@ async def test_people_repair_approve_deletes_path_tags_but_keeps_content_tags(ad
             rows = [dict(r) for r in await cur.fetchall()]
         async with db.execute("SELECT photo_path FROM photo_embeddings") as cur:
             embedding_rows = await cur.fetchall()
+        async with db.execute(
+            "SELECT path_tag_done FROM photos_analyzed WHERE path = 'new_dir/photo.jpg'"
+        ) as cur:
+            path_tag_done = (await cur.fetchone())[0]
     assert rows == [{"tag": "서울", "source": "location", "photo_path": "new_dir/photo.jpg"}]
     # photo_embeddings(CLIP 벡터)도 콘텐츠 자체 정보라 photo_path만 갱신돼야 한다
     assert [r["photo_path"] for r in embedding_rows] == ["new_dir/photo.jpg"]
+    # rename 시 path_tag_done도 0으로 되돌아가야 다음 스캔이 새 폴더명으로 재태깅한다
+    assert path_tag_done == 0
 
 
 async def test_people_repair_ambiguous(admin_client):
