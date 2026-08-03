@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.2.0] - 2026-08-04
+
+### Added
+- **폴더 태그(Kiwi) 전체 재계산 Admin 버튼**: `path_tag_done` 플래그 도입(v2.1.1)
+  이후 한 번 시도한 사진은 커버리지 대상에서 영구히 빠져, Kiwi 사전/명사 추출
+  로직이 바뀌어도 기존 태그를 다시 계산할 방법이 없었음. Admin '태그' 화면에
+  "폴더 태그 재계산" 버튼 추가 — `photo_tags(source='path')` 전체 삭제 +
+  `path_tag_done` 전체 리셋 후 기존 커버리지 로직을 재실행. `tag_backfill`과
+  동일한 일반 잡 생성·중복방지 경로(`POST /api/admin/ai/jobs` `{"type":
+  "path_tag_reset"}`)로 처리하며 완료 시 Discord 알림 발송
+  (`ai_worker/main.py`, `ai_worker/daemon.py`, `ai_worker/notify.py`,
+  `backend/routers/admin_people.py`, `frontend/assets/js/pages/admin-tags.js`)
+
 ## [2.1.1] - 2026-08-04
 
 ### Fixed
@@ -1030,7 +1043,8 @@ Phase 2 — AI 얼굴 인식 스마트 앨범. NAS 로컬 AI(InsightFace)로 사
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v2.1.1...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v2.2.0...HEAD
+[2.2.0]: https://github.com/euikuk-jeong/lumisshow/compare/v2.1.1...v2.2.0
 [2.1.1]: https://github.com/euikuk-jeong/lumisshow/compare/v2.1.0...v2.1.1
 [2.1.0]: https://github.com/euikuk-jeong/lumisshow/compare/v2.0.2...v2.1.0
 [2.0.2]: https://github.com/euikuk-jeong/lumisshow/compare/v2.0.1...v2.0.2
