@@ -51,7 +51,7 @@ pytest -v
 main.py              # FastAPI app, 미들웨어, 라우터 등록
 routers/
   auth.py            # POST /api/auth/login|logout, GET /api/auth/me
-  admin_browse.py    # GET /api/admin/browse|search|music. Phase 8: search()가 파일명 매칭 외 photo_tags 태그 매칭도 OR로 포함(services/photo_tags.py의 search_tag_matched_paths)
+  admin_browse.py    # GET /api/admin/browse|search|music. Phase 8: search()가 파일명 매칭 외 photo_tags 태그 매칭도 OR로 포함(services/photo_tags.py의 search_tag_matched_paths). GET /photo-info — Admin 라이트박스(i 버튼) 단일 사진 EXIF·태그 조회, ADMIN_INFO_PANEL_SOURCES 전체(person/location 포함) 노출
   admin_albums.py    # CRUD /api/admin/albums/*
   admin_links.py     # CRUD /api/admin/albums/{id}/links
   admin_people.py    # Phase 2: 인물 CRUD, 얼굴 라벨/교정, 인물 사진 상세(슬라이드쇼용), 크롭 서빙, AI 잡 트리거, 경로 복구 승인

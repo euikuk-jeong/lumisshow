@@ -423,6 +423,7 @@
   gap: 8px;
 }
 .lightbox-body {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -510,6 +511,68 @@
 .lightbox-action-btn:disabled { opacity: 0.45; cursor: not-allowed; }
 .lightbox-action-danger { border-color: rgba(248,113,113,0.4); color: #f87171; }
 .lightbox-action-danger:hover:not(:disabled) { background: rgba(248,113,113,0.15); }
+
+.lightbox-info-btn {
+  position: absolute;
+  top: 16px;
+  left: 20px;
+  background: none;
+  border: none;
+  color: rgba(255,255,255,0.5);
+  font-size: 18px;
+  font-style: italic;
+  font-weight: bold;
+  cursor: pointer;
+  padding: 4px 12px;
+  line-height: 1;
+}
+.lightbox-info-btn:hover { color: #fff; }
+.lightbox-info-btn.lb-info-active { color: #fff; background: rgba(255,255,255,0.15); border-radius: var(--radius); }
+.lightbox-info {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 10;
+  background: rgba(0,0,0,0.55);
+  backdrop-filter: blur(8px) saturate(160%);
+  -webkit-backdrop-filter: blur(8px) saturate(160%);
+  border: 1px solid rgba(255,255,255,0.08);
+  color: #fff;
+  padding: 12px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  max-width: 360px;
+  max-height: calc(100% - 16px);
+  overflow-y: auto;
+}
+.lightbox-info-row {
+  display: grid;
+  grid-template-columns: 90px 1fr;
+  gap: 8px;
+  line-height: 1.5;
+}
+.lightbox-info-label {
+  color: rgba(255,255,255,0.55);
+  text-align: right;
+  white-space: nowrap;
+}
+.lightbox-info-value { word-break: break-all; }
+.lightbox-info-divider {
+  border-top: 1px solid rgba(255,255,255,0.15);
+  margin: 8px 0;
+}
+.lightbox-info-section {
+  font-size: 11px;
+  color: rgba(255,255,255,0.4);
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  margin-bottom: 5px;
+}
+.lightbox-info-loading,
+.lightbox-info-error { color: rgba(255,255,255,0.6); }
 
 /* ── Divider ────────────────────────────────────────────── */
 .divider {

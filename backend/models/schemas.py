@@ -243,6 +243,34 @@ _EXIF_META_FIELDS = (
 )
 
 
+class PhotoInfoResponse(BaseModel):
+    """Admin 라이트박스(i 버튼)의 단일 사진 EXIF·태그 조회 응답 (admin_browse.py GET /photo-info).
+
+    url 계열 필드가 없는 점을 제외하면 SharePhotoItem과 동일 — 라이트박스는 이미
+    이미지를 표시 중이라 URL이 필요 없다. Admin 전용 엔드포인트라 person_tags/
+    location_tags도 항상 채워진다(ADMIN_INFO_PANEL_SOURCES)."""
+    filename: str
+    taken_at: Optional[datetime]
+    width: Optional[int]
+    height: Optional[int]
+    make: Optional[str]
+    camera: Optional[str]
+    software: Optional[str]
+    shutter: Optional[str]
+    aperture: Optional[str]
+    iso: Optional[int]
+    focal_length: Optional[str]
+    shoot_mode: Optional[str]
+    flash: Optional[str]
+    metering: Optional[str]
+    exposure_mode: Optional[str]
+    person_tags: list[str] = []
+    location_tags: list[str] = []
+    ai_tags: list[str] = []
+    path_tags: list[str] = []
+    manual_tags: list[str] = []
+
+
 def build_share_photo_item(
     id: int, file_path: str, url: str,
     thumb_small_url: str, thumb_medium_url: str, thumb_large_url: str, meta: dict,
