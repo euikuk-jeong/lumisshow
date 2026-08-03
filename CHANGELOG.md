@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.3.0] - 2026-08-04
+
+### Added
+- **Admin 라이트박스 사진 정보(i 버튼)**: Admin 화면에서 사진을 전체크기로 보는
+  모든 지점(사진 탐색기·앨범 편집·태그 화면·인물 상세·인물 사진)이 공용으로
+  쓰는 라이트박스(`lightbox.js`)에 i 버튼을 추가해 EXIF와 태그를 확인할 수
+  있게 함. 슬라이드쇼의 정보 패널과 달리 라이트박스는 사진 경로만 들고 열리므로,
+  새 `GET /api/admin/photo-info`로 사진 1장분의 EXIF·태그를 그때그때 조회.
+  Admin 전용 화면이라 인물·위치 태그도 함께 노출 (`backend/routers/admin_browse.py`,
+  `backend/models/schemas.py`, `frontend/assets/js/lightbox.js`,
+  `frontend/assets/css/admin.css`)
+
 ## [2.2.0] - 2026-08-04
 
 ### Added
