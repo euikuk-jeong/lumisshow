@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.1.1] - 2026-08-04
+
+### Fixed
+- **폴더명(Kiwi) 태깅, 명사 없는 폴더 사진이 매 스캔 재시도되던 문제 수정**: 순수
+  영문/숫자 폴더명처럼 명사가 하나도 안 나오는 사진은 태그 행이 생기지 않아
+  커버리지 조건(`photo_tags`에 `source='path'` 행 존재 여부)을 계속 만족시켜
+  매 스캔 재시도되고, 그때마다 Discord 알림의 `path_tagged` 건수가 실제 신규
+  작업 없이 부풀려졌음. `photos_analyzed`에 `path_tag_done` 플래그를 추가해
+  시도 여부를 직접 기록하는 방식으로 전환 — 결과(태그 생성 여부)와 무관하게
+  한 번 시도한 사진은 재시도하지 않음. 경로복구 승인(rename) 시에는 플래그를
+  0으로 되돌려 새 폴더명으로 다시 태깅되게 함 (`ai_worker/db.py`,
+  `ai_worker/scanner.py`, `backend/models/ai_database.py`,
+  `backend/routers/admin_people.py`)
+  - **배포 직후 1회성 안내**: 기존 DB는 마이그레이션으로 전체 사진의
+    `path_tag_done`이 0부터 시작하므로, 배포 후 첫 스캔은 그동안 재시도되며
+    쌓여있던 전체 대상을 다시 훑어 큰 `path_tagged` 수치(수만 건)와 함께 알림이
+    한 번 발송됨 — 정상. 그 다음 날 스캔부터 신규 사진이 없으면 알림이 오지
+    않는 것으로 정상 동작을 확인할 수 있음.
+  - **동작 변경 참고**: `source='path'` 태그를 Admin이 수동으로 지운 경우, 과거엔
+    다음 스캔이 다시 채웠으나 이제는 `path_tag_done=1`로 남아있어 재생성되지
+    않음(의도된 변경).
+
 ## [2.1.0] - 2026-08-04
 
 ### Added
@@ -1008,7 +1030,8 @@ Phase 2 — AI 얼굴 인식 스마트 앨범. NAS 로컬 AI(InsightFace)로 사
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v2.1.0...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v2.1.1...HEAD
+[2.1.1]: https://github.com/euikuk-jeong/lumisshow/compare/v2.1.0...v2.1.1
 [2.1.0]: https://github.com/euikuk-jeong/lumisshow/compare/v2.0.2...v2.1.0
 [2.0.2]: https://github.com/euikuk-jeong/lumisshow/compare/v2.0.1...v2.0.2
 [2.0.1]: https://github.com/euikuk-jeong/lumisshow/compare/v2.0.0...v2.0.1
