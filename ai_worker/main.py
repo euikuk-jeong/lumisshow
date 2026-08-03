@@ -4,6 +4,7 @@
   python -m ai_worker.main rematch       # 전체 얼굴을 현재 등록 셋으로 재매칭
   python -m ai_worker.main tag-backfill  # AI 태그/위치 재계산(어휘·threshold 변경 후,
                                           # 또는 이 기능 도입 이전 사진 소급 적용)
+  python -m ai_worker.main path-tag-reset  # 폴더명(Kiwi) 태깅 전체 재계산(사전/로직 변경 후)
   python -m ai_worker.main daemon        # 야간 자동 스캔 + jobs 큐 폴링 (컨테이너 상주)
 """
 
@@ -268,6 +269,28 @@ def run_tag_backfill(limit: int | None = None) -> dict:
     return summary
 
 
+def run_path_tag_reset() -> dict:
+    """폴더명(Kiwi) 태깅 전체 재계산 — path_tag_done 플래그 도입 이후 한 번 시도한
+    사진은 scanner.tag_paths_from_folder_names()가 재시도하지 않으므로, Kiwi
+    사전/로직이 바뀌어 전체를 다시 태깅하고 싶을 때 admin이 명시적으로 트리거하는
+    배치. 기존 photo_tags(source='path')를 전부 지우고 path_tag_done을 0으로
+    되돌린 뒤 같은 커버리지 함수를 다시 실행한다(2026-08-04, 사용자 요청)."""
+    conn = db.connect()
+    flags = category_flags(conn)
+    if not flags["path_enabled"]:
+        log.info("폴더명(Kiwi) 태깅 비활성화(Admin 설정) — 재계산을 건너뜁니다")
+        return {"path_tagged": 0, "elapsed": 0.0}
+
+    start = time.monotonic()
+    conn.execute("DELETE FROM photo_tags WHERE source = 'path'")
+    conn.execute("UPDATE photos_analyzed SET path_tag_done = 0")
+    conn.commit()
+    path_tagged = scanner.tag_paths_from_folder_names(conn)
+    elapsed = time.monotonic() - start
+    log.info("폴더명 태깅 재계산 완료: %d장에 반영, %.0f초", path_tagged, elapsed)
+    return {"path_tagged": path_tagged, "elapsed": elapsed}
+
+
 def run_review_ignored(target_person_id: int) -> None:
     conn = db.connect()
     count = matcher.match_ignored_for_person(conn, target_person_id, config.match_threshold())
@@ -276,7 +299,9 @@ def run_review_ignored(target_person_id: int) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(prog="ai_worker")
-    parser.add_argument("command", choices=["scan", "rematch", "tag-backfill", "daemon"])
+    parser.add_argument(
+        "command", choices=["scan", "rematch", "tag-backfill", "path-tag-reset", "daemon"]
+    )
     parser.add_argument("--limit", type=int, default=None,
                         help="최대 처리 장수 (전체에서 균등 랜덤 샘플)")
     args = parser.parse_args()
@@ -286,6 +311,8 @@ def main() -> None:
         run_rematch()
     elif args.command == "tag-backfill":
         run_tag_backfill(args.limit)
+    elif args.command == "path-tag-reset":
+        run_path_tag_reset()
     else:
         from ai_worker.daemon import run_daemon
         run_daemon()

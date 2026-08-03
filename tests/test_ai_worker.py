@@ -339,6 +339,52 @@ def test_tag_paths_from_folder_names_no_pending_returns_zero(conn):
     assert scanner.tag_paths_from_folder_names(conn) == 0
 
 
+def test_run_path_tag_reset_recomputes_already_done_photos(conn, monkeypatch):
+    """Kiwi 사전/로직이 바뀌어 기존 태그가 stale해진 상황을 재현 — 이미
+    path_tag_done=1인 사진도 run_path_tag_reset()이 지우고 다시 태깅해야 한다."""
+    from ai_worker import main
+
+    fake = _CountingKiwi({"캠핑장": [_FakeToken("캠핑장", "NNP")]})
+    monkeypatch.setattr(scanner, "_get_kiwi", lambda: fake)
+
+    conn.execute("INSERT INTO photos_analyzed (path, mtime) VALUES ('2024/캠핑장/a.jpg', 0)")
+    conn.execute(
+        "INSERT INTO photo_tags (photo_path, tag, source) VALUES ('2024/캠핑장/a.jpg', '캠핑', 'path')"
+    )
+    conn.execute(
+        "UPDATE photos_analyzed SET path_tag_done = 1 WHERE path = '2024/캠핑장/a.jpg'"
+    )
+    conn.commit()
+
+    summary = main.run_path_tag_reset()
+    assert summary["path_tagged"] == 1
+
+    rows = {
+        r["tag"] for r in conn.execute(
+            "SELECT tag FROM photo_tags WHERE photo_path = '2024/캠핑장/a.jpg' AND source = 'path'"
+        ).fetchall()
+    }
+    assert rows == {"캠핑장"}  # 옛 태그('캠핑')는 지워지고 새 어휘 결과만 남는다
+    assert conn.execute(
+        "SELECT path_tag_done FROM photos_analyzed WHERE path = '2024/캠핑장/a.jpg'"
+    ).fetchone()[0] == 1
+
+
+def test_run_path_tag_reset_skips_when_path_disabled(conn, monkeypatch):
+    from ai_worker import main
+
+    def _boom():
+        raise AssertionError("path_enabled=0이면 폴더명 태깅을 호출하면 안 됨")
+
+    monkeypatch.setattr(scanner, "tag_paths_from_folder_names", lambda conn: _boom())
+    conn.execute("INSERT INTO ai_settings (key, value) VALUES ('path_enabled', '0')")
+    conn.execute("INSERT INTO photos_analyzed (path, mtime) VALUES ('2024/a.jpg', 0)")
+    conn.commit()
+
+    summary = main.run_path_tag_reset()
+    assert summary == {"path_tagged": 0, "elapsed": 0.0}
+
+
 # ── GPS 위치 태깅 (geocoder) ─────────────────────────────────────────
 
 
