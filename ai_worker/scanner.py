@@ -39,21 +39,23 @@ def extract_folder_nouns(folder_name: str) -> list[str]:
 
 
 def tag_paths_from_folder_names(conn: sqlite3.Connection) -> int:
-    """photos_analyzed 중 아직 path 태그가 없는 사진의 바로 상위 폴더명을 Kiwi로
-    분석해 photo_tags(source='path')에 기록한다.
+    """photos_analyzed 중 아직 폴더명 태깅을 시도하지 않은(`path_tag_done = 0`) 사진의
+    바로 상위 폴더명을 Kiwi로 분석해 photo_tags(source='path')에 기록한다.
 
-    mtime 기반 pending_photos()와 무관하게 "커버리지"로 동작한다 — photo_tags에
-    source='path' 행이 하나도 없는 사진만 대상으로 삼기 때문에, 이 기능 도입 이전
-    사진(기존 4.5만 장)도 다음 스캔에서 자연히 채워지고, 경로복구 승인(admin_people.py의
-    _apply_path_repair는 path 태그를 지우기만 하고 재계산은 안 함 — Kiwi는 워커
-    전용이라 백엔드에서 실행할 수 없음) 이후에도 다음 스캔이 이어서 채운다.
+    mtime 기반 pending_photos()와 무관하게 "커버리지"로 동작한다 — `path_tag_done`
+    플래그가 0인 사진만 대상으로 삼기 때문에, 이 기능 도입 이전 사진(기존 4.5만 장)도
+    다음 스캔에서 자연히 채워지고, 경로복구 승인(admin_people.py의 _apply_path_repair가
+    rename 시 photo_tags(source='path')를 지우면서 path_tag_done도 0으로 되돌림 — Kiwi는
+    워커 전용이라 백엔드에서 재계산할 수 없음) 이후에도 다음 스캔이 이어서 채운다.
     같은 폴더는 1회만 Kiwi를 실행해 재사용한다(폴더 단위 캐싱).
 
-    명사가 하나도 없는 폴더(예: 순수 영문/숫자 폴더명)의 사진은 태그가 영원히 안
-    생기므로 매 스캔 재시도된다 — Kiwi 호출 자체는 저렴해 감수할 만한 비용이다."""
+    명사가 하나도 없는 폴더(예: 순수 영문/숫자 폴더명)의 사진은 태그가 안 생기지만
+    `path_tag_done`은 시도 여부만 보고 1로 표시하므로 다음 스캔부터 재시도하지 않는다
+    (한때는 photo_tags 행 존재 여부로 커버리지를 판단해 이런 사진이 매 스캔 재시도되며
+    알림 로그의 path_tagged 건수를 실제 신규 작업 없이 계속 부풀렸었다 — 2026-08-04
+    사용자 피드백으로 photos_analyzed.path_tag_done 플래그 기반으로 전환)."""
     rows = conn.execute(
-        """SELECT path FROM photos_analyzed
-           WHERE path NOT IN (SELECT DISTINCT photo_path FROM photo_tags WHERE source = 'path')"""
+        "SELECT path FROM photos_analyzed WHERE path_tag_done = 0"
     ).fetchall()
     if not rows:
         return 0
@@ -65,13 +67,18 @@ def tag_paths_from_folder_names(conn: sqlite3.Connection) -> int:
         folder = os.path.basename(os.path.dirname(path))
         if folder not in folder_cache:
             folder_cache[folder] = extract_folder_nouns(folder) if folder else []
-        for noun in folder_cache[folder]:
+        nouns = folder_cache[folder]
+        for noun in nouns:
             conn.execute(
                 """INSERT INTO photo_tags (photo_path, tag, source) VALUES (?, ?, 'path')
                    ON CONFLICT(photo_path, tag, source) DO NOTHING""",
                 (path, noun),
             )
-        tagged += 1
+        if nouns:
+            tagged += 1
+        conn.execute(
+            "UPDATE photos_analyzed SET path_tag_done = 1 WHERE path = ?", (path,)
+        )
     conn.commit()
     return tagged
 

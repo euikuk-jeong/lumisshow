@@ -14,11 +14,12 @@ PRAGMA foreign_keys = ON;
 
 -- ── 워커가 쓰는 테이블 ──────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS photos_analyzed (
-    path        TEXT PRIMARY KEY,              -- PHOTO_ROOT 상대 경로 (/ 구분자)
-    mtime       REAL NOT NULL,
-    analyzed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    face_count  INTEGER NOT NULL DEFAULT 0,
-    status      TEXT NOT NULL DEFAULT 'done'   -- done | error
+    path          TEXT PRIMARY KEY,              -- PHOTO_ROOT 상대 경로 (/ 구분자)
+    mtime         REAL NOT NULL,
+    analyzed_at   DATETIME DEFAULT CURRENT_TIMESTAMP,
+    face_count    INTEGER NOT NULL DEFAULT 0,
+    status        TEXT NOT NULL DEFAULT 'done',  -- done | error
+    path_tag_done INTEGER NOT NULL DEFAULT 0     -- 폴더명(Kiwi) 태깅 시도 여부(결과 무관, scanner.py 참고)
 );
 
 CREATE TABLE IF NOT EXISTS faces (
@@ -172,6 +173,14 @@ def connect(db_path: str | None = None) -> sqlite3.Connection:
     # 기존 DB의 persons 테이블에는 cover_face_id 컬럼이 없을 수 있음
     try:
         conn.execute("ALTER TABLE persons ADD COLUMN cover_face_id INTEGER")
+        conn.commit()
+    except sqlite3.OperationalError:
+        pass  # 컬럼이 이미 존재함
+    # 기존 DB의 photos_analyzed 테이블에는 path_tag_done 컬럼이 없을 수 있음
+    try:
+        conn.execute(
+            "ALTER TABLE photos_analyzed ADD COLUMN path_tag_done INTEGER NOT NULL DEFAULT 0"
+        )
         conn.commit()
     except sqlite3.OperationalError:
         pass  # 컬럼이 이미 존재함

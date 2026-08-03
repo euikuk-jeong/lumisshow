@@ -208,21 +208,25 @@ alpha-2 코드를 `geocoder._COUNTRY_NAMES_KO` 정적 매핑으로 한국어 국
 `ai_settings.path_enabled`가 꺼져 있으면 `run_scan()`/`run_tag_backfill()`
 모두 이 함수 호출 자체를 생략한다(위 "카테고리별 on/off" 참고).
 
-`scanner.tag_paths_from_folder_names()`는 `photo_tags`에 `source='path'` 행이
-하나도 없는 `photos_analyzed` 사진만 골라 바로 위 폴더명 1단계를 Kiwi 형태소
-분석기(명사 NNG/NNP만, 1음절은 접미 파편으로 보고 제외)로 분석해 태깅한다.
-`pending_photos()`(mtime 기반)와 완전히 독립적으로 동작 — 이 기능 도입 이전
-사진(기존 4.5만 장)이나 경로복구 승인 이후(아래 참고) new_path도 다음 스캔에서
-자연히 채워진다. 같은 폴더는 1회만 Kiwi를 실행해 재사용(폴더 단위 캐싱).
-명사가 하나도 안 나오는 폴더(순수 영문/숫자 등)의 사진은 태그가 영원히 안
-생겨 매 스캔 재시도되는데, Kiwi 호출 자체가 저렴해 감수하기로 함(최적화 보류).
+`scanner.tag_paths_from_folder_names()`는 `photos_analyzed.path_tag_done = 0`인
+사진만 골라 바로 위 폴더명 1단계를 Kiwi 형태소 분석기(명사 NNG/NNP만, 1음절은
+접미 파편으로 보고 제외)로 분석해 태깅하고, 결과(태그 생성 여부)와 무관하게
+처리한 사진은 `path_tag_done = 1`로 표시한다. `pending_photos()`(mtime 기반)와
+완전히 독립적으로 동작 — 이 기능 도입 이전 사진(기존 4.5만 장)이나 경로복구
+승인 이후(아래 참고) new_path도 다음 스캔에서 자연히 채워진다. 같은 폴더는
+1회만 Kiwi를 실행해 재사용(폴더 단위 캐싱). 명사가 하나도 안 나오는 폴더(순수
+영문/숫자 등)의 사진은 태그가 안 생기지만 `path_tag_done`은 시도 여부만 보고
+1로 남으므로 다음 스캔부터 재시도하지 않는다(2026-08-04 수정 — 예전에는
+`photo_tags`에 `source='path'` 행이 있는지로 커버리지를 판단해 이런 사진이
+매 스캔 재시도되며 Discord 알림의 `path_tagged` 건수를 실제 신규 작업 없이
+계속 부풀렸었다).
 
 `admin_people.py`의 `_apply_path_repair`(경로복구 승인)는 `source='path'` 태그를
-new_path로 갱신하지 않고 **지우기만** 한다 — Kiwi는 워커 전용 무거운 의존성이라
-backend에서 재계산할 수 없기 때문. 지운 뒤 다음 워커 스캔의 커버리지 로직이
-new_path 폴더명으로 다시 채운다. `location`/`ai`/`manual`/`person` 태그와
-`photo_embeddings`는 사진 콘텐츠 자체 정보라 경로가 바뀌어도 유효하므로 그대로
-`UPDATE`한다.
+new_path로 갱신하지 않고 **지우기만** 하며, 동시에 `photos_analyzed.path_tag_done`도
+0으로 되돌린다 — Kiwi는 워커 전용 무거운 의존성이라 backend에서 재계산할 수 없기
+때문. 되돌린 뒤 다음 워커 스캔의 커버리지 로직이 new_path 폴더명으로 다시 채운다.
+`location`/`ai`/`manual`/`person` 태그와 `photo_embeddings`는 사진 콘텐츠 자체
+정보라 경로가 바뀌어도 유효하므로 그대로 `UPDATE`한다.
 
 ### 사물/장면 태깅 (CLIP, `tagger.py`/`tag_vocab.py`) — scan()은 신규/변경 사진만
 `ai_settings.ai_tag_enabled`가 꺼져 있으면 `run_scan()`/`run_tag_backfill()`
