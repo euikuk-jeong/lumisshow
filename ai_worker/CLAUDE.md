@@ -21,6 +21,7 @@ python -m ai_worker.main scan          # 증분 스캔 → 분석 → 매칭 (1�
 python -m ai_worker.main rematch       # 등록 셋 변경 후 전체 재매칭
 python -m ai_worker.main tag-backfill  # AI 태그/위치 재계산 (어휘·threshold 변경 후,
                                         # 또는 이 기능 도입 이전 사진 소급 적용)
+python -m ai_worker.main path-tag-reset  # 폴더명(Kiwi) 태깅 전체 재계산 (사전/로직 변경 후)
 
 # 라벨링/평가 (M1 정답 셋)
 python -m ai_worker.tools.label_sheet             # $DATA_DIR/label_sheet.html 생성
@@ -227,6 +228,19 @@ new_path로 갱신하지 않고 **지우기만** 하며, 동시에 `photos_analy
 때문. 되돌린 뒤 다음 워커 스캔의 커버리지 로직이 new_path 폴더명으로 다시 채운다.
 `location`/`ai`/`manual`/`person` 태그와 `photo_embeddings`는 사진 콘텐츠 자체
 정보라 경로가 바뀌어도 유효하므로 그대로 `UPDATE`한다.
+
+**전체 재계산(`path_tag_reset` 잡, `main.run_path_tag_reset()`)**: `path_tag_done`
+플래그 도입 이후 한 번 시도한 사진은 커버리지 대상에서 영구히 빠지므로, Kiwi
+사전이나 명사 추출 로직 자체가 바뀌어 기존 태그를 통째로 다시 계산해야 하는
+경우(어휘 변경 뒤 재채점만 하면 되는 CLIP과 달리, Kiwi는 재실행 스위치가 따로
+없었음) 이 배치가 필요하다(2026-08-04, 사용자 요청으로 추가). `photo_tags(source=
+'path')` 전체 DELETE + `photos_analyzed.path_tag_done` 전체를 0으로 되돌린 뒤
+`tag_paths_from_folder_names()`를 그대로 재사용해 처음부터 다시 채운다. Admin
+'태그' 화면의 "폴더 태그 재계산" 버튼(`POST /api/admin/ai/jobs` `{"type":
+"path_tag_reset"}`) → `_JOB_TYPES`에 추가된 일반 잡 생성·중복방지 경로를
+그대로 탄다(전용 라우터 없음, `tag_backfill`과 동일 패턴). 완료 시
+`notify.notify_path_tag_reset_result()`로 Discord 알림(폴더명 태깅 반영
+건수 + 소요시간). `path_enabled`가 꺼져 있으면 아무것도 하지 않고 즉시 반환.
 
 ### 사물/장면 태깅 (CLIP, `tagger.py`/`tag_vocab.py`) — scan()은 신규/변경 사진만
 `ai_settings.ai_tag_enabled`가 꺼져 있으면 `run_scan()`/`run_tag_backfill()`

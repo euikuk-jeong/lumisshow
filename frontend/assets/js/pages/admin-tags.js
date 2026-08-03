@@ -17,6 +17,7 @@ export async function renderAdminTags() {
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn btn-ghost" id="btn-tag-backfill">AI 태그 재계산</button>
+        <button class="btn btn-ghost" id="btn-path-tag-reset">폴더 태그 재계산</button>
       </div>
     </div>
     <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-bottom:14px">
@@ -33,6 +34,7 @@ export async function renderAdminTags() {
   `, '/admin/tags');
 
   document.getElementById('btn-tag-backfill').addEventListener('click', triggerTagBackfill);
+  document.getElementById('btn-path-tag-reset').addEventListener('click', triggerPathTagReset);
   loadAiStatusLine();
 
   const wrap = document.getElementById('tags-content');
@@ -103,15 +105,30 @@ async function loadAiStatusLine() {
   if (!el) return;
   try {
     const s = await api.get('/api/admin/ai/status');
-    const active = s.recent_jobs.find(
-      j => j.type === 'tag_backfill' && (j.status === 'running' || j.status === 'pending')
-    );
-    el.textContent = active
-      ? `AI 태그 재계산 ${active.status === 'running' ? '실행 중' : '대기 중'}…`
-      : '어휘·threshold를 바꾼 뒤에는 "AI 태그 재계산"을 다시 실행하세요';
+    const isActive = j => j.status === 'running' || j.status === 'pending';
+    const activeBackfill = s.recent_jobs.find(j => j.type === 'tag_backfill' && isActive(j));
+    const activePathReset = s.recent_jobs.find(j => j.type === 'path_tag_reset' && isActive(j));
+    if (activeBackfill) {
+      el.textContent = `AI 태그 재계산 ${activeBackfill.status === 'running' ? '실행 중' : '대기 중'}…`;
+    } else if (activePathReset) {
+      el.textContent = `폴더 태그 재계산 ${activePathReset.status === 'running' ? '실행 중' : '대기 중'}…`;
+    } else {
+      el.textContent = '어휘·threshold를 바꾼 뒤에는 "AI 태그 재계산"을 다시 실행하세요';
+    }
   } catch {
     el.textContent = 'AI 분석 데이터가 아직 없습니다 (워커 첫 스캔 전)';
   }
+}
+
+async function triggerPathTagReset() {
+  if (!confirm('기존 폴더명 태그를 모두 지우고 처음부터 다시 계산할까요?\n(Kiwi 사전/로직이 바뀐 경우에만 필요합니다)')) return;
+  try {
+    const r = await api.post('/api/admin/ai/jobs', { type: 'path_tag_reset' });
+    alert(r.duplicated
+      ? `이미 대기/실행 중인 재계산 작업이 있습니다 (#${r.id})`
+      : `폴더 태그 재계산을 요청했습니다 (#${r.id}). AI 워커가 곧 처리합니다.`);
+    loadAiStatusLine();
+  } catch (e) { alert(e.message); }
 }
 
 async function triggerTagBackfill() {

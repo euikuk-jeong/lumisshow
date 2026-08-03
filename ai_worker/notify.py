@@ -81,6 +81,15 @@ def notify_rematch_result(summary: dict) -> None:
     )
 
 
+def notify_path_tag_reset_result(summary: dict) -> None:
+    _send(
+        "**LumisShow 폴더 태그 재계산 완료**\n"
+        f"폴더명 태깅 {summary['path_tagged']}장\n"
+        f"소요 {summary['elapsed']:.0f}초\n"
+        f"{_admin_people_url()}"
+    )
+
+
 def notify_tag_backfill_result(summary: dict) -> None:
     _send(
         "**LumisShow AI 태그 재계산 완료**\n"

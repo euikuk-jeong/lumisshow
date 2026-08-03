@@ -68,6 +68,7 @@ def finish_job(conn: sqlite3.Connection, job_id: int, status: str) -> None:
 
 def run_daemon() -> None:
     from ai_worker.main import (  # 순환 import 방지용 lazy
+        run_path_tag_reset,
         run_rematch,
         run_review_ignored,
         run_scan,
@@ -103,6 +104,8 @@ def run_daemon() -> None:
                     run_review_ignored(target_person_id)
                 elif job_type == "tag_backfill":
                     notify.notify_tag_backfill_result(run_tag_backfill())
+                elif job_type == "path_tag_reset":
+                    notify.notify_path_tag_reset_result(run_path_tag_reset())
                 else:
                     raise ValueError(f"알 수 없는 잡 타입: {job_type}")
                 finish_job(conn, job_id, "done")
