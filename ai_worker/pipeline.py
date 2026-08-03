@@ -105,6 +105,15 @@ class FacePipeline:
         return faces, img, gps
 
 
+def _load_image(abs_path: str) -> tuple[Image.Image, tuple[float, float] | None]:
+    """얼굴 검출 없이 회전 보정된 이미지와 GPS만 읽는다 — 얼굴 인식 카테고리가
+    꺼졌을 때(analyze_and_store)와 tag-backfill(backfill_photo)에서 공용으로 쓴다."""
+    with Image.open(abs_path) as raw:
+        gps = _extract_gps(raw)
+        img = ImageOps.exif_transpose(raw).convert("RGB")
+    return img, gps
+
+
 def save_face_crop(img: Image.Image, face: DetectedFace, face_id: int) -> None:
     """얼굴 영역을 여유 마진(25%) 포함해 크롭 → DATA_DIR/faces/{face_id}.jpg"""
     x1, y1, x2, y2 = face.bbox
@@ -246,9 +255,7 @@ def backfill_photo(
     1번만 연다). (임베딩을 새로 채웠는지, 위치를 새로 채웠는지)를 반환 — 파일을
     열 수 없으면 예외를 그대로 던진다(호출부인 main.run_tag_backfill이 건너뛰고
     계속 진행)."""
-    with Image.open(abs_path) as raw:
-        gps = _extract_gps(raw)
-        img = ImageOps.exif_transpose(raw).convert("RGB")
+    img, gps = _load_image(abs_path)
 
     embedded = False
     if need_embedding:
@@ -264,24 +271,44 @@ def backfill_photo(
 
 
 def analyze_and_store(
-    pipeline: FacePipeline,
+    pipeline: FacePipeline | None,
     conn: sqlite3.Connection,
     rel_path: str,
     mtime: float,
     enrollment: dict[int, np.ndarray],
     threshold: float,
     clip_ctx: ClipTaggingContext | None = None,
+    location_enabled: bool = True,
 ) -> tuple[int, bool, bool, bool]:
     """사진 1장 분석 → faces/face_matches/photos_analyzed/photo_locations/
     photo_embeddings 기록 (1장 = 1커밋, resumable).
 
     재분석(mtime 변경) 시 기존 얼굴 행은 삭제 후 새로 기록.
-    (검출된 얼굴 수, 성공 여부, 위치 반영 여부, AI 태그 반영 여부)를 반환.
+    (이번 스캔에서 검출한 얼굴 수, 성공 여부, 위치 반영 여부, AI 태그 반영 여부)를
+    반환 — 호출부(main.run_scan)가 이 값을 합산해 "이번 스캔에서 몇 개 검출했는지"
+    로그·Discord 알림에 쓰므로, 얼굴 인식이 꺼져 기존 얼굴을 그대로 뒀을 뿐인
+    경우까지 여기 섞이면 안 된다(재스캔마다 진짜 검출량과 무관하게 숫자가 널뛴다).
     실패 시 status='error'로 기록하고 (0, False, False, False) 반환.
+
+    카테고리 on/off(Admin 설정)는 "끄면 새로 생성하지 않지만 기존 데이터는
+    지우지 않는다" 원칙을 따른다:
+    - `pipeline`이 None이면 얼굴 인식이 꺼진 상태 — 얼굴 검출을 건너뛰고
+      `faces`/`face_matches`를 건드리지 않는다(DELETE도 하지 않음). 반환값의
+      얼굴 수는 항상 0(이번 스캔에서 새로 검출한 게 없다는 뜻)이고,
+      `photos_analyzed.face_count`는 이와 별개로 현재 `faces`에 남아 있는
+      행 수를 그대로 기록한다(둘의 의미가 다르다).
+    - `location_enabled`가 False면 `_update_location` 호출 자체를 생략해
+      기존 `photo_locations`를 보존한다.
+    - `clip_ctx`가 None이면(사물 태깅이 꺼졌거나 CLIP 로딩 실패) `_update_ai_tags`가
+      기존 태그를 그대로 둔 채 아무 것도 하지 않는다(이미 그렇게 동작함).
     """
     abs_path = os.path.join(config.photo_root(), rel_path)
     try:
-        faces, img, gps = pipeline.analyze(abs_path)
+        if pipeline is not None:
+            faces, img, gps = pipeline.analyze(abs_path)
+        else:
+            faces = None
+            img, gps = _load_image(abs_path)
     except Exception:
         conn.execute(
             """INSERT INTO photos_analyzed (path, mtime, face_count, status)
@@ -294,27 +321,39 @@ def analyze_and_store(
         conn.commit()
         return 0, False, False, False
 
-    conn.execute("DELETE FROM faces WHERE photo_path = ?", (rel_path,))
-    for face in faces:
-        cur = conn.execute(
-            "INSERT INTO faces (photo_path, bbox, det_score, embedding) VALUES (?, ?, ?, ?)",
-            (
-                rel_path,
-                json.dumps([round(v, 1) for v in face.bbox]),
-                face.det_score,
-                matcher.embedding_to_blob(face.embedding),
-            ),
-        )
-        face_id = cur.lastrowid
-        save_face_crop(img, face, face_id)
-        result = matcher.match_one(face.embedding, enrollment, threshold)
-        if result is not None:
-            conn.execute(
-                "INSERT INTO face_matches (face_id, person_id, score) VALUES (?, ?, ?)",
-                (face_id, result[0], result[1]),
+    if faces is not None:
+        conn.execute("DELETE FROM faces WHERE photo_path = ?", (rel_path,))
+        for face in faces:
+            cur = conn.execute(
+                "INSERT INTO faces (photo_path, bbox, det_score, embedding) VALUES (?, ?, ?, ?)",
+                (
+                    rel_path,
+                    json.dumps([round(v, 1) for v in face.bbox]),
+                    face.det_score,
+                    matcher.embedding_to_blob(face.embedding),
+                ),
             )
+            face_id = cur.lastrowid
+            save_face_crop(img, face, face_id)
+            result = matcher.match_one(face.embedding, enrollment, threshold)
+            if result is not None:
+                conn.execute(
+                    "INSERT INTO face_matches (face_id, person_id, score) VALUES (?, ?, ?)",
+                    (face_id, result[0], result[1]),
+                )
+        stored_face_count = len(faces)
+        detected_face_count = stored_face_count
+    else:
+        # 얼굴 인식이 꺼진 상태 — photos_analyzed.face_count는 현재 남아있는 행 수를
+        # 그대로 기록하되(조회용 통계), 반환값(이번 스캔에서 "새로 검출"한 수)은
+        # 항상 0이어야 한다. 둘을 같은 값으로 쓰면 재분석 때마다 검출량과 무관하게
+        # summary["faces"]/로그/Discord 알림 숫자가 기존 얼굴 수만큼 부풀어 오른다.
+        stored_face_count = conn.execute(
+            "SELECT COUNT(*) FROM faces WHERE photo_path = ?", (rel_path,)
+        ).fetchone()[0]
+        detected_face_count = 0
 
-    located = _update_location(conn, rel_path, gps)
+    located = _update_location(conn, rel_path, gps) if location_enabled else False
     tagged = _update_ai_tags(conn, rel_path, img, clip_ctx)
 
     conn.execute(
@@ -323,7 +362,7 @@ def analyze_and_store(
            ON CONFLICT(path) DO UPDATE SET
              mtime=excluded.mtime, face_count=excluded.face_count, status='done',
              analyzed_at=CURRENT_TIMESTAMP""",
-        (rel_path, mtime, len(faces)),
+        (rel_path, mtime, stored_face_count),
     )
     conn.commit()
-    return len(faces), True, located, tagged
+    return detected_face_count, True, located, tagged

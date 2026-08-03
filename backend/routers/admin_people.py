@@ -1122,23 +1122,57 @@ async def create_job(
     return {"id": cur.lastrowid, "type": body.type, "duplicated": False}
 
 
+_CATEGORY_SETTING_KEYS = ("face_enabled", "location_enabled", "path_enabled", "ai_tag_enabled")
+
+
+async def _read_ai_settings(db) -> dict:
+    async with db.execute(
+        "SELECT key, value FROM ai_settings WHERE key IN "
+        "('scan_hour', 'tag_threshold', 'face_enabled', 'location_enabled', "
+        "'path_enabled', 'ai_tag_enabled')"
+    ) as cur:
+        rows = await cur.fetchall()
+    values = {row["key"]: row["value"] for row in rows}
+    result = {
+        "scan_hour": int(values["scan_hour"]) if "scan_hour" in values else None,
+        "tag_threshold": float(values["tag_threshold"]) if "tag_threshold" in values else None,
+    }
+    # 카테고리 플래그는 키가 없으면 기본 활성화(true) — 이 기능 도입 이전과 동일하게
+    # 전부 켜진 상태로 취급해야 기존 사용자 동작이 안 바뀐다. ai_worker의
+    # category_flags()와 "1"/"0" 문자열 규약을 동일하게 맞춰야 한다.
+    for key in _CATEGORY_SETTING_KEYS:
+        result[key] = values.get(key, "1") != "0"
+    return result
+
+
 @router.get("/ai/settings")
 async def get_ai_settings(_: str = Depends(get_current_admin), db=Depends(get_ai_db)):
-    """scan_hour: Admin이 설정한 야간 스캔 시각. null이면 워커 환경변수(AI_SCAN_HOUR) 사용."""
-    async with db.execute(
-        "SELECT value FROM ai_settings WHERE key = 'scan_hour'"
-    ) as cur:
-        row = await cur.fetchone()
-    return {"scan_hour": int(row["value"]) if row else None}
+    """scan_hour: 야간 스캔 시각(AI_SCAN_HOUR), tag_threshold: CLIP 태그 부여 임계값
+    (AI_TAG_THRESHOLD). 둘 다 null이면 워커 환경변수 사용. face_enabled/
+    location_enabled/path_enabled/ai_tag_enabled: 카테고리별 on/off, 기본 true."""
+    return await _read_ai_settings(db)
 
 
 @router.patch("/ai/settings")
 async def update_ai_settings(
     body: AiSettingsUpdate, _: str = Depends(get_current_admin), db=Depends(get_ai_db)
 ):
-    await db.execute(
-        "INSERT OR REPLACE INTO ai_settings (key, value) VALUES ('scan_hour', ?)",
-        (str(body.scan_hour),),
-    )
+    if body.scan_hour is not None:
+        await db.execute(
+            "INSERT OR REPLACE INTO ai_settings (key, value) VALUES ('scan_hour', ?)",
+            (str(body.scan_hour),),
+        )
+    if body.tag_threshold is not None:
+        await db.execute(
+            "INSERT OR REPLACE INTO ai_settings (key, value) VALUES ('tag_threshold', ?)",
+            (str(body.tag_threshold),),
+        )
+    for key in _CATEGORY_SETTING_KEYS:
+        value = getattr(body, key)
+        if value is not None:
+            await db.execute(
+                "INSERT OR REPLACE INTO ai_settings (key, value) VALUES (?, ?)",
+                (key, "1" if value else "0"),
+            )
     await db.commit()
-    return {"scan_hour": body.scan_hour}
+    return await _read_ai_settings(db)

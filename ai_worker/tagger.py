@@ -149,7 +149,7 @@ class ClipTaggingContext:
 
 
 def tag_threshold_setting(conn: sqlite3.Connection) -> float:
-    """ai_settings의 tag_threshold(Admin 설정, Phase 4 예정)가 있으면 우선,
+    """ai_settings의 tag_threshold(Admin 설정)가 있으면 우선,
     없으면 환경변수(daemon.scan_hour_setting과 동일 패턴)."""
     row = conn.execute(
         "SELECT value FROM ai_settings WHERE key = 'tag_threshold'"

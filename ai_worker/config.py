@@ -39,7 +39,7 @@ def tag_threshold() -> float:
     """CLIP zero-shot 태그 부여 임계값(코사인 유사도). 정식 eval은 생략하고
     (doc/tagging_requirement.md 결정) 실사진 15장 정성 검증(2026-08-02, 82개 어휘
     기준 평균 4.4개/사진 부여, 누락 0건)으로 잡은 초기값. `tagger.tag_threshold_setting`을
-    통해 ai_settings(Admin 설정, Phase 4 예정)가 있으면 이 값보다 우선한다."""
+    통해 ai_settings(Admin 설정)가 있으면 이 값보다 우선한다."""
     return float(os.getenv("AI_TAG_THRESHOLD", "0.24"))
 
 

@@ -31,6 +31,22 @@ def _pending_orphan_count(conn) -> int:
     ).fetchone()[0]
 
 
+_CATEGORY_KEYS = ("face_enabled", "location_enabled", "path_enabled", "ai_tag_enabled")
+
+
+def category_flags(conn) -> dict[str, bool]:
+    """ai_settings의 카테고리별 on/off(Admin 설정). 키가 없으면 기본 활성화(True) —
+    이 기능 도입 이전과 동일하게 전부 켜진 상태로 동작해야 기존 사용자 동작이
+    안 바뀐다. 값이 '0'일 때만 off, 그 외(키 없음 포함)는 on."""
+    placeholders = ",".join("?" * len(_CATEGORY_KEYS))
+    rows = conn.execute(
+        f"SELECT key, value FROM ai_settings WHERE key IN ({placeholders})",
+        _CATEGORY_KEYS,
+    ).fetchall()
+    values = {row["key"]: row["value"] for row in rows}
+    return {key: values.get(key, "1") != "0" for key in _CATEGORY_KEYS}
+
+
 def run_scan(limit: int | None = None) -> dict:
     from ai_worker.pipeline import FacePipeline, analyze_and_store
     from ai_worker.tag_vocab import TAG_VOCAB
@@ -38,6 +54,7 @@ def run_scan(limit: int | None = None) -> dict:
 
     conn = db.connect()
     root = config.photo_root()
+    flags = category_flags(conn)
     pending = scanner.pending_photos(conn, root)
     renamed = _pending_repair_count(conn)
     orphaned = _pending_orphan_count(conn)
@@ -55,8 +72,9 @@ def run_scan(limit: int | None = None) -> dict:
 
     # 폴더명 태깅(Kiwi)은 mtime 기반 pending과 무관한 커버리지 방식이라, 얼굴 재분석
     # 대상이 없어도(pending 비어도) 실행해야 한다 — 이 기능 도입 이전 사진이나
-    # 경로복구로 새로 생긴 path 태그 공백을 여기서 채운다.
-    path_tagged = scanner.tag_paths_from_folder_names(conn)
+    # 경로복구로 새로 생긴 path 태그 공백을 여기서 채운다. 카테고리가 꺼져 있으면
+    # 새로 생성하지 않는다(기존 태그는 그대로 둠).
+    path_tagged = scanner.tag_paths_from_folder_names(conn) if flags["path_enabled"] else 0
     if path_tagged:
         log.info("폴더명 태깅(Kiwi): %d장에 path 태그 반영", path_tagged)
     summary["path_tagged"] = path_tagged
@@ -64,26 +82,34 @@ def run_scan(limit: int | None = None) -> dict:
     if not pending:
         return summary
 
-    log.info("모델 로딩 중 (buffalo_l, det_size=%d)...", config.det_size())
-    pipeline = FacePipeline()
-    enrollment = matcher.load_enrollment(conn)
+    pipeline = None
+    enrollment = {}
     threshold = config.match_threshold()
-    log.info("등록 인물 %d명, threshold=%.2f", len(enrollment), threshold)
+    if flags["face_enabled"]:
+        log.info("모델 로딩 중 (buffalo_l, det_size=%d)...", config.det_size())
+        pipeline = FacePipeline()
+        enrollment = matcher.load_enrollment(conn)
+        log.info("등록 인물 %d명, threshold=%.2f", len(enrollment), threshold)
+    else:
+        log.info("얼굴 인식 비활성화(Admin 설정) — 이번 스캔은 얼굴 검출을 건너뜁니다")
 
     # CLIP 태깅은 얼굴 인식과 별개 기능이라, 모델 다운로드/로딩이 실패해도(네트워크
     # 불안정 등) 얼굴 분석 자체는 계속 진행한다 — best-effort.
     clip_ctx = None
-    try:
-        log.info("CLIP 태깅 모델 로딩 중...")
-        clip_tagger = ClipTagger()
-        tag_threshold = tag_threshold_setting(conn)
-        text_embeds = clip_tagger.embed_texts([e["prompt"] for e in TAG_VOCAB])
-        clip_ctx = ClipTaggingContext(
-            tagger=clip_tagger, text_embeds=text_embeds, threshold=tag_threshold
-        )
-        log.info("CLIP 태깅 준비 완료 (어휘 %d개, threshold=%.2f)", len(TAG_VOCAB), tag_threshold)
-    except Exception:
-        log.exception("CLIP 태깅 모델 로딩 실패 — 이번 스캔은 얼굴 인식만 수행")
+    if flags["ai_tag_enabled"]:
+        try:
+            log.info("CLIP 태깅 모델 로딩 중...")
+            clip_tagger = ClipTagger()
+            tag_threshold = tag_threshold_setting(conn)
+            text_embeds = clip_tagger.embed_texts([e["prompt"] for e in TAG_VOCAB])
+            clip_ctx = ClipTaggingContext(
+                tagger=clip_tagger, text_embeds=text_embeds, threshold=tag_threshold
+            )
+            log.info("CLIP 태깅 준비 완료 (어휘 %d개, threshold=%.2f)", len(TAG_VOCAB), tag_threshold)
+        except Exception:
+            log.exception("CLIP 태깅 모델 로딩 실패 — 이번 스캔은 사물(AI 태그) 태깅을 건너뜁니다")
+    else:
+        log.info("사물(AI 태그) 인식 비활성화(Admin 설정) — 이번 스캔은 CLIP 태깅을 건너뜁니다")
 
     start = time.monotonic()
     total_faces = 0
@@ -92,7 +118,8 @@ def run_scan(limit: int | None = None) -> dict:
     tagged = 0
     for i, (rel_path, mtime) in enumerate(pending, 1):
         face_count, ok, was_located, was_tagged = analyze_and_store(
-            pipeline, conn, rel_path, mtime, enrollment, threshold, clip_ctx=clip_ctx,
+            pipeline, conn, rel_path, mtime, enrollment, threshold,
+            clip_ctx=clip_ctx, location_enabled=flags["location_enabled"],
         )
         total_faces += face_count
         if not ok:
@@ -141,6 +168,12 @@ def run_tag_backfill(limit: int | None = None) -> dict:
       tag-backfill만 실행할 가능성을 대비해 여기서도 호출한다(idempotent).
     - status='error'(얼굴 분석 자체가 실패한) 사진은 대상에서 제외 — 같은 파일이라
       CLIP도 열지 못할 가능성이 높음.
+
+    카테고리가 꺼져 있으면(Admin 설정) 해당 카테고리는 소급 처리도 건너뛴다 — "끄면
+    새로 생성하지 않는다"는 원칙이 scan()뿐 아니라 backfill에도 동일하게 적용된다.
+    반대로 껐다가 다시 켠 경우, 꺼져 있던 동안 건너뛴 사진은 정확히 이 함수가
+    대상으로 삼는 "photo_embeddings/photo_locations가 없는 사진"과 일치하므로
+    별도 로직 없이 이 배치를 한 번 더 돌리는 것만으로 밀린 부분이 채워진다.
     """
     from ai_worker import pipeline
     from ai_worker.tag_vocab import TAG_VOCAB
@@ -148,8 +181,17 @@ def run_tag_backfill(limit: int | None = None) -> dict:
 
     conn = db.connect()
     root = config.photo_root()
+    flags = category_flags(conn)
 
-    path_tagged = scanner.tag_paths_from_folder_names(conn)
+    path_tagged = scanner.tag_paths_from_folder_names(conn) if flags["path_enabled"] else 0
+
+    summary = {
+        "photos": 0, "embedded": 0, "rescored": 0, "located": 0,
+        "errors": 0, "path_tagged": path_tagged, "elapsed": 0.0,
+    }
+
+    if not flags["ai_tag_enabled"] and not flags["location_enabled"]:
+        return summary
 
     rows = conn.execute(
         "SELECT path FROM photos_analyzed WHERE status = 'done' ORDER BY path"
@@ -158,11 +200,7 @@ def run_tag_backfill(limit: int | None = None) -> dict:
     if limit is not None and len(targets) > limit:
         targets = random.Random(42).sample(targets, limit)
         log.info("--limit %d: 랜덤 샘플 %d장만 처리", limit, len(targets))
-
-    summary = {
-        "photos": len(targets), "embedded": 0, "rescored": 0, "located": 0,
-        "errors": 0, "path_tagged": path_tagged, "elapsed": 0.0,
-    }
+    summary["photos"] = len(targets)
     if not targets:
         return summary
 
@@ -175,12 +213,14 @@ def run_tag_backfill(limit: int | None = None) -> dict:
                     "tag-backfill을 건너뜁니다.", root)
         return summary
 
-    log.info("CLIP 태깅 모델 로딩 중...")
-    clip_tagger = ClipTagger()
-    threshold = tag_threshold_setting(conn)
-    text_embeds = clip_tagger.embed_texts([e["prompt"] for e in TAG_VOCAB])
-    clip_ctx = ClipTaggingContext(tagger=clip_tagger, text_embeds=text_embeds, threshold=threshold)
-    log.info("CLIP 태깅 준비 완료 (어휘 %d개, threshold=%.2f)", len(TAG_VOCAB), threshold)
+    clip_ctx = None
+    if flags["ai_tag_enabled"]:
+        log.info("CLIP 태깅 모델 로딩 중...")
+        clip_tagger = ClipTagger()
+        threshold = tag_threshold_setting(conn)
+        text_embeds = clip_tagger.embed_texts([e["prompt"] for e in TAG_VOCAB])
+        clip_ctx = ClipTaggingContext(tagger=clip_tagger, text_embeds=text_embeds, threshold=threshold)
+        log.info("CLIP 태깅 준비 완료 (어휘 %d개, threshold=%.2f)", len(TAG_VOCAB), threshold)
 
     start = time.monotonic()
     for i, rel_path in enumerate(targets, 1):
@@ -190,18 +230,21 @@ def run_tag_backfill(limit: int | None = None) -> dict:
         has_location = conn.execute(
             "SELECT 1 FROM photo_locations WHERE photo_path = ?", (rel_path,)
         ).fetchone() is not None
+        need_embedding = flags["ai_tag_enabled"] and not has_embedding
+        need_location = flags["location_enabled"] and not has_location
 
         # rescore_ai_tags_from_cache와 backfill_photo를 하나의 try로 묶는다 — 캐시된
         # 벡터가 손상된 경우(blob_to_embedding 실패 등) 한 장 때문에 전체 배치가
         # 죽지 않고, 사진 1장 = 1 트랜잭션(resumable) 원칙을 그대로 지킨다.
         try:
-            if has_embedding and pipeline.rescore_ai_tags_from_cache(conn, rel_path, clip_ctx):
+            if flags["ai_tag_enabled"] and has_embedding \
+                    and pipeline.rescore_ai_tags_from_cache(conn, rel_path, clip_ctx):
                 summary["rescored"] += 1
-            if not has_embedding or not has_location:
+            if need_embedding or need_location:
                 abs_path = os.path.join(root, rel_path)
                 embedded, located = pipeline.backfill_photo(
                     conn, rel_path, abs_path, clip_ctx,
-                    need_embedding=not has_embedding, need_location=not has_location,
+                    need_embedding=need_embedding, need_location=need_location,
                 )
                 summary["embedded"] += int(embedded)
                 summary["located"] += int(located)

@@ -61,6 +61,42 @@ tools/        # label_helper.py (CSV 라벨링), eval.py (precision/recall)
   액션이라 예외적으로 `photos_analyzed.path`/`faces.photo_path`를 직접 UPDATE한다
   (admin이 승인한 rename/move 제안 반영, WAL+busy_timeout으로 워커와의 동시 쓰기 직렬화)
 
+### 카테고리별 on/off (`ai_settings`) — 얼굴/위치/폴더명/사물
+`ai_settings`에 `face_enabled`/`location_enabled`/`path_enabled`/`ai_tag_enabled`
+4개 키(문자열 `"1"`/`"0"`, 키가 없으면 기본 활성화 — 이 기능 도입 이전과 동일하게
+전부 켜진 상태로 취급)로 카테고리별 on/off를 관리한다. Admin(`GET/PATCH
+/api/admin/ai/settings`, `backend/routers/admin_people.py`)과 워커
+(`main.category_flags()`)가 같은 `"1"`/`"0"` 문자열 규약을 각자 독립적으로
+파싱한다 — 이 둘을 잇는 자동 테스트는 없으므로, 값 인코딩을 바꿀 때는(예:
+`"1"/"0"` → JSON boolean) 양쪽을 함께 수정해야 한다.
+
+**원칙: "끄면 다음 스캔부터 새로 생성하지 않지만, 기존 데이터는 지우지 않는다"**
+(`pipeline.analyze_and_store()`가 카테고리별로 구현):
+- 얼굴 인식이 꺼지면(`pipeline=None`) `faces`/`face_matches`를 DELETE도 INSERT도
+  하지 않는다 — `photos_analyzed.face_count`는 현재 남아있는 행 수를 그대로
+  기록하되, `analyze_and_store()`의 반환값(이번 스캔에서 "새로 검출"한 수, 로그·
+  `summary["faces"]`·Discord 알림에 합산됨)은 항상 0이다. 이 둘을 같은 값으로
+  섞으면 재분석할 때마다 실제 검출량과 무관하게 통계가 기존 얼굴 수만큼 부풀어
+  오른다(구현 시 실수하기 쉬운 지점).
+- 위치가 꺼지면 `_update_location()` 호출 자체를 생략(`photo_locations` 보존).
+- 사물(AI 태그)이 꺼지면 CLIP 모델을 아예 로딩하지 않고 `clip_ctx=None`을 넘긴다
+  — `_update_ai_tags()`가 `clip_ctx=None`일 때 기존 태그를 보존하는 기존
+  best-effort 경로(CLIP 로딩 실패 시 폴백)를 그대로 재사용한 것이라, "의도적으로
+  끔"과 "로딩 실패"가 코드상 구분되지 않는다(결과가 똑같아 문제 없음).
+- 폴더명이 꺼지면 `scanner.tag_paths_from_folder_names()` 호출 자체를 생략.
+
+**재활성화 시 밀린 분량 처리(MVP 범위, 2026-08-04 결정)**: 위치·사물은
+`tag-backfill`이 원래 "`photo_embeddings`/`photo_locations`가 없는 사진"을
+대상으로 삼으므로, 꺼져 있던 동안 건너뛴 사진과 정확히 일치해 별도 로직 없이
+`tag-backfill`을 한 번 더 돌리면 밀린 부분이 채워진다(`run_tag_backfill()`도
+같은 플래그를 읽어 꺼진 카테고리는 backfill도 건너뜀 — "끄면 새로 생성 안 함"
+원칙이 소급 처리에도 동일 적용). **얼굴은 대칭 메커니즘이 없다** — 기존
+"재매칭"(`rematch`)은 이미 `faces`에 있는 임베딩을 인물과 재매칭할 뿐 얼굴
+검출 자체를 다시 하지 않으므로, 꺼진 동안 스캔된 사진의 얼굴은 그 사진이
+`pending_photos()`(mtime 기반)에 다시 걸릴 때까지 인식되지 않는다. 얼굴
+백필(예: photos_analyzed에 "얼굴 검사 안 함" 마커 추가 후 tag-backfill류
+배치가 InsightFace까지 로딩해 처리)은 의도적으로 범위 밖으로 미뤘다.
+
 ### 경로 rename/move 복구 — 제안 후 admin 승인
 `scanner.pending_photos()`가 매 스캔(야간/수동)마다 같은 walk 결과로
 `queue_rename_proposals()`를 실행해 사라진 경로를 basename 1:1 매칭만 탐지, `pending_path_repairs`
@@ -146,6 +182,9 @@ GPS `location='서울'` + 폴더명 `path='서울'`).
 `photo_tags`처럼 상시 동시 쓰기는 아니고, 기존 path-repair 예외의 연장선.
 
 ### GPS 위치 태깅 (`geocoder.py`) — 오프라인, 도시는 영문·국가만 한국어
+`ai_settings.location_enabled`가 꺼져 있으면 아래 전체를 건너뛴다(위 "카테고리별
+on/off" 참고) — 이 섹션의 서술은 켜져 있을 때 기준이다.
+
 `pipeline.FacePipeline.analyze()`가 `ImageOps.exif_transpose()` 호출 **전**
 원본 이미지에서 GPS EXIF를 읽는다(transpose 이후 이미지는 exif가 유실될 수 있음).
 좌표가 있으면 `geocoder.reverse_geocode()`(reverse_geocoder, GeoNames 기반 오프라인
@@ -166,6 +205,9 @@ alpha-2 코드를 `geocoder._COUNTRY_NAMES_KO` 정적 매핑으로 한국어 국
 요구하는 `if __name__ == "__main__":` 가드 없이도 워커 루프 안에서 안전하게 호출한다.
 
 ### 폴더명 태깅 (Kiwi, `scanner.py`) — 커버리지 방식, mtime과 무관
+`ai_settings.path_enabled`가 꺼져 있으면 `run_scan()`/`run_tag_backfill()`
+모두 이 함수 호출 자체를 생략한다(위 "카테고리별 on/off" 참고).
+
 `scanner.tag_paths_from_folder_names()`는 `photo_tags`에 `source='path'` 행이
 하나도 없는 `photos_analyzed` 사진만 골라 바로 위 폴더명 1단계를 Kiwi 형태소
 분석기(명사 NNG/NNP만, 1음절은 접미 파편으로 보고 제외)로 분석해 태깅한다.
@@ -183,6 +225,10 @@ new_path 폴더명으로 다시 채운다. `location`/`ai`/`manual`/`person` 태
 `UPDATE`한다.
 
 ### 사물/장면 태깅 (CLIP, `tagger.py`/`tag_vocab.py`) — scan()은 신규/변경 사진만
+`ai_settings.ai_tag_enabled`가 꺼져 있으면 `run_scan()`/`run_tag_backfill()`
+모두 CLIP 모델을 아예 로딩하지 않는다(위 "카테고리별 on/off" 참고) — 아래
+서술은 켜져 있을 때 기준이다.
+
 `pipeline.analyze_and_store()`가 얼굴 검출과 같은 이미지(이미 exif_transpose까지
 끝난 것)로 CLIP 이미지 임베딩을 계산해 `photo_embeddings`에 캐시하고,
 `tag_vocab.TAG_VOCAB`(80개, 텍스트 임베딩은 `run_scan()`에서 스캔당 1회만 계산해
@@ -219,9 +265,9 @@ Content-Length와 실제 수신 바이트 수를 비교해 불완전 응답을 �
 단체사진" 방향으로 수렴)가 무관한 야외 사진에서도 반복적으로 상위 태그로
 발화해 2026-08-02 어휘에서 제외(82→80개) — 프롬프트를 더 구체적인 장면
 묘사로 재작성해 재검증하기 전까지는 tag_vocab.py에 다시 넣지 않는다.
-CLIP 로딩(모델 다운로드 포함) 실패는 얼굴 인식과 무관한 별도 기능이라 그
-스캔은 얼굴 인식만 수행하고 계속 진행한다(best-effort, `run_scan()`에서
-예외를 삼킴).
+CLIP 로딩(모델 다운로드 포함) 실패는 얼굴 인식과 무관한 별도 기능이라 이번
+스캔은 사물(AI 태그) 태깅만 건너뛰고 나머지(얼굴 인식·위치·폴더명, 켜져 있는
+것만)는 계속 진행한다(best-effort, `run_scan()`에서 예외를 삼킴).
 
 ### AI 태그 재계산 (`tag-backfill`) — CLIP/위치 소급 처리 전용 배치
 `python -m ai_worker.main tag-backfill` (`main.run_tag_backfill()`) 또는
@@ -234,7 +280,10 @@ daemon이 폴링해 실행한다 — `scan`/`rematch`와 동일한 일반 잡 �
 **전체**(`status='done'`, 얼굴 분석 자체가 실패한 `error` 행은 같은 파일을
 CLIP도 못 열 가능성이 높아 제외)를 대상으로 하는 명시적 배치 작업이다 —
 admin이 어휘/threshold를 바꾼 뒤, 또는 이 기능 도입 이전 사진에 소급
-적용하고 싶을 때 의도적으로 실행한다. 사진마다:
+적용하고 싶을 때 의도적으로 실행한다. **`ai_tag_enabled`/`location_enabled`가
+꺼져 있으면 해당 트랙은 여기서도 건너뛴다**(위 "카테고리별 on/off" 참고) —
+둘 다 꺼져 있으면 `photos_analyzed` 조회·CLIP 로딩 없이 즉시 반환(폴더명
+태깅만 `path_enabled`에 따라 별도로 반영). 사진마다(두 트랙 다 켜져 있을 때):
 
 - `photo_embeddings`가 있으면 `pipeline.rescore_ai_tags_from_cache()`로
   **재인코딩 없이** 캐시된 벡터만 재사용해 현재 어휘/threshold로 재채점 —
