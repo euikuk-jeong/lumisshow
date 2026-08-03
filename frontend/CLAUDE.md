@@ -21,6 +21,7 @@ assets/js/
   layout.js                       # admin shell 렌더 헬퍼
   utils.js                        # esc() HTML 이스케이프 등
   date-scroll-indicator.js        # 날짜별 보기 스크롤 중 년/월/일 배지 표시 (browse/album-edit/person-photos 공용)
+  lightbox.js                     # Admin 전체크기 사진 뷰어 (openLightbox, browse/album-edit/tags/person-detail/person-photos 공용). i 버튼으로 EXIF·태그 정보 패널(GET /api/admin/photo-info) 조회
   pages/
     admin-login.js                # 로그인 폼
     admin-albums.js               # 앨범 목록
@@ -74,6 +75,8 @@ CSS animation 우선(GPU 가속). `EFFECTS` 배열에서 랜덤 선택. 수동 �
 `renderInfoContent()` — 사진 EXIF 정보 + 태그(Phase 6) + (음악 재생 중이면) 구분선 + 음악 섹션. 트랙 변경·음악 토글 시 `refreshInfoPanel()`로 실시간 갱신.
 
 태그 5개 행(인물/위치/태그/폴더명/직접 추가)은 `SharePhotoItem`의 `person_tags`/`location_tags`/`ai_tags`/`path_tags`/`manual_tags`를 그대로 표시 — 뷰어별 노출 범위(공유 링크는 person/location 비노출)는 백엔드(`services/photo_tags.py`)가 이미 걸러 보내므로 프론트에서 재분기하지 않는다.
+
+**Admin 라이트박스(`lightbox.js`)의 i 버튼**: 슬라이드쇼와 달리 라이트박스는 사진 목록을 경로 문자열 배열로만 받아(EXIF·태그 미포함) 열리므로, i 버튼 클릭 시 `GET /api/admin/photo-info?path=`로 사진 1장분을 그때그때 조회한다. 캐싱은 하지 않는다 — admin-tags.js의 "+ 태그 추가"(`extraAction`)로 패널이 열린 채 태그가 바뀔 수 있어, 캐시를 두면 갱신 후에도 이전 태그 목록이 남아있는 문제가 생긴다. 응답이 도착했을 때 패널이 이미 닫혔거나 다른 사진으로 넘어갔으면(`localPaths[idx] !== path`) 버린다. Admin 전용이라 `person_tags`/`location_tags`도 항상 채워져 인물 태그가 함께 표시된다(백엔드 `ADMIN_INFO_PANEL_SOURCES`).
 
 ### 음악 파일 선택 모달 (Admin)
 - `GET /api/admin/music` → 서버 목록 로드

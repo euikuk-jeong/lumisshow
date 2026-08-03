@@ -13,7 +13,9 @@
  *                             공통 disable·에러 alert 래핑을 하지 않음 — 버튼을 다시
  *                             누를 수 있는 채로 두는 게 태그 추가 같은 반복 동작에 더 맞음).
  */
+import { api } from './api.js';
 import { startedInEdgeZone, resolveSwipeDirection } from './touch-gesture.js';
+import { esc } from './utils.js';
 
 export function openLightbox(paths, startIdx, options = {}) {
   const localPaths = [...paths];
@@ -26,10 +28,12 @@ export function openLightbox(paths, startIdx, options = {}) {
   const overlay = document.createElement('div');
   overlay.className = 'lightbox-overlay';
   overlay.innerHTML = `
+    <button class="lightbox-info-btn" id="lb-btn-info" title="정보">i</button>
     <button class="lightbox-close" title="닫기">✕</button>
     <button class="lightbox-nav lightbox-prev">‹</button>
     <div class="lightbox-body">
       <img class="lightbox-img" src="" alt="">
+      <div class="lightbox-info" id="lb-info" style="display:none"></div>
       <div class="lightbox-caption"></div>
       ${hasFooter ? `<div class="lightbox-footer">
         ${hasSelection ? `<div class="lightbox-sel-area">
@@ -48,6 +52,77 @@ export function openLightbox(paths, startIdx, options = {}) {
 
   const imgEl     = overlay.querySelector('.lightbox-img');
   const captionEl = overlay.querySelector('.lightbox-caption');
+  const infoBtn   = overlay.querySelector('#lb-btn-info');
+  const infoEl    = overlay.querySelector('#lb-info');
+
+  // ── 정보 패널 (i 버튼: EXIF·태그, person/location 포함 — Admin 전용) ──
+  // 매번 새로 조회한다(캐싱 안 함) — admin-tags.js의 "+ 태그 추가"(extraAction)로
+  // 패널이 열린 채 태그를 바꿀 수 있어, 캐시를 두면 갱신 후에도 이전 태그 목록이
+  // 계속 보이는 문제가 생긴다.
+  let infoVisible = false;
+
+  function rowsToHtml(rows) {
+    return rows.map(([l, v]) =>
+      `<div class="lightbox-info-row"><span class="lightbox-info-label">${esc(l)}</span><span class="lightbox-info-value">${esc(v)}</span></div>`
+    ).join('');
+  }
+
+  function formatInfo(info) {
+    const exifRows = [];
+    const add = (label, value) => { if (value != null && value !== '') exifRows.push([label, String(value)]); };
+
+    add('Filename', info.filename);
+    if (info.taken_at) {
+      const d = new Date(info.taken_at);
+      const pad = n => String(n).padStart(2, '0');
+      add('Date', `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`);
+    }
+    if (info.width && info.height) add('Resolution', `${info.width} × ${info.height}`);
+    add('Make', info.make);
+    add('Camera', info.camera);
+    add('Software', info.software);
+    add('Shoot Mode', info.shoot_mode);
+    add('Exposure', info.shutter);
+    add('Aperture', info.aperture);
+    add('ISO', info.iso);
+    add('Focal Length', info.focal_length);
+    add('Flash', info.flash);
+    add('Metering', info.metering);
+    add('Exposure Mode', info.exposure_mode);
+
+    const tagRows = [];
+    const addList = (label, list) => { if (list && list.length) tagRows.push([label, list.join(', ')]); };
+    addList('인물', info.person_tags);
+    addList('위치', info.location_tags);
+    addList('태그', info.ai_tags);
+    addList('폴더명', info.path_tags);
+    addList('직접 추가', info.manual_tags);
+
+    const exifHtml = rowsToHtml(exifRows);
+    if (!tagRows.length) return exifHtml;
+    return `${exifHtml}<div class="lightbox-info-divider"></div><div class="lightbox-info-section">🏷 태그</div>${rowsToHtml(tagRows)}`;
+  }
+
+  async function refreshInfoPanel() {
+    if (!infoVisible) return;
+    const path = localPaths[idx];
+    infoEl.innerHTML = '<div class="lightbox-info-loading">불러오는 중…</div>';
+    try {
+      const info = await api.get(`/api/admin/photo-info?path=${encodeURIComponent(path)}`);
+      if (!infoVisible || localPaths[idx] !== path) return; // 패널이 닫혔거나 다른 사진으로 이동한 뒤 도착한 응답은 버림
+      infoEl.innerHTML = formatInfo(info);
+    } catch (err) {
+      if (!infoVisible || localPaths[idx] !== path) return;
+      infoEl.innerHTML = '<div class="lightbox-info-error">정보를 불러오지 못했습니다.</div>';
+    }
+  }
+
+  infoBtn.addEventListener('click', () => {
+    infoVisible = !infoVisible;
+    infoEl.style.display = infoVisible ? 'block' : 'none';
+    infoBtn.classList.toggle('lb-info-active', infoVisible);
+    if (infoVisible) refreshInfoPanel();
+  });
 
   // ── 확대/이동 (wheel 줌, 드래그 팬, 더블클릭 토글) ──
   let scale = 1, tx = 0, ty = 0;
@@ -191,6 +266,7 @@ export function openLightbox(paths, startIdx, options = {}) {
       coverBtn.disabled = isCurrent;
     }
     updateSelectionUI();
+    refreshInfoPanel();
   }
 
   let closed = false;

@@ -11,12 +11,19 @@ from fastapi.responses import FileResponse
 
 from backend.models.ai_database import get_ai_db
 from backend.models.database import get_db
-from backend.models.schemas import BrowseResponse, FolderItem, PhotoItem, SearchResponse
+from backend.models.schemas import (
+    _EXIF_META_FIELDS,
+    BrowseResponse,
+    FolderItem,
+    PhotoInfoResponse,
+    PhotoItem,
+    SearchResponse,
+)
 
 _AUDIO_EXTENSIONS = {'.mp3', '.flac', '.ogg', '.m4a', '.wav', '.aac', '.opus'}
 from backend.services.auth import admin_image_auth, get_current_admin
 from backend.services.photo_meta import load_photo_meta
-from backend.services.photo_tags import search_tag_matched_paths
+from backend.services.photo_tags import ADMIN_INFO_PANEL_SOURCES, load_photo_tags, search_tag_matched_paths
 from backend.services.settings import get_settings
 from backend.services.thumbnail import IMAGE_EXTENSIONS, generate_thumbnail
 
@@ -314,3 +321,37 @@ async def admin_photo(
     if not os.path.isfile(full_path):
         raise HTTPException(status_code=404, detail="File not found")
     return FileResponse(full_path)
+
+
+@router.get("/photo-info", response_model=PhotoInfoResponse)
+async def admin_photo_info(
+    path: str = Query(...),
+    _: str = Depends(get_current_admin),
+    db=Depends(get_db),
+    ai_db=Depends(get_ai_db),
+):
+    """Admin 라이트박스(i 버튼)용 단일 사진 EXIF·태그 조회. person/location 포함
+    전체 source(ADMIN_INFO_PANEL_SOURCES) 노출 — Admin 전용이라 뷰어별 노출 범위
+    분기가 필요 없다."""
+    root = _photo_root()
+    if os.path.isabs(path):
+        full_path = os.path.realpath(path)
+    else:
+        full_path = os.path.realpath(os.path.join(root, path.lstrip("/\\")))
+    if full_path != root and not full_path.startswith(root + os.sep):
+        raise HTTPException(status_code=400, detail="Invalid path")
+    if not os.path.isfile(full_path):
+        raise HTTPException(status_code=404, detail="File not found")
+
+    rel = os.path.relpath(full_path, root).replace("\\", "/")
+    meta = (await load_photo_meta([rel], db)).get(rel, {})
+    tags = (await load_photo_tags([rel], ai_db, ADMIN_INFO_PANEL_SOURCES)).get(rel, {})
+    return PhotoInfoResponse(
+        filename=os.path.basename(full_path),
+        person_tags=tags.get("person", []),
+        location_tags=tags.get("location", []),
+        ai_tags=tags.get("ai", []),
+        path_tags=tags.get("path", []),
+        manual_tags=tags.get("manual", []),
+        **{k: meta.get(k) for k in _EXIF_META_FIELDS},
+    )

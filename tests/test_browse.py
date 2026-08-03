@@ -317,6 +317,62 @@ async def test_photo_absolute_path(auth_client, photo_root):
     assert r.status_code == 200
 
 
+# ── photo-info (i 버튼: EXIF·태그 조회) ────────────────────────────────────────
+
+async def test_photo_info_returns_exif(auth_client, photo_root):
+    _make_jpg_with_exif(photo_root / "dated.jpg", "2023:05:15 10:30:00")
+    r = await auth_client.get("/api/admin/photo-info?path=dated.jpg")
+    assert r.status_code == 200
+    data = r.json()
+    assert data["filename"] == "dated.jpg"
+    assert data["taken_at"].startswith("2023-05-15")
+    assert data["width"] == 100
+
+
+async def test_photo_info_includes_all_tag_sources(auth_client):
+    """Admin 전용이므로 person/location 태그도 함께 노출돼야 한다."""
+    await _seed_tag("홍길동", "photo0.jpg", source="person")
+    await _seed_tag("서울", "photo0.jpg", source="location")
+    await _seed_tag("캠핑", "photo0.jpg", source="ai")
+    await _seed_tag("직접입력", "photo0.jpg", source="manual")
+
+    r = await auth_client.get("/api/admin/photo-info?path=photo0.jpg")
+    data = r.json()
+    assert data["person_tags"] == ["홍길동"]
+    assert data["location_tags"] == ["서울"]
+    assert data["ai_tags"] == ["캠핑"]
+    assert data["manual_tags"] == ["직접입력"]
+
+
+async def test_photo_info_no_tags_returns_empty_lists(auth_client):
+    r = await auth_client.get("/api/admin/photo-info?path=photo0.jpg")
+    data = r.json()
+    assert data["person_tags"] == []
+    assert data["ai_tags"] == []
+
+
+async def test_photo_info_path_traversal_blocked(auth_client):
+    r = await auth_client.get("/api/admin/photo-info?path=../../etc/passwd")
+    assert r.status_code == 400
+
+
+async def test_photo_info_nonexistent_file(auth_client):
+    r = await auth_client.get("/api/admin/photo-info?path=no_such.jpg")
+    assert r.status_code == 404
+
+
+async def test_photo_info_requires_auth(client):
+    r = await client.get("/api/admin/photo-info?path=photo0.jpg")
+    assert r.status_code == 401
+
+
+async def test_photo_info_absolute_path(auth_client, photo_root):
+    abs_path = str(photo_root / "photo0.jpg")
+    r = await auth_client.get(f"/api/admin/photo-info?path={abs_path}")
+    assert r.status_code == 200
+    assert r.json()["filename"] == "photo0.jpg"
+
+
 # ── browse hidden paths ───────────────────────────────────────────────────────
 
 async def test_browse_hidden_folder_not_shown(auth_client, photo_root):
