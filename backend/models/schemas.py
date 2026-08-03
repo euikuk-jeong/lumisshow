@@ -316,7 +316,8 @@ class JobCreate(BaseModel):
     target_person_id: Optional[int] = None   # review_ignored 전용
 
 class AiSettingsUpdate(BaseModel):
-    scan_hour: int = Field(ge=0, le=23)  # 야간 자동 스캔 시각 (로컬 TZ)
+    scan_hour: Optional[int] = Field(default=None, ge=0, le=23)  # 야간 자동 스캔 시각 (로컬 TZ)
+    tag_threshold: Optional[float] = Field(default=None, ge=0.0, le=1.0)  # CLIP 태그 부여 임계값
 
 
 # ── 태그 관리 (Phase 5) ───────────────────────────────────────────────────

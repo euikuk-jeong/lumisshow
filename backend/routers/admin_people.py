@@ -1122,23 +1122,38 @@ async def create_job(
     return {"id": cur.lastrowid, "type": body.type, "duplicated": False}
 
 
+async def _read_ai_settings(db) -> dict:
+    async with db.execute(
+        "SELECT key, value FROM ai_settings WHERE key IN ('scan_hour', 'tag_threshold')"
+    ) as cur:
+        rows = await cur.fetchall()
+    values = {row["key"]: row["value"] for row in rows}
+    return {
+        "scan_hour": int(values["scan_hour"]) if "scan_hour" in values else None,
+        "tag_threshold": float(values["tag_threshold"]) if "tag_threshold" in values else None,
+    }
+
+
 @router.get("/ai/settings")
 async def get_ai_settings(_: str = Depends(get_current_admin), db=Depends(get_ai_db)):
-    """scan_hour: Admin이 설정한 야간 스캔 시각. null이면 워커 환경변수(AI_SCAN_HOUR) 사용."""
-    async with db.execute(
-        "SELECT value FROM ai_settings WHERE key = 'scan_hour'"
-    ) as cur:
-        row = await cur.fetchone()
-    return {"scan_hour": int(row["value"]) if row else None}
+    """scan_hour: 야간 스캔 시각(AI_SCAN_HOUR), tag_threshold: CLIP 태그 부여 임계값
+    (AI_TAG_THRESHOLD). 둘 다 null이면 워커 환경변수 사용."""
+    return await _read_ai_settings(db)
 
 
 @router.patch("/ai/settings")
 async def update_ai_settings(
     body: AiSettingsUpdate, _: str = Depends(get_current_admin), db=Depends(get_ai_db)
 ):
-    await db.execute(
-        "INSERT OR REPLACE INTO ai_settings (key, value) VALUES ('scan_hour', ?)",
-        (str(body.scan_hour),),
-    )
+    if body.scan_hour is not None:
+        await db.execute(
+            "INSERT OR REPLACE INTO ai_settings (key, value) VALUES ('scan_hour', ?)",
+            (str(body.scan_hour),),
+        )
+    if body.tag_threshold is not None:
+        await db.execute(
+            "INSERT OR REPLACE INTO ai_settings (key, value) VALUES ('tag_threshold', ?)",
+            (str(body.tag_threshold),),
+        )
     await db.commit()
-    return {"scan_hour": body.scan_hour}
+    return await _read_ai_settings(db)

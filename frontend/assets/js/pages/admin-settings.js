@@ -158,6 +158,27 @@ function renderSettingsForm(settings) {
         </div>
       </div>
 
+      <!-- AI 태그 인식 -->
+      <div class="settings-section card" id="ai-tag-section" style="display:none">
+        <div class="settings-section-header">
+          <p class="section-title">AI 태그 인식</p>
+          <p class="text-muted text-sm">CLIP 태그 부여 임계값(0~1, 낮을수록 태그가 더 많이 붙음) · 미설정 시 환경변수 AI_TAG_THRESHOLD(기본 0.24) 사용 · 변경은 다음 스캔부터 반영, 이미 분석된 사진에 소급 적용하려면 태그 관리 화면에서 재계산 실행 필요</p>
+        </div>
+        <div class="settings-group">
+          <div class="settings-item">
+            <label class="settings-label">인식 민감도</label>
+            <div class="settings-input-row">
+              <input id="s-ai-tag-threshold" type="number" min="0" max="1" step="0.01"
+                     class="form-input settings-num" placeholder="0.24">
+            </div>
+          </div>
+        </div>
+        <div class="settings-actions">
+          <button class="btn btn-primary btn-sm" id="btn-save-tag-threshold">저장</button>
+          <span id="tag-threshold-ok" class="text-success text-sm" style="display:none">저장됨 ✓</span>
+        </div>
+      </div>
+
       <!-- XMP 내보내기 -->
       <div class="settings-section card" id="xmp-export-section" style="display:none">
         <div class="settings-section-header">
@@ -235,19 +256,23 @@ function renderSettingsForm(settings) {
   initAiScanSection();
 }
 
-/* ── AI 야간 스캔 시각 (+ XMP 내보내기 섹션도 같은 ai.db 가용성 조건으로 노출) ── */
+/* ── AI 야간 스캔 시각 (+ AI 태그 인식·XMP 내보내기 섹션도 같은 ai.db 가용성 조건으로 노출) ── */
 async function initAiScanSection() {
   const section = document.getElementById('ai-scan-section');
+  const tagSection = document.getElementById('ai-tag-section');
   const xmpSection = document.getElementById('xmp-export-section');
   let current;
   try {
     current = await api.get('/api/admin/ai/settings');
   } catch {
-    return; // ai.db 미구성 등 — 두 섹션 모두 숨김 유지
+    return; // ai.db 미구성 등 — 세 섹션 모두 숨김 유지
   }
   const select = document.getElementById('s-ai-scan-hour');
   if (current.scan_hour != null) select.value = String(current.scan_hour);
+  const thresholdInput = document.getElementById('s-ai-tag-threshold');
+  if (current.tag_threshold != null) thresholdInput.value = String(current.tag_threshold);
   section.style.display = '';
+  tagSection.style.display = '';
   xmpSection.style.display = '';
 
   document.getElementById('btn-save-ai-scan').addEventListener('click', async () => {
@@ -257,6 +282,21 @@ async function initAiScanSection() {
     try {
       await api.patch('/api/admin/ai/settings', { scan_hour: parseInt(select.value, 10) });
       showOk('ai-scan-ok');
+    } catch (e) {
+      alert(e.message);
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  document.getElementById('btn-save-tag-threshold').addEventListener('click', async () => {
+    const btn = document.getElementById('btn-save-tag-threshold');
+    const value = parseFloat(thresholdInput.value);
+    if (Number.isNaN(value) || value < 0 || value > 1) { alert('0~1 사이 값을 입력하세요'); return; }
+    btn.disabled = true;
+    try {
+      await api.patch('/api/admin/ai/settings', { tag_threshold: value });
+      showOk('tag-threshold-ok');
     } catch (e) {
       alert(e.message);
     } finally {

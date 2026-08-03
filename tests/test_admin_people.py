@@ -1201,17 +1201,22 @@ async def test_ignored_candidates_list_filters_and_orders(admin_client, client):
 async def test_ai_settings_get_and_update(admin_client, client):
     # 미설정 시 null
     r = await admin_client.get("/api/admin/ai/settings")
-    assert r.status_code == 200 and r.json() == {"scan_hour": None}
+    assert r.status_code == 200
+    assert r.json() == {"scan_hour": None, "tag_threshold": None}
 
     # 설정 저장 → 조회 반영
     r = await admin_client.patch("/api/admin/ai/settings", json={"scan_hour": 4})
-    assert r.status_code == 200 and r.json() == {"scan_hour": 4}
+    assert r.status_code == 200
+    assert r.json() == {"scan_hour": 4, "tag_threshold": None}
     r = await admin_client.get("/api/admin/ai/settings")
-    assert r.json() == {"scan_hour": 4}
+    assert r.json() == {"scan_hour": 4, "tag_threshold": None}
 
     # 덮어쓰기
     await admin_client.patch("/api/admin/ai/settings", json={"scan_hour": 23})
-    assert (await admin_client.get("/api/admin/ai/settings")).json() == {"scan_hour": 23}
+    assert (await admin_client.get("/api/admin/ai/settings")).json() == {
+        "scan_hour": 23,
+        "tag_threshold": None,
+    }
 
     # 범위 밖 422
     r = await admin_client.patch("/api/admin/ai/settings", json={"scan_hour": 24})
@@ -1225,3 +1230,26 @@ async def test_ai_settings_get_and_update(admin_client, client):
     assert r.status_code in (401, 403)
     r = await client.patch("/api/admin/ai/settings", json={"scan_hour": 3})
     assert r.status_code in (401, 403)
+
+
+async def test_ai_settings_tag_threshold(admin_client):
+    # 미설정 시 null, scan_hour와 독립적으로 갱신
+    r = await admin_client.patch("/api/admin/ai/settings", json={"tag_threshold": 0.3})
+    assert r.status_code == 200
+    assert r.json() == {"scan_hour": None, "tag_threshold": 0.3}
+
+    # scan_hour를 건드리지 않고 tag_threshold만 갱신
+    await admin_client.patch("/api/admin/ai/settings", json={"scan_hour": 5})
+    r = await admin_client.patch("/api/admin/ai/settings", json={"tag_threshold": 0.18})
+    assert r.json() == {"scan_hour": 5, "tag_threshold": 0.18}
+
+    # 범위 밖 422
+    r = await admin_client.patch("/api/admin/ai/settings", json={"tag_threshold": 1.5})
+    assert r.status_code == 422
+    r = await admin_client.patch("/api/admin/ai/settings", json={"tag_threshold": -0.1})
+    assert r.status_code == 422
+
+    # body가 빈 객체면 값 변경 없이 현재 상태만 반환
+    r = await admin_client.patch("/api/admin/ai/settings", json={})
+    assert r.status_code == 200
+    assert r.json() == {"scan_hour": 5, "tag_threshold": 0.18}
