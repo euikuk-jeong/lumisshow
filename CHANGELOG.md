@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.1.0] - 2026-08-04
+
+### Added
+- **AI 태그(CLIP) 인식 민감도 Admin 설정**: `AI_TAG_THRESHOLD` 환경변수(컨테이너
+  재기동 필요) 없이 Admin 설정 화면에서 CLIP 태그 부여 임계값을 조정 가능
+  (`GET/PATCH /api/admin/ai/settings`의 `tag_threshold`)
+- **AI 인식 카테고리별(얼굴/위치/폴더명/사물) on/off 설정**: 4개 카테고리를
+  각각 독립적으로 켜고 끌 수 있는 설정 추가. 끄면 다음 스캔부터 새로 생성하지
+  않되 기존 데이터는 삭제되지 않고 그대로 유지되며, 위치·사물은 다시 켠 뒤
+  기존 "AI 태그 재계산"으로 밀린 분량을 소급 반영할 수 있음(얼굴 인식은 대칭
+  메커니즘이 없어 꺼져 있던 동안 스캔된 사진은 재스캔 전까지 인식되지 않는
+  제한을 가짐) (`ai_worker/pipeline.py`, `ai_worker/main.py`)
+
 ## [2.0.2] - 2026-08-03
 
 ### Fixed
@@ -995,7 +1008,8 @@ Phase 2 — AI 얼굴 인식 스마트 앨범. NAS 로컬 AI(InsightFace)로 사
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v2.0.2...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v2.1.0...HEAD
+[2.1.0]: https://github.com/euikuk-jeong/lumisshow/compare/v2.0.2...v2.1.0
 [2.0.2]: https://github.com/euikuk-jeong/lumisshow/compare/v2.0.1...v2.0.2
 [2.0.1]: https://github.com/euikuk-jeong/lumisshow/compare/v2.0.0...v2.0.1
 [2.0.0]: https://github.com/euikuk-jeong/lumisshow/compare/v1.16.1...v2.0.0
