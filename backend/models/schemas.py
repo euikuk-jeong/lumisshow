@@ -340,7 +340,8 @@ class ConfirmByScore(BaseModel):
     min_score: float = Field(ge=0.0, le=1.0)
 
 class JobCreate(BaseModel):
-    type: str                          # scan | rematch | review_ignored | tag_backfill
+    type: str                          # scan | rematch | review_ignored | tag_backfill |
+                                        # path_tag_reset | location_tag_reset
     target_person_id: Optional[int] = None   # review_ignored 전용
 
 class AiSettingsUpdate(BaseModel):

@@ -1062,6 +1062,20 @@ async def test_path_tag_reset_job_create_and_dedup(admin_client):
     assert stats["recent_jobs"][0]["status"] == "pending"
 
 
+async def test_location_tag_reset_job_create_and_dedup(admin_client):
+    """위치 태그 한글 재번역(location_tag_reset)도 동일한 일반 잡 생성·중복 방지 경로를 탄다."""
+    r = await admin_client.post("/api/admin/ai/jobs", json={"type": "location_tag_reset"})
+    assert r.status_code == 201 and r.json()["duplicated"] is False
+    job_id = r.json()["id"]
+
+    r = await admin_client.post("/api/admin/ai/jobs", json={"type": "location_tag_reset"})
+    assert r.json() == {"id": job_id, "type": "location_tag_reset", "duplicated": True}
+
+    stats = (await admin_client.get("/api/admin/ai/status")).json()
+    assert stats["recent_jobs"][0]["type"] == "location_tag_reset"
+    assert stats["recent_jobs"][0]["status"] == "pending"
+
+
 async def test_ai_status_unassigned_excludes_labeled_and_matched(admin_client):
     """미분류(unassigned)는 라벨도 매칭도 없는 얼굴만 센다."""
     face_ids = await _seed_faces(3)

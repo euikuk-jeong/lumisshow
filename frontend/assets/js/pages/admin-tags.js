@@ -18,6 +18,7 @@ export async function renderAdminTags() {
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn btn-ghost" id="btn-tag-backfill">AI 태그 재계산</button>
         <button class="btn btn-ghost" id="btn-path-tag-reset">폴더 태그 재계산</button>
+        <button class="btn btn-ghost" id="btn-location-tag-reset">위치 태그 한글 재번역</button>
       </div>
     </div>
     <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-bottom:14px">
@@ -35,6 +36,7 @@ export async function renderAdminTags() {
 
   document.getElementById('btn-tag-backfill').addEventListener('click', triggerTagBackfill);
   document.getElementById('btn-path-tag-reset').addEventListener('click', triggerPathTagReset);
+  document.getElementById('btn-location-tag-reset').addEventListener('click', triggerLocationTagReset);
   loadAiStatusLine();
 
   const wrap = document.getElementById('tags-content');
@@ -108,10 +110,13 @@ async function loadAiStatusLine() {
     const isActive = j => j.status === 'running' || j.status === 'pending';
     const activeBackfill = s.recent_jobs.find(j => j.type === 'tag_backfill' && isActive(j));
     const activePathReset = s.recent_jobs.find(j => j.type === 'path_tag_reset' && isActive(j));
+    const activeLocationReset = s.recent_jobs.find(j => j.type === 'location_tag_reset' && isActive(j));
     if (activeBackfill) {
       el.textContent = `AI 태그 재계산 ${activeBackfill.status === 'running' ? '실행 중' : '대기 중'}…`;
     } else if (activePathReset) {
       el.textContent = `폴더 태그 재계산 ${activePathReset.status === 'running' ? '실행 중' : '대기 중'}…`;
+    } else if (activeLocationReset) {
+      el.textContent = `위치 태그 한글 재번역 ${activeLocationReset.status === 'running' ? '실행 중' : '대기 중'}…`;
     } else {
       el.textContent = '어휘·threshold를 바꾼 뒤에는 "AI 태그 재계산"을 다시 실행하세요';
     }
@@ -137,6 +142,16 @@ async function triggerTagBackfill() {
     alert(r.duplicated
       ? `이미 대기/실행 중인 재계산 작업이 있습니다 (#${r.id})`
       : `AI 태그 재계산을 요청했습니다 (#${r.id}). AI 워커가 곧 처리합니다.`);
+    loadAiStatusLine();
+  } catch (e) { alert(e.message); }
+}
+
+async function triggerLocationTagReset() {
+  try {
+    const r = await api.post('/api/admin/ai/jobs', { type: 'location_tag_reset' });
+    alert(r.duplicated
+      ? `이미 대기/실행 중인 재계산 작업이 있습니다 (#${r.id})`
+      : `위치 태그 한글 재번역을 요청했습니다 (#${r.id}). AI 워커가 곧 처리합니다.`);
     loadAiStatusLine();
   } catch (e) { alert(e.message); }
 }
