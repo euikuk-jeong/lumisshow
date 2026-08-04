@@ -123,7 +123,7 @@ def test_scanner_retries_stale_error_status_even_without_mtime_change(conn, tmp_
     mtime = os.path.getmtime(path)
     conn.execute(
         "INSERT INTO photos_analyzed (path, mtime, face_count, status, analyzed_at) "
-        "VALUES ('a.jpg', ?, 0, 'error', datetime('now', '-30 days'))",
+        "VALUES ('a.jpg', ?, 0, 'error', datetime('now', '-31 days'))",
         (mtime,),
     )
     conn.commit()
@@ -143,6 +143,30 @@ def test_scanner_does_not_retry_recent_error_status(conn, tmp_path):
     )
     conn.commit()
     assert scanner.pending_photos(conn, root) == []
+
+
+def test_scanner_batches_recent_error_with_stale_error(conn, tmp_path):
+    """실패 시점이 다른 error 사진 여러 개가 있을 때, 가장 오래된 것이 재시도
+    주기를 넘기면 최근에 실패한 것도 함께 재시도 대상에 포함돼야 한다 — 그래야
+    파일마다 다른 날 재시도되며 에러 알림이 산발적으로 발생하는 걸 막고, 한 번
+    같이 재시도된 뒤로는 이후 주기도 자동 동기화된다."""
+    root = str(tmp_path / "photos")
+    old_path = _make_photo(root, "old.jpg")
+    recent_path = _make_photo(root, "recent.jpg")
+    conn.execute(
+        "INSERT INTO photos_analyzed (path, mtime, face_count, status, analyzed_at) "
+        "VALUES ('old.jpg', ?, 0, 'error', datetime('now', '-31 days'))",
+        (os.path.getmtime(old_path),),
+    )
+    conn.execute(
+        "INSERT INTO photos_analyzed (path, mtime, face_count, status) "
+        "VALUES ('recent.jpg', ?, 0, 'error')",
+        (os.path.getmtime(recent_path),),
+    )
+    conn.commit()
+    assert sorted(p for p, _ in scanner.pending_photos(conn, root)) == [
+        "old.jpg", "recent.jpg",
+    ]
 
 
 def test_scanner_queues_renamed_photo_proposal_without_applying(conn, tmp_path):

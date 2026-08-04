@@ -18,7 +18,7 @@ _kiwi = None
 # status='error' 사진 재시도 주기 — 너무 짧으면 지속 실패 파일 때문에 매 스캔
 # pending이 비지 않아 모델 로딩 비용·Discord 알림이 매번 발생하고, 너무 길면
 # 일시적 오류로 실패한 사진이 오래 방치된다.
-_ERROR_RETRY_DAYS = 7
+_ERROR_RETRY_DAYS = 30
 
 
 def _get_kiwi():
@@ -204,6 +204,9 @@ def pending_photos(conn: sqlite3.Connection, root: str) -> list[tuple[str, float
     그대로여도 주기적으로 재시도) — 매 스캔 무조건 재시도하면 지속적으로 실패하는
     파일(손상 등) 때문에 매일 밤 pending이 절대 비지 않아 모델 로딩 비용을 매번
     치르고 Discord 알림도 매번 발송돼버린다(둘 다 "증분 없으면 스킵" 원칙 위반).
+    가장 오래된 error 1건이라도 주기를 넘기면 나머지 error 전부를 함께 재시도한다
+    (실패 시점이 제각각이면 파일마다 다른 날 재시도돼 에러 알림이 산발적으로 발생) —
+    한 번 같이 재시도되면 analyzed_at이 같은 날로 갱신돼 이후 주기도 자동 동기화된다.
 
     같은 walk 결과를 재사용해 rename/move 후보 제안(queue_rename_proposals)과
     완전 삭제 후보 제안(queue_orphan_proposals)을 함께 수행한다(추가 walk 없음).
@@ -212,13 +215,22 @@ def pending_photos(conn: sqlite3.Connection, root: str) -> list[tuple[str, float
     current = dict(walk_photos(root))
     analyzed_rows = conn.execute("SELECT path, mtime FROM photos_analyzed").fetchall()
     analyzed = {row["path"]: row["mtime"] for row in analyzed_rows}
-    error_paths = {
-        row["path"] for row in conn.execute(
-            "SELECT path FROM photos_analyzed WHERE status = 'error' "
-            "AND (analyzed_at IS NULL OR analyzed_at < datetime('now', ?))",
-            (f"-{_ERROR_RETRY_DAYS} days",),
-        )
-    }
+    # 가장 오래된 error가 재시도 주기를 넘기면 나머지 error도 함께 재시도한다 —
+    # 실패 시점이 제각각이면 파일마다 다른 날 재시도돼 에러 알림이 산발적으로
+    # 발생한다. 한 번 같이 재시도되면 analyzed_at이 같은 날로 갱신돼 이후
+    # 주기도 자동으로 계속 동기화된다.
+    oldest_due = conn.execute(
+        "SELECT 1 FROM photos_analyzed WHERE status = 'error' "
+        "AND (analyzed_at IS NULL OR analyzed_at < datetime('now', ?)) LIMIT 1",
+        (f"-{_ERROR_RETRY_DAYS} days",),
+    ).fetchone()
+    error_paths = set()
+    if oldest_due:
+        error_paths = {
+            row["path"] for row in conn.execute(
+                "SELECT path FROM photos_analyzed WHERE status = 'error'"
+            )
+        }
 
     if not current and analyzed:
         # NAS 언마운트 등으로 walk 결과가 비정상적으로 비었을 때 전체 삭제로 오인해
