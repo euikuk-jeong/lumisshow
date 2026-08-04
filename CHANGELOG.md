@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.5.0] - 2026-08-05
+
+### Changed
+- **AI 워커 얼굴 인식 실패 재시도 주기 30일로 연장 + 재시도 동기화**: 손상된
+  사진 파일(`broken data stream`, `UnidentifiedImageError` 등)은 원본을
+  교체하지 않는 한 재시도해도 계속 실패하는데, 기존 7일 주기로는 재시도가
+  너무 잦았다. 주기를 30일로 늘리고, 실패 시점이 제각각인 여러 파일이 각자
+  다른 날 재시도되며 에러 알림이 산발적으로 발생하지 않도록 가장 오래된
+  error가 주기를 넘기면 나머지 error 사진도 함께 재시도하도록 변경(한 번
+  같이 재시도되면 이후 주기도 자동으로 계속 동기화됨) (`ai_worker/scanner.py`)
+
 ## [2.4.1] - 2026-08-05
 
 ### Added
@@ -1097,7 +1108,8 @@ Phase 2 — AI 얼굴 인식 스마트 앨범. NAS 로컬 AI(InsightFace)로 사
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v2.4.1...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v2.5.0...HEAD
+[2.5.0]: https://github.com/euikuk-jeong/lumisshow/compare/v2.4.1...v2.5.0
 [2.4.1]: https://github.com/euikuk-jeong/lumisshow/compare/v2.4.0...v2.4.1
 [2.4.0]: https://github.com/euikuk-jeong/lumisshow/compare/v2.3.1...v2.4.0
 [2.3.1]: https://github.com/euikuk-jeong/lumisshow/compare/v2.3.0...v2.3.1
