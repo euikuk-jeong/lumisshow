@@ -1,7 +1,7 @@
 import { shareApi, ShareAuthError } from '../api.js';
 import { esc, getVersion } from '../utils.js';
 import { EFFECTS, EFFECT_LABELS, loadSlideshowSettings } from '../slideshow-config.js';
-import { startedInEdgeZone, resolveSwipeDirection, clampDragOffset } from '../touch-gesture.js';
+import { createPhotoZoomViewer } from '../photo-zoom-viewer.js';
 
 function saveSettings(token, s) {
   localStorage.setItem(`slideshow_settings_${token}`, JSON.stringify(s));
@@ -154,13 +154,6 @@ export async function renderAlbumView(token) {
 function _openSharePhotoViewer(token, photos, startIdx) {
   let idx = startIdx;
   let infoVisible = false;
-  let zoom = 1;
-  let panX = 0;
-  let panY = 0;
-  let swipeX = 0;     // 스와이프 드래그 중 현재 사진의 X 오프셋(px)
-  let settling = false; // 스와이프 완료/취소 애니메이션 진행 중 여부
-  const MIN_ZOOM = 1;
-  const MAX_ZOOM = 4;
 
   const overlay = document.createElement('div');
   overlay.className = 'spv-overlay';
@@ -199,261 +192,20 @@ function _openSharePhotoViewer(token, photos, startIdx) {
   const infoBtnEl  = overlay.querySelector('.spv-info-btn');
   const infoEl     = overlay.querySelector('.spv-info');
 
-  // ── Zoom & Pan ──────────────────────────────────────────────
-
-  function clampPan() {
-    const maxX = Math.max(0, (imgEl.offsetWidth * zoom - bodyEl.offsetWidth) / 2);
-    const maxY = Math.max(0, (imgEl.offsetHeight * zoom - bodyEl.offsetHeight) / 2);
-    panX = Math.max(-maxX, Math.min(maxX, panX));
-    panY = Math.max(-maxY, Math.min(maxY, panY));
-  }
-
-  function applyTransform() {
-    imgEl.style.transform = zoom > 1
-      ? `translate(-50%, -50%) translate(${panX}px, ${panY}px) scale(${zoom})`
-      : `translate(-50%, -50%) translateX(${swipeX}px)`;
-    imgEl.style.cursor = zoom > 1 ? 'grab' : '';
-    updatePeekTransforms();
-    prevBtn.style.visibility = (zoom <= 1 && idx > 0) ? 'visible' : 'hidden';
-    nextBtn.style.visibility = (zoom <= 1 && idx < photos.length - 1) ? 'visible' : 'hidden';
-  }
-
-  // 이전/다음 미리보기 이미지를 화면 밖(±bodyWidth)에 대기시켜 두었다가
-  // swipeX만큼 같이 이동시켜 드래그를 따라오는 것처럼 보이게 한다.
-  function updatePeekTransforms() {
-    const bodyWidth = bodyEl.offsetWidth;
-    peekPrevEl.style.transform = `translate(-50%, -50%) translateX(${swipeX - bodyWidth}px)`;
-    peekNextEl.style.transform = `translate(-50%, -50%) translateX(${swipeX + bodyWidth}px)`;
-  }
-
-  function resetZoom() {
-    zoom = MIN_ZOOM; panX = 0; panY = 0; swipeX = 0;
-    applyTransform();
-  }
-
-  // Zoom toward screen point (ox, oy) = offset from body center in screen px
-  function changeZoom(factor, ox = 0, oy = 0) {
-    const newZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, zoom * factor));
-    if (newZoom === zoom) return;
-    const scale = newZoom / zoom;
-    panX = ox * (1 - scale) + panX * scale;
-    panY = oy * (1 - scale) + panY * scale;
-    zoom = newZoom;
-    if (zoom <= MIN_ZOOM) { panX = 0; panY = 0; }
-    clampPan();
-    applyTransform();
-  }
-
-  // ── Middle click: reset zoom ────────────────────────────────
-  bodyEl.addEventListener('mousedown', (e) => {
-    if (e.button === 1) { e.preventDefault(); resetZoom(); }
+  // ── 확대/이동/스와이프 (Admin 라이트박스와 공용 — photo-zoom-viewer.js) ──
+  const zoomViewer = createPhotoZoomViewer({
+    bodyEl, imgEl, peekPrevEl, peekNextEl,
+    getUrl: i => photos[i] ? photos[i].url : null,
+    getCount: () => photos.length,
+    getIndex: () => idx,
+    onIndexChanged: afterShow,
+    // 확대 중에는 이전/다음 버튼이 팬 조작을 가리지 않도록 숨긴다(기존 공유뷰어 동작 유지)
+    onZoomChange: zoom => {
+      zoomedIn = zoom > 1;
+      prevBtn.style.visibility = (zoom <= 1 && idx > 0) ? 'visible' : 'hidden';
+      nextBtn.style.visibility = (zoom <= 1 && idx < photos.length - 1) ? 'visible' : 'hidden';
+    },
   });
-
-  // ── Mouse wheel zoom ────────────────────────────────────────
-  bodyEl.addEventListener('wheel', (e) => {
-    e.preventDefault();
-    const rect = bodyEl.getBoundingClientRect();
-    const ox = e.clientX - (rect.left + rect.width / 2);
-    const oy = e.clientY - (rect.top + rect.height / 2);
-    changeZoom(e.deltaY < 0 ? 1.2 : 1 / 1.2, ox, oy);
-  }, { passive: false });
-
-  // ── Double-click: toggle 2× / reset ────────────────────────
-  imgEl.addEventListener('dblclick', (e) => {
-    if (zoom > 1) {
-      resetZoom();
-    } else {
-      const rect = bodyEl.getBoundingClientRect();
-      const ox = e.clientX - (rect.left + rect.width / 2);
-      const oy = e.clientY - (rect.top + rect.height / 2);
-      changeZoom(2, ox, oy);
-    }
-  });
-
-  // ── Mouse drag (pan when zoomed) ────────────────────────────
-  let dragging = false;
-  let dragPrev = null;
-
-  imgEl.addEventListener('mousedown', (e) => {
-    if (zoom <= 1) return;
-    dragging = true;
-    dragPrev = { x: e.clientX, y: e.clientY };
-    imgEl.style.cursor = 'grabbing';
-    e.preventDefault();
-  });
-
-  function onMouseMove(e) {
-    if (!dragging) return;
-    panX += e.clientX - dragPrev.x;
-    panY += e.clientY - dragPrev.y;
-    dragPrev = { x: e.clientX, y: e.clientY };
-    clampPan();
-    applyTransform();
-  }
-
-  function onMouseUp() {
-    if (!dragging) return;
-    dragging = false;
-    dragPrev = null;
-    if (zoom > 1) imgEl.style.cursor = 'grab';
-  }
-
-  document.addEventListener('mousemove', onMouseMove);
-  document.addEventListener('mouseup', onMouseUp);
-
-  // ── Touch: pinch zoom + single-finger pan + swipe navigate (zoom=1) ──
-  // 스와이프는 화면 가장자리(SWIPE_EDGE_EXCLUDE_PX 이내)에서 시작하면 무시한다.
-  // iOS는 그 영역을 뒤로가기 제스처 전용으로 예약해 두어 preventDefault로도 못 막으므로,
-  // 해당 영역 밖에서 시작한 좌우 드래그만 이전/다음 사진 이동으로 처리한다.
-  let lastPinchDist = null;
-  let lastPinchMid  = null;
-  let lastTouchPos  = null;
-  let swipeStart    = null;
-
-  bodyEl.addEventListener('touchstart', (e) => {
-    if (e.touches.length === 2) {
-      lastPinchDist = Math.hypot(
-        e.touches[0].clientX - e.touches[1].clientX,
-        e.touches[0].clientY - e.touches[1].clientY
-      );
-      lastPinchMid = {
-        x: (e.touches[0].clientX + e.touches[1].clientX) / 2,
-        y: (e.touches[0].clientY + e.touches[1].clientY) / 2,
-      };
-      lastTouchPos = null;
-      swipeStart = null;
-    } else if (e.touches.length === 1 && zoom > 1) {
-      lastTouchPos = { x: e.touches[0].clientX, y: e.touches[0].clientY };
-      lastPinchDist = null;
-      swipeStart = null;
-    } else if (e.touches.length === 1 && !settling) {
-      const rect = bodyEl.getBoundingClientRect();
-      swipeStart = {
-        x: e.touches[0].clientX,
-        y: e.touches[0].clientY,
-        t: Date.now(),
-        // 시작 시점에 한 번만 판정 — 가장자리에서 시작한 드래그는 따라오는 시늉조차 하지 않는다.
-        // (도중에만 취소되면 끝까지 드래그해도 항상 스냅백되는 것처럼 보여 혼란스럽다)
-        edge: startedInEdgeZone(e.touches[0].clientX, rect.left, rect.right),
-      };
-    }
-  }, { passive: true });
-
-  bodyEl.addEventListener('touchmove', (e) => {
-    if (e.touches.length === 2 && lastPinchDist !== null) {
-      e.preventDefault();
-      const dist = Math.hypot(
-        e.touches[0].clientX - e.touches[1].clientX,
-        e.touches[0].clientY - e.touches[1].clientY
-      );
-      const mid = {
-        x: (e.touches[0].clientX + e.touches[1].clientX) / 2,
-        y: (e.touches[0].clientY + e.touches[1].clientY) / 2,
-      };
-      const rect = bodyEl.getBoundingClientRect();
-      const ox = mid.x - (rect.left + rect.width / 2);
-      const oy = mid.y - (rect.top + rect.height / 2);
-      changeZoom(dist / lastPinchDist, ox, oy);
-      // Additional pan with midpoint translation
-      panX += mid.x - lastPinchMid.x;
-      panY += mid.y - lastPinchMid.y;
-      clampPan();
-      applyTransform();
-      lastPinchDist = dist;
-      lastPinchMid  = mid;
-    } else if (e.touches.length === 1 && zoom > 1 && lastTouchPos) {
-      e.preventDefault();
-      panX += e.touches[0].clientX - lastTouchPos.x;
-      panY += e.touches[0].clientY - lastTouchPos.y;
-      lastTouchPos = { x: e.touches[0].clientX, y: e.touches[0].clientY };
-      clampPan();
-      applyTransform();
-    } else if (e.touches.length === 1 && zoom <= 1 && swipeStart && !settling && !swipeStart.edge) {
-      const dx = e.touches[0].clientX - swipeStart.x;
-      swipeX = clampDragOffset(dx, { hasPrev: idx > 0, hasNext: idx < photos.length - 1 });
-      applyTransform();
-    }
-  }, { passive: false });
-
-  bodyEl.addEventListener('touchend', (e) => {
-    if (e.touches.length < 2) { lastPinchDist = null; lastPinchMid = null; }
-    if (e.touches.length === 0) lastTouchPos = null;
-
-    if (swipeStart && e.touches.length === 0 && zoom <= 1) {
-      const endTouch = e.changedTouches[0];
-      const dx = endTouch.clientX - swipeStart.x;
-      const dy = endTouch.clientY - swipeStart.y;
-      let dir = resolveSwipeDirection({ dx, dy, startedInEdge: swipeStart.edge });
-      if (dir === 1 && idx >= photos.length - 1) dir = 0;
-      if (dir === -1 && idx <= 0) dir = 0;
-      settleSwipe(dir);
-    }
-    swipeStart = null;
-  }, { passive: true });
-
-  // 스와이프 판정(dir: 1=다음, -1=이전, 0=취소) 이후 화면 밖까지 슬라이드하거나
-  // 원위치로 되돌아가는 애니메이션을 재생한 뒤 실제 사진 전환을 적용한다.
-  function settleSwipe(dir) {
-    const bodyWidth = bodyEl.offsetWidth;
-    const targetX = dir === 1 ? -bodyWidth : dir === -1 ? bodyWidth : 0;
-    if (Math.round(swipeX) === Math.round(targetX)) {
-      finishSwipe(dir);
-      return;
-    }
-    settling = true;
-    const els = [imgEl, peekPrevEl, peekNextEl];
-    els.forEach(el => el.classList.add('spv-snapping'));
-    swipeX = targetX;
-    applyTransform();
-
-    let done = false;
-    const finish = () => {
-      if (done) return;
-      done = true;
-      clearTimeout(fallbackTimer);
-      imgEl.removeEventListener('transitionend', onTransitionEnd);
-      els.forEach(el => el.classList.remove('spv-snapping'));
-      settling = false;
-      finishSwipe(dir);
-    };
-    // transitionend는 opacity/transform 등 속성별로 각각 발생하므로 transform 전환이
-    // imgEl에서 끝난 경우만 받는다 — 그렇지 않으면 슬라이드가 끝나기 전에 조기 커밋된다.
-    const onTransitionEnd = (e) => {
-      if (e.target !== imgEl || e.propertyName !== 'transform') return;
-      finish();
-    };
-    imgEl.addEventListener('transitionend', onTransitionEnd);
-    // 탭 백그라운드 등으로 transitionend가 아예 발생하지 않는 경우를 대비한 안전망
-    // (없으면 settling이 true로 고정돼 이후 스와이프가 영구히 먹통이 된다)
-    const fallbackTimer = setTimeout(finish, 350);
-  }
-
-  // 스와이프로 완료된 사진 전환: 새 이미지가 실제로 로드된 뒤에만 swipeX를 되돌린다.
-  // 다음/이전 사진은 이미 peek 이미지로 화면에 보이고 있으므로, 로드 전에 먼저
-  // 위치를 리셋해버리면 아직 안 뜬 이전 사진이 잠깐 다시 보이는 깜빡임이 생긴다.
-  function commitSwipe(newIdx) {
-    const photo = photos[newIdx];
-    imgEl.addEventListener('load', () => {
-      idx = newIdx;
-      swipeX = 0;
-      zoom = MIN_ZOOM; panX = 0; panY = 0;
-      applyTransform();
-      peekPrevEl.src = idx > 0 ? photos[idx - 1].url : '';
-      peekNextEl.src = idx < photos.length - 1 ? photos[idx + 1].url : '';
-      filenameEl.textContent = photo.filename || '';
-      counterEl.textContent = `${(idx + 1).toLocaleString()} / ${photos.length.toLocaleString()}`;
-      dlBtn.href = photo.url;
-      dlBtn.download = photo.filename || 'photo.jpg';
-      if (infoVisible) infoEl.innerHTML = formatInfo(photo);
-    }, { once: true });
-    imgEl.src = photo.url;
-  }
-
-  function finishSwipe(dir) {
-    if (dir === 1 && idx < photos.length - 1) commitSwipe(idx + 1);
-    else if (dir === -1 && idx > 0) commitSwipe(idx - 1);
-    else { swipeX = 0; applyTransform(); }
-  }
 
   // ── EXIF info formatter ─────────────────────────────────────
 
@@ -502,39 +254,39 @@ function _openSharePhotoViewer(token, photos, startIdx) {
 
   // ── Photo display ───────────────────────────────────────────
 
-  function show(i) {
+  // 이미지 로드 완료 후 photo-zoom-viewer.js가 호출 — 캡션/버튼/정보패널 등 idx 종속 UI 갱신
+  function afterShow(i) {
     idx = i;
     const photo = photos[idx];
-    imgEl.style.opacity = '0.4';
-    imgEl.onload = () => { imgEl.style.opacity = '1'; };
-    imgEl.src = photo.url;
-    peekPrevEl.src = idx > 0 ? photos[idx - 1].url : '';
-    peekNextEl.src = idx < photos.length - 1 ? photos[idx + 1].url : '';
     filenameEl.textContent = photo.filename || '';
     counterEl.textContent = `${(idx + 1).toLocaleString()} / ${photos.length.toLocaleString()}`;
     dlBtn.href = photo.url;
     dlBtn.download = photo.filename || 'photo.jpg';
-    resetZoom();
     if (infoVisible) infoEl.innerHTML = formatInfo(photo);
   }
 
+  const show = i => zoomViewer.goTo(i);
+
+  // 확대 중에는 화살표 키 이동을 막는다(먼저 줌을 리셋해야 넘어감) — onZoomChange에서 갱신
+  let zoomedIn = false;
+
   function close() {
     document.removeEventListener('keydown', onKey);
-    document.removeEventListener('mousemove', onMouseMove);
-    document.removeEventListener('mouseup', onMouseUp);
     overlay.remove();
     if (window._pageCleanup === close) window._pageCleanup = null;
   }
 
   function onKey(e) {
     if (e.key === 'Escape') { close(); return; }
-    if (zoom <= 1) {
+    if (e.target.closest('input, textarea') || e.isComposing) return;
+    if (!zoomedIn) {
       if (e.key === 'ArrowLeft'  && idx > 0) show(idx - 1);
       if (e.key === 'ArrowRight' && idx < photos.length - 1) show(idx + 1);
     }
-    if (e.key === '+' || e.key === '=') changeZoom(1.3);
-    if (e.key === '-') changeZoom(1 / 1.3);
-    if (e.key === '0') resetZoom();
+    if (e.key === '+' || e.key === '=') zoomViewer.changeZoom(1.3);
+    if (e.key === '-') zoomViewer.changeZoom(1 / 1.3);
+    if (e.key === '0') zoomViewer.resetZoom();
+    if (e.key === 'i' || e.key === 'I') infoBtnEl.click();
   }
 
   overlay.querySelector('.spv-close').addEventListener('click', close);
