@@ -15,6 +15,11 @@ _logger = logging.getLogger(__name__)
 _MIN_NOUN_LEN = 2
 _kiwi = None
 
+# status='error' 사진 재시도 주기 — 너무 짧으면 지속 실패 파일 때문에 매 스캔
+# pending이 비지 않아 모델 로딩 비용·Discord 알림이 매번 발생하고, 너무 길면
+# 일시적 오류로 실패한 사진이 오래 방치된다.
+_ERROR_RETRY_DAYS = 7
+
 
 def _get_kiwi():
     """Kiwi()는 사전 로딩 비용이 있어(수백ms~1초대) 모듈 전역에 1회만 만들어
@@ -194,16 +199,25 @@ def queue_orphan_proposals(
 
 
 def pending_photos(conn: sqlite3.Connection, root: str) -> list[tuple[str, float]]:
-    """분석이 필요한 (상대 경로, mtime) 목록 — 신규 또는 mtime 변경분.
+    """분석이 필요한 (상대 경로, mtime) 목록 — 신규, mtime 변경분, 또는
+    `_ERROR_RETRY_DAYS`일 넘게 지난 status='error' 사진(파일이 안 바뀌어 mtime이
+    그대로여도 주기적으로 재시도) — 매 스캔 무조건 재시도하면 지속적으로 실패하는
+    파일(손상 등) 때문에 매일 밤 pending이 절대 비지 않아 모델 로딩 비용을 매번
+    치르고 Discord 알림도 매번 발송돼버린다(둘 다 "증분 없으면 스킵" 원칙 위반).
 
     같은 walk 결과를 재사용해 rename/move 후보 제안(queue_rename_proposals)과
     완전 삭제 후보 제안(queue_orphan_proposals)을 함께 수행한다(추가 walk 없음).
     제안된 new_path는 admin이 승인/거부하기 전까지 "신규 사진"으로 오분석되지
     않도록 분석 대상에서 제외한다."""
     current = dict(walk_photos(root))
-    analyzed = {
-        row["path"]: row["mtime"]
-        for row in conn.execute("SELECT path, mtime FROM photos_analyzed")
+    analyzed_rows = conn.execute("SELECT path, mtime FROM photos_analyzed").fetchall()
+    analyzed = {row["path"]: row["mtime"] for row in analyzed_rows}
+    error_paths = {
+        row["path"] for row in conn.execute(
+            "SELECT path FROM photos_analyzed WHERE status = 'error' "
+            "AND (analyzed_at IS NULL OR analyzed_at < datetime('now', ?))",
+            (f"-{_ERROR_RETRY_DAYS} days",),
+        )
     }
 
     if not current and analyzed:
@@ -226,5 +240,5 @@ def pending_photos(conn: sqlite3.Connection, root: str) -> list[tuple[str, float
 
     return [
         (rel, mtime) for rel, mtime in current.items()
-        if analyzed.get(rel) != mtime and rel not in pending_new_paths
+        if (analyzed.get(rel) != mtime or rel in error_paths) and rel not in pending_new_paths
     ]

@@ -1,6 +1,7 @@
 """ai_worker 단위 테스트 — 모델(insightface) 설치 없이 실행 가능한 범위:
 db 스키마, 증분 스캐너, cosine 매처, 라벨링 도구."""
 
+import logging
 import os
 import time
 
@@ -111,6 +112,37 @@ def test_scanner_skips_analyzed_and_detects_mtime_change(conn, tmp_path):
     # mtime 변경 → 재분석 대상
     os.utime(path, (time.time() + 100, time.time() + 100))
     assert [p for p, _ in scanner.pending_photos(conn, root)] == ["a.jpg"]
+
+
+def test_scanner_retries_stale_error_status_even_without_mtime_change(conn, tmp_path):
+    """일시적 오류 등으로 status='error'가 된 사진은 파일이 안 바뀌어(mtime 그대로)도
+    _ERROR_RETRY_DAYS일 넘게 지나면 다시 분석 대상에 포함돼야 한다 — 그렇지 않으면
+    영구 방치된다."""
+    root = str(tmp_path / "photos")
+    path = _make_photo(root, "a.jpg")
+    mtime = os.path.getmtime(path)
+    conn.execute(
+        "INSERT INTO photos_analyzed (path, mtime, face_count, status, analyzed_at) "
+        "VALUES ('a.jpg', ?, 0, 'error', datetime('now', '-30 days'))",
+        (mtime,),
+    )
+    conn.commit()
+    assert [p for p, _ in scanner.pending_photos(conn, root)] == ["a.jpg"]
+
+
+def test_scanner_does_not_retry_recent_error_status(conn, tmp_path):
+    """방금 실패한 사진(analyzed_at이 최근)은 재시도 창 안이라 매 스캔 재시도하지
+    않는다 — 그래야 지속 실패 파일이 매일 밤 모델 로딩·Discord 알림을 유발하지 않는다."""
+    root = str(tmp_path / "photos")
+    path = _make_photo(root, "a.jpg")
+    mtime = os.path.getmtime(path)
+    conn.execute(
+        "INSERT INTO photos_analyzed (path, mtime, face_count, status) "
+        "VALUES ('a.jpg', ?, 0, 'error')",
+        (mtime,),
+    )
+    conn.commit()
+    assert scanner.pending_photos(conn, root) == []
 
 
 def test_scanner_queues_renamed_photo_proposal_without_applying(conn, tmp_path):
@@ -432,6 +464,15 @@ def test_extract_gps_none_on_malformed_values():
     assert pipeline._extract_gps(img) is None
 
 
+def test_extract_gps_none_on_nan_from_broken_fraction():
+    """Pillow IFDRational은 EXIF 분수 필드의 분모가 0이면 예외 없이 nan을 반환한다
+    (깨진 GPS 태그) — 그대로 넘기면 geocoder의 cKDTree.query가 크래시한다."""
+    img = _FakeImg(
+        {0x0112: 1}, {1: "N", 2: (37.0, 33.0, float("nan")), 3: "E", 4: (127.0, 0.0, 0.0)}
+    )
+    assert pipeline._extract_gps(img) is None
+
+
 def test_reverse_geocode_maps_country_code_to_korean(monkeypatch):
     class _FakeGeocoder:
         def query(self, coords):
@@ -592,6 +633,28 @@ def test_analyze_and_store_persists_location_from_stub_pipeline(conn, monkeypatc
         )
     }
     assert ai_tags == {"바다"}
+
+
+def test_analyze_and_store_logs_and_records_error_on_analyze_failure(conn, caplog):
+    """analyze() 실패 시 status='error'로 기록될 뿐 아니라, 원인(트레이스백)이 로그에
+    남아야 admin이 ai.db를 직접 SELECT하지 않고도 원인을 파악할 수 있다."""
+    class _BoomPipeline:
+        def analyze(self, path):
+            raise RuntimeError("decode boom")
+
+    with caplog.at_level(logging.ERROR, logger="ai_worker.pipeline"):
+        face_count, ok, located, tagged = pipeline.analyze_and_store(
+            _BoomPipeline(), conn, "2024/broken.jpg", 123.0, enrollment={}, threshold=0.45,
+        )
+    assert (face_count, ok, located, tagged) == (0, False, False, False)
+
+    row = conn.execute(
+        "SELECT status FROM photos_analyzed WHERE path = '2024/broken.jpg'"
+    ).fetchone()
+    assert row["status"] == "error"
+
+    assert any("2024/broken.jpg" in r.message for r in caplog.records)
+    assert any(r.exc_info for r in caplog.records)
 
 
 def _seed_ai_tag(conn, photo_path: str, tag: str = "캠핑") -> None:

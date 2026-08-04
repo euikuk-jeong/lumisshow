@@ -6,6 +6,7 @@ insightface/onnxruntime은 무거운 의존성이라 lazy import — 스캔 로�
 
 import json
 import logging
+import math
 import os
 import sqlite3
 from dataclasses import dataclass
@@ -54,6 +55,10 @@ def _extract_gps(img: Image.Image) -> tuple[float, float] | None:
         longitude = d + m / 60 + s / 3600
         if lon_ref in ("W", "w"):
             longitude = -longitude
+        if not (math.isfinite(latitude) and math.isfinite(longitude)):
+            # Pillow IFDRational은 EXIF 분수 필드의 분모가 0이면 예외 없이 nan을
+            # 반환한다(깨진 GPS 태그) — 그대로 넘기면 geocoder의 cKDTree.query가 죽는다.
+            return None
         return latitude, longitude
     except (TypeError, ValueError, ZeroDivisionError, KeyError):
         return None
@@ -310,6 +315,7 @@ def analyze_and_store(
             faces = None
             img, gps = _load_image(abs_path)
     except Exception:
+        _logger.exception("%s 분석 실패", rel_path)
         conn.execute(
             """INSERT INTO photos_analyzed (path, mtime, face_count, status)
                VALUES (?, ?, 0, 'error')
