@@ -67,11 +67,13 @@ export function openLightbox(paths, startIdx, options = {}) {
     ).join('');
   }
 
-  function formatInfo(info) {
+  function formatInfo(info, path) {
     const exifRows = [];
     const add = (label, value) => { if (value != null && value !== '') exifRows.push([label, String(value)]); };
 
     add('Filename', info.filename);
+    const slashIdx = path.lastIndexOf('/');
+    if (slashIdx > 0) add('경로', path.slice(0, slashIdx));
     if (info.taken_at) {
       const d = new Date(info.taken_at);
       const pad = n => String(n).padStart(2, '0');
@@ -110,7 +112,7 @@ export function openLightbox(paths, startIdx, options = {}) {
     try {
       const info = await api.get(`/api/admin/photo-info?path=${encodeURIComponent(path)}`);
       if (!infoVisible || localPaths[idx] !== path) return; // 패널이 닫혔거나 다른 사진으로 이동한 뒤 도착한 응답은 버림
-      infoEl.innerHTML = formatInfo(info);
+      infoEl.innerHTML = formatInfo(info, path);
     } catch (err) {
       if (!infoVisible || localPaths[idx] !== path) return;
       infoEl.innerHTML = '<div class="lightbox-info-error">정보를 불러오지 못했습니다.</div>';
