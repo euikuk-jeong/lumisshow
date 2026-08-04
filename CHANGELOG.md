@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.3.1] - 2026-08-04
+
+### Fixed
+- **얼굴 인식 실패 시 로그 없음 + 영구 재시도 안 되는 문제**: `analyze_and_store()`가
+  얼굴 검출 실패를 예외를 삼킨 채 `status='error'`로만 기록해 원인 파악을 위해
+  `ai.db`를 직접 SELECT해야 했고, `pending_photos()`가 mtime 일치 여부로만
+  재분석 대상을 골라 파일이 안 바뀌면 실패한 사진이 영원히 재시도되지 않았음.
+  실패 시 `_logger.exception`으로 트레이스백을 로그에 남기고, `status='error'`
+  사진은 7일(`_ERROR_RETRY_DAYS`) 넘게 지나면 mtime 불변이어도 재분석 대상에
+  포함하도록 수정. 매 스캔 무조건 재시도하지 않는 이유는 지속 실패 파일이 있을
+  때 `run_scan()`이 매일 밤 모델(buffalo_l/CLIP)을 로딩하고 "증분 없으면 스킵"
+  게이팅을 무력화해 Discord 알림이 매번 발송되는 걸 막기 위함
+  (`ai_worker/pipeline.py`, `ai_worker/scanner.py`)
+- **GPS EXIF 깨진 값(분모 0)으로 역지오코딩 반복 실패**: Pillow `IFDRational`이
+  EXIF 분수 필드의 분모가 0이면 예외 없이 `nan`을 반환해, 위경도가 그대로
+  `geocoder.reverse_geocode()` → `cKDTree.query()`로 들어가 `ValueError`가
+  반복 발생하며 위치 태그도 붙지 않았음. `_extract_gps()`가 계산된 위경도를
+  `math.isfinite()`로 검증 후 아니면 `None`을 반환하도록 수정 (`ai_worker/pipeline.py`)
+
 ## [2.3.0] - 2026-08-04
 
 ### Added
@@ -1055,7 +1074,9 @@ Phase 2 — AI 얼굴 인식 스마트 앨범. NAS 로컬 AI(InsightFace)로 사
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v2.2.0...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v2.3.1...HEAD
+[2.3.1]: https://github.com/euikuk-jeong/lumisshow/compare/v2.3.0...v2.3.1
+[2.3.0]: https://github.com/euikuk-jeong/lumisshow/compare/v2.2.0...v2.3.0
 [2.2.0]: https://github.com/euikuk-jeong/lumisshow/compare/v2.1.1...v2.2.0
 [2.1.1]: https://github.com/euikuk-jeong/lumisshow/compare/v2.1.0...v2.1.1
 [2.1.0]: https://github.com/euikuk-jeong/lumisshow/compare/v2.0.2...v2.1.0
