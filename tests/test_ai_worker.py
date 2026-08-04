@@ -480,7 +480,7 @@ def test_reverse_geocode_maps_country_code_to_korean(monkeypatch):
 
     monkeypatch.setattr(geocoder, "_get_geocoder", lambda: _FakeGeocoder())
     city, country = geocoder.reverse_geocode(37.5665, 126.978)
-    assert city == "Seoul"
+    assert city == "서울"  # _CITY_NAMES_KO 매핑 대상
     assert country == "대한민국"
 
 
@@ -493,6 +493,76 @@ def test_reverse_geocode_falls_back_to_raw_code_when_unmapped(monkeypatch):
     city, country = geocoder.reverse_geocode(0.0, 0.0)
     assert city == "Nowhere"
     assert country == "ZZ"
+
+
+def test_reverse_geocode_falls_back_to_raw_city_when_unmapped(monkeypatch):
+    """국가는 매핑되지만((country, city) 조합이 딕셔너리에 없는) 도시명은 로마자
+    그대로 폴백해야 한다 — 큐레이션 안 된 지명이 오역 없이 노출되는 게 목표."""
+    class _FakeGeocoder:
+        def query(self, coords):
+            return [{"name": "SomeUnmappedTown", "cc": "KR"}]
+
+    monkeypatch.setattr(geocoder, "_get_geocoder", lambda: _FakeGeocoder())
+    city, country = geocoder.reverse_geocode(0.0, 0.0)
+    assert city == "SomeUnmappedTown"
+    assert country == "대한민국"
+
+
+def test_retranslate_cities_updates_existing_rows_and_resyncs_tags(conn):
+    conn.execute(
+        "INSERT INTO photo_locations (photo_path, city, country) VALUES (?, ?, ?)",
+        ("2024/a.jpg", "Kwangmyong", "대한민국"),
+    )
+    conn.execute(
+        "INSERT INTO photo_tags (photo_path, tag, source) VALUES ('2024/a.jpg', 'Kwangmyong', 'location')"
+    )
+    conn.commit()
+
+    changed = geocoder.retranslate_cities(conn)
+    assert changed == 1
+
+    row = conn.execute(
+        "SELECT city FROM photo_locations WHERE photo_path = '2024/a.jpg'"
+    ).fetchone()
+    assert row["city"] == "광명"
+    tags = {
+        r["tag"] for r in conn.execute(
+            "SELECT tag FROM photo_tags WHERE photo_path = '2024/a.jpg' AND source = 'location'"
+        ).fetchall()
+    }
+    assert tags == {"광명", "대한민국"}  # 옛 로마자 태그는 지워지고 번역된 값만 남는다
+
+
+def test_retranslate_cities_skips_unmapped_rows(conn):
+    conn.execute(
+        "INSERT INTO photo_locations (photo_path, city, country) VALUES (?, ?, ?)",
+        ("2024/a.jpg", "SomeUnmappedTown", "대한민국"),
+    )
+    conn.commit()
+
+    changed = geocoder.retranslate_cities(conn)
+    assert changed == 0
+    row = conn.execute(
+        "SELECT city FROM photo_locations WHERE photo_path = '2024/a.jpg'"
+    ).fetchone()
+    assert row["city"] == "SomeUnmappedTown"
+
+
+def test_run_location_tag_reset_translates_and_reports_count(conn):
+    from ai_worker import main
+
+    conn.execute(
+        "INSERT INTO photo_locations (photo_path, city, country) VALUES (?, ?, ?)",
+        ("2024/a.jpg", "Seoul", "대한민국"),
+    )
+    conn.commit()
+
+    summary = main.run_location_tag_reset()
+    assert summary["translated"] == 1
+    row = conn.execute(
+        "SELECT city FROM photo_locations WHERE photo_path = '2024/a.jpg'"
+    ).fetchone()
+    assert row["city"] == "서울"
 
 
 def test_sync_location_tag_creates_city_and_country_rows(conn):
@@ -1700,6 +1770,29 @@ def test_notify_tag_backfill_result_formats_summary(monkeypatch):
     assert "에러 0건" in sent["content"]
     assert "폴더명 태깅 4장" in sent["content"]
     assert "소요 12초" in sent["content"]
+    assert "http://example.test:9999/admin/people" in sent["content"]
+
+
+def test_notify_location_tag_reset_result_formats_summary(monkeypatch):
+    """run_location_tag_reset()이 반환하는 summary dict의 키(translated/elapsed)가
+    notify_location_tag_reset_result의 f-string과 어긋나면 KeyError가 나야 한다."""
+    from ai_worker import notify
+
+    monkeypatch.setenv("AI_DISCORD_WEBHOOK_URL", "https://example.invalid/webhook")
+    monkeypatch.setenv("BASE_URL", "http://example.test:9999")
+
+    sent = {}
+
+    def fake_urlopen(req, timeout=None):
+        import json
+        sent["content"] = json.loads(req.data)["content"]
+
+    monkeypatch.setattr(notify.urllib.request, "urlopen", fake_urlopen)
+
+    notify.notify_location_tag_reset_result({"translated": 7, "elapsed": 3.4})
+
+    assert "도시명 7건 한글 변환" in sent["content"]
+    assert "소요 3초" in sent["content"]
     assert "http://example.test:9999/admin/people" in sent["content"]
 
 

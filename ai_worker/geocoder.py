@@ -3,8 +3,13 @@ GeoNames 기반)만 사용 — Kiwi를 LLM 대신 고른 것과 동일하게 외
 피하기 위함(doc/tagging_requirement.md).
 
 reverse_geocoder는 영문(로마자) 도시명 + ISO 3166-1 alpha-2 국가코드만 반환한다.
-도시명을 한국어로 옮길 저비용 오프라인 방법이 없어 로마자 그대로 쓰고, 국가명만
-정적 매핑으로 한국어로 바꾼다(2026-08-02 결정) — 예: ("Seoul", "대한민국").
+국가명은 `_COUNTRY_NAMES_KO` 정적 매핑으로 한국어로 바꾼다(2026-08-02 결정).
+도시명도 동일한 방식(`_CITY_NAMES_KO`, `(국가 한글명, 로마자 도시명)` 키)으로 실사용
+중 관측된 지명을 커버(2026-08-05 결정) — 매핑에 없는 지명은 로마자 그대로 폴백한다
+(전세계 지명을 저비용으로 완전히 옮길 방법은 없어 tag_vocab.py 어휘 큐레이션과 동일하게
+"나오는 대로 추가"하는 방식). 매핑을 새로 추가한 뒤 이미 분석된 사진에도 소급 반영하려면
+`retranslate_cities()`(재지오코딩 없이 DB 값만 갱신, `main.run_location_tag_reset()`)를
+실행한다.
 """
 
 import sqlite3
@@ -27,12 +32,15 @@ def _get_geocoder():
 
 
 def reverse_geocode(lat: float, lon: float) -> tuple[str | None, str | None]:
-    """(city, country) 조회. city는 reverse_geocoder 원본(로마자) 그대로,
-    country는 ISO 국가코드를 한국어 국가명으로 변환(매핑에 없으면 코드 그대로 폴백)."""
+    """(city, country) 조회. country는 ISO 국가코드를 한국어 국가명으로 변환(매핑에
+    없으면 코드 그대로 폴백), city는 (country, 원본 로마자명) 조합을 `_CITY_NAMES_KO`에서
+    찾아 한국어로 변환(매핑에 없으면 로마자 그대로 폴백)."""
     result = _get_geocoder().query([(lat, lon)])[0]
     city = result.get("name") or None
     cc = result.get("cc") or None
     country = _COUNTRY_NAMES_KO.get(cc, cc) if cc else None
+    if city and country:
+        city = _CITY_NAMES_KO.get((country, city), city)
     return city, country
 
 
@@ -56,6 +64,27 @@ def sync_location_tag(conn: sqlite3.Connection, photo_path: str) -> None:
                    ON CONFLICT(photo_path, tag, source) DO NOTHING""",
                 (photo_path, value),
             )
+
+
+def retranslate_cities(conn: sqlite3.Connection) -> int:
+    """`_CITY_NAMES_KO`를 기존 `photo_locations.city`에 재적용한다 — 재지오코딩(파일
+    열기·GPS 재계산) 없이 이미 저장된 값만 현재 매핑으로 갱신하므로 가볍다(DB 조회뿐).
+    매핑에 새 지명을 추가한 뒤 이미 분석된 사진에도 소급 반영하고 싶을 때 쓴다
+    (`main.run_location_tag_reset()`). 바뀐 행 수를 반환."""
+    rows = conn.execute("SELECT photo_path, city, country FROM photo_locations").fetchall()
+    changed = 0
+    for row in rows:
+        if not row["city"] or not row["country"]:
+            continue
+        new_city = _CITY_NAMES_KO.get((row["country"], row["city"]), row["city"])
+        if new_city != row["city"]:
+            conn.execute(
+                "UPDATE photo_locations SET city = ? WHERE photo_path = ?",
+                (new_city, row["photo_path"]),
+            )
+            sync_location_tag(conn, row["photo_path"])
+            changed += 1
+    return changed
 
 
 # ISO 3166-1 alpha-2 → 한국어 국가명. 매핑에 없는 코드는 reverse_geocode()가 코드
@@ -129,4 +158,68 @@ _COUNTRY_NAMES_KO: dict[str, str] = {
     "XK": "코소보",
     "YE": "예멘", "YT": "마요트",
     "ZA": "남아프리카공화국", "ZM": "잠비아", "ZW": "짐바브웨",
+}
+
+
+# (한국어 국가명, reverse_geocoder 원본 로마자 도시명) → 한국어 지명. 실사용 중
+# `photo_locations`에 관측된 지명만 큐레이션(전세계 완전 커버는 목표하지 않음,
+# tag_vocab.py와 동일한 "나오는 대로 추가" 방식). 매핑에 없으면 로마자 그대로 폴백.
+# 새 지명을 추가한 뒤 기존 사진에 소급 반영하려면 retranslate_cities() 실행.
+_CITY_NAMES_KO: dict[tuple[str, str], str] = {
+    ("대한민국", "Seoul"): "서울",
+    ("대한민국", "Incheon"): "인천",
+    ("대한민국", "Daegu"): "대구",
+    ("대한민국", "Kwangmyong"): "광명",
+    ("대한민국", "Koesan"): "괴산",
+    ("대한민국", "Santyoku"): "삼척",
+    ("대한민국", "Anseong"): "안성",
+    ("대한민국", "Bucheon-si"): "부천",
+    ("대한민국", "Kurye"): "구례",
+    ("대한민국", "Gaigeturi"): "애월",
+    ("대한민국", "Gwanin"): "관인",
+    ("대한민국", "Anyang-si"): "안양",
+    ("대한민국", "Gapyeong"): "가평",
+    ("대한민국", "Guri-si"): "구리",
+    ("대한민국", "Seogwipo"): "서귀포",
+    ("대한민국", "Chinch'on"): "진천",
+    ("대한민국", "Jangheung"): "장흥",
+    ("대한민국", "Seongnam-si"): "성남",
+    ("대한민국", "Kwangju"): "광주",
+    ("대한민국", "Suwon-si"): "수원",
+    ("대한민국", "Jeongok"): "전곡",
+    ("대한민국", "Songgang-dong"): "송강동",
+    ("대한민국", "Tonghae"): "동해",
+    ("대한민국", "Hongch'on"): "홍천",
+    ("대한민국", "Nangen"): "남원",
+    ("대한민국", "Goyang-si"): "고양",
+    ("대한민국", "Yangp'yong"): "양평",
+    ("대한민국", "Hwaseong-si"): "화성",
+    ("대한민국", "Neietsu"): "영월",
+    ("대한민국", "Tanhyeon"): "탄현",
+    ("대한민국", "Seonwon"): "선원",
+    ("대한민국", "T'aebaek"): "태백",
+    ("대한민국", "Wabu"): "와부",
+    ("대한민국", "Haseong"): "하성",
+    ("대한민국", "Sindong"): "신동",
+    ("대한민국", "Hwacheon"): "화천",
+    ("대한민국", "Yeoncheon"): "연천",
+    ("대한민국", "Cheongpyeong"): "청평",
+    ("대한민국", "Kang-neung"): "강릉",
+    ("대한민국", "Uijeongbu-si"): "의정부",
+    ("대한민국", "Wonju"): "원주",
+    ("대한민국", "Gwangjeok"): "광적",
+    ("대한민국", "Beobwon"): "법원",
+    ("대한민국", "Hanam"): "하남",
+    ("대한민국", "Jeju-si"): "제주",
+    ("대한민국", "Naju"): "나주",
+    ("대한민국", "Osan"): "오산",
+    ("대한민국", "Sangju"): "상주",
+    ("베트남", "Nha Trang"): "나트랑",
+    ("베트남", "Cam Lam"): "깜람",
+    ("가나", "Takoradi"): "타코라디",
+    ("일본", "Beppu"): "벳푸",
+    ("일본", "Fukuoka-shi"): "후쿠오카",
+    ("일본", "Chikushino-shi"): "치쿠시노",
+    ("일본", "Hita"): "히타",
+    ("일본", "Bungo-Takada-shi"): "분고타카다",
 }

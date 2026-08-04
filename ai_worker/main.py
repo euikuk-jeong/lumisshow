@@ -5,6 +5,8 @@
   python -m ai_worker.main tag-backfill  # AI 태그/위치 재계산(어휘·threshold 변경 후,
                                           # 또는 이 기능 도입 이전 사진 소급 적용)
   python -m ai_worker.main path-tag-reset  # 폴더명(Kiwi) 태깅 전체 재계산(사전/로직 변경 후)
+  python -m ai_worker.main location-tag-reset  # 위치(도시명) 한글 번역 재적용(geocoder
+                                          # ._CITY_NAMES_KO에 지명 추가 후)
   python -m ai_worker.main daemon        # 야간 자동 스캔 + jobs 큐 폴링 (컨테이너 상주)
 """
 
@@ -14,7 +16,7 @@ import os
 import random
 import time
 
-from ai_worker import config, db, matcher, scanner
+from ai_worker import config, db, geocoder, matcher, scanner
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("ai_worker")
@@ -291,6 +293,20 @@ def run_path_tag_reset() -> dict:
     return {"path_tagged": path_tagged, "elapsed": elapsed}
 
 
+def run_location_tag_reset() -> dict:
+    """위치(도시명) 한글 번역 재적용 — geocoder._CITY_NAMES_KO에 지명을 새로 추가한 뒤
+    이미 분석된 사진에도 소급 반영하고 싶을 때 admin이 명시적으로 트리거하는 배치.
+    재지오코딩(파일 열기·GPS 재계산)이 아니라 이미 저장된 photo_locations.city를
+    현재 매핑으로 재번역만 하므로 DB 조회뿐이라 가볍다(초 단위)."""
+    conn = db.connect()
+    start = time.monotonic()
+    translated = geocoder.retranslate_cities(conn)
+    conn.commit()
+    elapsed = time.monotonic() - start
+    log.info("위치 태그 한글 재번역 완료: %d건 변경, %.0f초", translated, elapsed)
+    return {"translated": translated, "elapsed": elapsed}
+
+
 def run_review_ignored(target_person_id: int) -> None:
     conn = db.connect()
     count = matcher.match_ignored_for_person(conn, target_person_id, config.match_threshold())
@@ -300,7 +316,8 @@ def run_review_ignored(target_person_id: int) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(prog="ai_worker")
     parser.add_argument(
-        "command", choices=["scan", "rematch", "tag-backfill", "path-tag-reset", "daemon"]
+        "command",
+        choices=["scan", "rematch", "tag-backfill", "path-tag-reset", "location-tag-reset", "daemon"],
     )
     parser.add_argument("--limit", type=int, default=None,
                         help="최대 처리 장수 (전체에서 균등 랜덤 샘플)")
@@ -313,6 +330,8 @@ def main() -> None:
         run_tag_backfill(args.limit)
     elif args.command == "path-tag-reset":
         run_path_tag_reset()
+    elif args.command == "location-tag-reset":
+        run_location_tag_reset()
     else:
         from ai_worker.daemon import run_daemon
         run_daemon()

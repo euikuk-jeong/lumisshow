@@ -39,7 +39,7 @@ from backend.services.settings import get_settings
 
 router = APIRouter(prefix="/api/admin", tags=["admin-people"])
 
-_JOB_TYPES = {"scan", "rematch", "review_ignored", "tag_backfill", "path_tag_reset"}
+_JOB_TYPES = {"scan", "rematch", "review_ignored", "tag_backfill", "path_tag_reset", "location_tag_reset"}
 
 # photos-detail 페이지네이션 스냅샷: 최초 요청(page=1, snapshot 미지정)에서 계산한
 # 전체 photo_path 순서를 토큰에 고정해두고 이후 페이지 요청은 이 목록만 슬라이스한다.

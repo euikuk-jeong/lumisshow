@@ -90,6 +90,15 @@ def notify_path_tag_reset_result(summary: dict) -> None:
     )
 
 
+def notify_location_tag_reset_result(summary: dict) -> None:
+    _send(
+        "**LumisShow 위치 태그 재번역 완료**\n"
+        f"도시명 {summary['translated']}건 한글 변환\n"
+        f"소요 {summary['elapsed']:.0f}초\n"
+        f"{_admin_people_url()}"
+    )
+
+
 def notify_tag_backfill_result(summary: dict) -> None:
     _send(
         "**LumisShow AI 태그 재계산 완료**\n"

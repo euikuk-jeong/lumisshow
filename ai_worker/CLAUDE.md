@@ -22,6 +22,8 @@ python -m ai_worker.main rematch       # 등록 셋 변경 후 전체 재매칭
 python -m ai_worker.main tag-backfill  # AI 태그/위치 재계산 (어휘·threshold 변경 후,
                                         # 또는 이 기능 도입 이전 사진 소급 적용)
 python -m ai_worker.main path-tag-reset  # 폴더명(Kiwi) 태깅 전체 재계산 (사전/로직 변경 후)
+python -m ai_worker.main location-tag-reset  # 위치(도시명) 한글 번역 재적용 (geocoder.
+                                        # _CITY_NAMES_KO 지명 추가 후)
 
 # 라벨링/평가 (M1 정답 셋)
 python -m ai_worker.tools.label_sheet             # $DATA_DIR/label_sheet.html 생성
@@ -199,10 +201,36 @@ KD-tree)로 (도시, 국가)를 얻어 `photo_locations`(정본)에 기록하고
 `reverse_geocode()`의 `cKDTree.query()`가 `ValueError`를 반복 던지며 로그를
 채우고 위치 태그도 못 붙는 문제가 있었다.
 
-도시명은 reverse_geocoder가 주는 로마자(예: "Seoul") 그대로 쓴다 — 오프라인으로
-한국어 도시명을 구할 저비용 방법이 없다(2026-08-02 확인). 국가는 ISO 3166-1
-alpha-2 코드를 `geocoder._COUNTRY_NAMES_KO` 정적 매핑으로 한국어 국가명으로
-바꾼다(매핑에 없으면 코드 그대로 폴백).
+국가는 ISO 3166-1 alpha-2 코드를 `geocoder._COUNTRY_NAMES_KO` 정적 매핑으로
+한국어 국가명으로 바꾼다(매핑에 없으면 코드 그대로 폴백). 도시명도 동일한 방식으로
+`geocoder._CITY_NAMES_KO`(`(한국어 국가명, reverse_geocoder 원본 로마자 도시명)` 키)
+정적 매핑을 거친다(2026-08-05 결정, 사용자가 실사용 데이터에서 로마자 지명이
+"괴리감이 든다"고 피드백). 전세계 지명을 저비용 오프라인으로 완전히 번역할 방법은
+없어(2026-08-02 확인 유지) `tag_vocab.py` 어휘 큐레이션과 동일하게 실제
+`photo_locations`에 관측된 지명만 나오는 대로 채워 넣는 방식이다 — 매핑에 없는
+지명은 로마자 그대로 폴백한다(안전한 실패, 번역 누락이지 오역이 아님). GeoNames의
+한국 지명 데이터는 일부 매우 오래된/비표준 로마자 표기(예: `Santyoku`=삼척,
+`Neietsu`=영월, `Nangen`=남원, `Gaigeturi`=애월)를 쓰는데, 좌표 대조로 실제
+지명과의 매칭 자체는 정확함을 확인했다(153개 지점 KD-tree의 최근접점 오매칭
+문제가 아니라 순수 로마자 표기 문제).
+
+**딕셔너리 키를 `(country_ko, city_en)` 조합으로 잡는 이유**: `name` 단독으로
+매핑하면 다른 나라의 동일 로마자 도시명과 충돌할 수 있다(안전 마진, 국내
+reverse_geocoder 데이터셋 152개 지명 자체는 실측 결과 중복 없음 확인됨).
+
+**소급 반영(`location_tag_reset`)**: `_CITY_NAMES_KO`에 지명을 새로 추가해도
+이미 분석된 사진의 `photo_locations.city`는 자동으로 갱신되지 않는다(다음 GPS
+재분석 전까지 로마자로 남음). `geocoder.retranslate_cities()`가 재지오코딩
+없이 기존 `photo_locations` 행을 현재 매핑으로 재번역하고 `photo_tags`를
+재동기화한다 — DB 조회·갱신뿐이라 이미지 재오픈이나 GPS 재계산이 필요한
+`tag-backfill`보다 훨씬 가볍다(초 단위). CLI(`python -m ai_worker.main
+location-tag-reset`) 또는 Admin '태그' 화면 "위치 태그 한글 재번역" 버튼
+(`POST /api/admin/ai/jobs` `{"type": "location_tag_reset"}`, `_JOB_TYPES`에
+추가된 일반 잡 생성·중복방지 경로 재사용 — `tag_backfill`/`path_tag_reset`과
+동일 패턴, 전용 라우터 없음)으로 트리거. `path_enabled` 같은 카테고리 플래그로
+게이팅하지 않는다 — 새 위치 데이터를 생성하는 게 아니라 이미 저장된 텍스트를
+재번역만 하는 작업이라 위치 인식 자체의 on/off와 무관하다. 완료 시
+`notify.notify_location_tag_reset_result()`로 Discord 알림.
 
 `RGeocoder`는 인스턴스 생성마다 ~30MB CSV를 다시 읽고 KD-tree를 재구축하므로
 (`reverse_geocoder.search()`가 매 호출 새 인스턴스를 만듦) 모듈 전역에 1회만
