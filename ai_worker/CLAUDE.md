@@ -193,7 +193,11 @@ KD-tree)로 (도시, 국가)를 얻어 `photo_locations`(정본)에 기록하고
 `geocoder.sync_location_tag()`가 `photo_tags(source='location')`에 city/country를
 각각 별도 행으로 복제한다(하나로 합치면 "서울" 단독 검색이 안 됨). GPS가 없거나
 역지오코딩이 실패하면(둘 다 best-effort — 얼굴 분석 성공 여부에 영향 없음)
-`photo_locations` 행을 지운다.
+`photo_locations` 행을 지운다. `pipeline._extract_gps()`는 위경도를 `math.isfinite()`로
+검증 후 반환한다(2026-08-04 수정) — Pillow `IFDRational`은 EXIF 분수 필드의
+분모가 0이면 예외 없이 `nan`을 반환해(깨진 GPS 태그) 그대로 넘기면
+`reverse_geocode()`의 `cKDTree.query()`가 `ValueError`를 반복 던지며 로그를
+채우고 위치 태그도 못 붙는 문제가 있었다.
 
 도시명은 reverse_geocoder가 주는 로마자(예: "Seoul") 그대로 쓴다 — 오프라인으로
 한국어 도시명을 구할 저비용 방법이 없다(2026-08-02 확인). 국가는 ISO 3166-1
@@ -333,7 +337,15 @@ admin이 어휘/threshold를 바꾼 뒤, 또는 이 기능 도입 이전 사진�
 ### resumable 파이프라인
 사진 1장 = 1 트랜잭션 커밋. 중단 후 재실행하면 `photos_analyzed`에 없는(또는
 mtime이 바뀐) 사진만 다시 처리한다. EXIF 회전 보정 후 분석하며, 실패한 사진은
-`status='error'`로 기록해 무한 재시도를 막는다.
+`status='error'`로 기록하고 `_logger.exception`으로 원인(트레이스백)을 로그에
+남긴다. `error` 상태는 mtime이 그대로여도 `scanner._ERROR_RETRY_DAYS`(7일)가
+지나면 `pending_photos()`가 다시 분석 대상에 포함시킨다(2026-08-04 수정 — 예전엔
+mtime 일치만으로 스킵해 일시적 오류로 실패한 사진이 파일이 안 바뀌는 한 영원히
+재시도되지 않았다). 매 스캔 무조건 재시도하지 않는 이유: 지속적으로 실패하는
+파일(손상 등)이 있으면 `pending`이 절대 비지 않아 `run_scan()`이 매일 밤
+모델(buffalo_l/CLIP) 로딩 비용을 치르고, `notify_scan_result()`의 "증분 없으면
+스킵" 게이팅도 무력화돼 Discord가 매번 울린다 — 7일 주기 자체가 "최소한
+Discord에 노출"이라는 요구를 겸한다.
 
 ### 모델/의존성 lazy import
 `insightface`는 `pipeline.py` 안에서만 import. scanner/matcher/db 단위 테스트는
