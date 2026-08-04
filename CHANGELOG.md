@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.4.0] - 2026-08-05
+
+### Added
+- **위치 태그 도시명 한글 번역**: GPS 역지오코딩(`reverse_geocoder`, GeoNames 기반)이
+  주는 로마자 도시명(예: `Santyoku`, `Gaigeturi`)이 검색·직관성을 해친다는 피드백에
+  따라, 국가명과 동일한 방식(`geocoder._CITY_NAMES_KO` 정적 매핑)으로 도시명도
+  한글로 번역(매핑에 없는 지명은 로마자 그대로 폴백). 국내 47개 + 해외(베트남·가나·
+  일본) 8개 지명을 실사용 데이터 기준으로 큐레이션. 이미 분석된 사진에 소급
+  반영하기 위한 `location_tag_reset` 배치도 추가 — 재지오코딩 없이 DB 값만
+  재번역해 가벼움. CLI(`python -m ai_worker.main location-tag-reset`) 또는
+  Admin '태그' 화면 "위치 태그 한글 재번역" 버튼으로 트리거, 완료 시 Discord 알림
+  (`ai_worker/geocoder.py`, `ai_worker/main.py`, `ai_worker/daemon.py`,
+  `ai_worker/notify.py`, `backend/routers/admin_people.py`,
+  `frontend/assets/js/pages/admin-tags.js`)
+
 ## [2.3.1] - 2026-08-04
 
 ### Fixed
@@ -1074,7 +1089,8 @@ Phase 2 — AI 얼굴 인식 스마트 앨범. NAS 로컬 AI(InsightFace)로 사
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v2.3.1...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v2.4.0...HEAD
+[2.4.0]: https://github.com/euikuk-jeong/lumisshow/compare/v2.3.1...v2.4.0
 [2.3.1]: https://github.com/euikuk-jeong/lumisshow/compare/v2.3.0...v2.3.1
 [2.3.0]: https://github.com/euikuk-jeong/lumisshow/compare/v2.2.0...v2.3.0
 [2.2.0]: https://github.com/euikuk-jeong/lumisshow/compare/v2.1.1...v2.2.0
