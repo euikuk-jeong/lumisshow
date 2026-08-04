@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.4.1] - 2026-08-05
+
+### Added
+- **Admin 라이트박스 정보 패널에 파일 경로 표시**: EXIF 정보 확인 시 사진이 어느
+  폴더에 있는지 알 수 없어 불편하다는 피드백에 따라, Filename 아래 소속 디렉토리
+  경로를 표시. 라이트박스는 EXIF 조회 시점에 파일 경로를 이미 알고 있어 백엔드
+  변경 없이 프론트에서만 처리 (`frontend/assets/js/lightbox.js`)
+
 ## [2.4.0] - 2026-08-05
 
 ### Added
@@ -1089,7 +1097,8 @@ Phase 2 — AI 얼굴 인식 스마트 앨범. NAS 로컬 AI(InsightFace)로 사
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v2.4.0...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v2.4.1...HEAD
+[2.4.1]: https://github.com/euikuk-jeong/lumisshow/compare/v2.4.0...v2.4.1
 [2.4.0]: https://github.com/euikuk-jeong/lumisshow/compare/v2.3.1...v2.4.0
 [2.3.1]: https://github.com/euikuk-jeong/lumisshow/compare/v2.3.0...v2.3.1
 [2.3.0]: https://github.com/euikuk-jeong/lumisshow/compare/v2.2.0...v2.3.0
