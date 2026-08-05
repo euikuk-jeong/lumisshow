@@ -69,7 +69,7 @@ async def login(req: LoginRequest, request: Request, response: Response, db=Depe
         value=token,
         httponly=True,
         max_age=_ADMIN_IMG_COOKIE_MAX_AGE,
-        samesite="lax",
+        samesite="strict",
         secure=os.getenv("BASE_URL", "").startswith("https://"),
         path="/api/admin",
     )
