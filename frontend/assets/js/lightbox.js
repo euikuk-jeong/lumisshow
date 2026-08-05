@@ -21,13 +21,11 @@ export function openLightbox(paths, startIdx, options = {}) {
   const localPaths = [...paths];
   let idx = startIdx;
 
-  const hasActions   = options.onSetCover || options.onDelete || options.extraAction;
   const hasSelection = !!options.getSelectionState;
 
   const overlay = document.createElement('div');
   overlay.className = 'lightbox-overlay';
   overlay.innerHTML = `
-    <button class="lightbox-info-btn" id="lb-btn-info" title="정보">i</button>
     <button class="lightbox-close" title="닫기">✕</button>
     <div class="lightbox-body">
       <button class="lightbox-nav lightbox-prev">‹</button>
@@ -43,11 +41,12 @@ export function openLightbox(paths, startIdx, options = {}) {
         <button class="lightbox-action-btn" id="lb-btn-select"></button>
         <span class="lb-sel-count" id="lb-sel-count"></span>
       </div>` : ''}
-      ${hasActions ? `<div class="lightbox-actions">
+      <div class="lightbox-actions">
+        <button class="lightbox-action-btn" id="lb-btn-info">정보보기</button>
         ${options.onSetCover  ? '<button class="lightbox-action-btn" id="lb-btn-cover">커버로 설정</button>' : ''}
         ${options.extraAction ? `<button class="lightbox-action-btn" id="lb-btn-extra">${options.extraAction.label}</button>` : ''}
         ${options.onDelete    ? `<button class="lightbox-action-btn lightbox-action-danger" id="lb-btn-delete">${options.deleteLabel || '앨범에서 삭제'}</button>` : ''}
-      </div>` : ''}
+      </div>
     </div>`;
   document.body.appendChild(overlay);
 
@@ -59,7 +58,7 @@ export function openLightbox(paths, startIdx, options = {}) {
   const infoBtn    = overlay.querySelector('#lb-btn-info');
   const infoEl     = overlay.querySelector('#lb-info');
 
-  // ── 정보 패널 (i 버튼: EXIF·태그, person/location 포함 — Admin 전용) ──
+  // ── 정보 패널 (정보보기 버튼: EXIF·태그, person/location 포함 — Admin 전용) ──
   // 매번 새로 조회한다(캐싱 안 함) — admin-tags.js의 "+ 태그 추가"(extraAction)로
   // 패널이 열린 채 태그를 바꿀 수 있어, 캐시를 두면 갱신 후에도 이전 태그 목록이
   // 계속 보이는 문제가 생긴다.
@@ -126,7 +125,7 @@ export function openLightbox(paths, startIdx, options = {}) {
   infoBtn.addEventListener('click', () => {
     infoVisible = !infoVisible;
     infoEl.style.display = infoVisible ? 'block' : 'none';
-    infoBtn.classList.toggle('lb-info-active', infoVisible);
+    infoBtn.classList.toggle('lb-selected', infoVisible);
     if (infoVisible) refreshInfoPanel();
   });
 

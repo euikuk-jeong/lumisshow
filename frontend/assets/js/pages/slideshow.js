@@ -592,6 +592,7 @@ async function runSlideshow(src) {
         updateUI();
         break;
       case 'Escape': closeSlideshow(); break;
+      case 'i': case 'I': document.getElementById('ss-info-btn').click(); break;
     }
   }
   document.addEventListener('keydown', handleKeydown);
