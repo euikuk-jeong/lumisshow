@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.7.3] - 2026-08-06
+
+### Fixed
+- **Admin 라이트박스 정보 버튼 클릭 불가 문제**: 좌상단에 떠있던 [i] 아이콘이 `.lightbox-body`가
+  DOM 순서상 나중에 렌더링되어 stacking에서 위를 덮어 클릭이 가로채지고 있었다. 하단 액션 바로
+  이동해 "정보보기" 텍스트 버튼으로 변경했다(단축키 `i`는 그대로 유지)
+  (`frontend/assets/js/lightbox.js`, `frontend/assets/css/admin.css`)
+
+### Added
+- **슬라이드쇼 정보 패널 단축키(`i`)**: 라이트박스·공유뷰어는 이미 지원하던 단축키를 슬라이드쇼에도
+  등록해 정보 패널을 키보드로 토글할 수 있게 했다 (`frontend/assets/js/pages/slideshow.js`)
+
 ## [2.7.2] - 2026-08-05
 
 ### Security
@@ -1154,7 +1166,8 @@ Phase 2 — AI 얼굴 인식 스마트 앨범. NAS 로컬 AI(InsightFace)로 사
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v2.7.2...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v2.7.3...HEAD
+[2.7.3]: https://github.com/euikuk-jeong/lumisshow/compare/v2.7.2...v2.7.3
 [2.7.2]: https://github.com/euikuk-jeong/lumisshow/compare/v2.7.1...v2.7.2
 [2.7.1]: https://github.com/euikuk-jeong/lumisshow/compare/v2.7.0...v2.7.1
 [2.7.0]: https://github.com/euikuk-jeong/lumisshow/compare/v2.6.0...v2.7.0
