@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.7.0] - 2026-08-05
+
+### Added
+- **수동 태그 자유 텍스트 입력**: 태그 추가 모달의 고정 어휘(vocab) 드롭다운을 텍스트 입력창으로
+  바꿔 목록에 없는 태그도 직접 입력할 수 있게 했다. 기존 vocab과 실제 사용 중인 태그를 합쳐
+  자동완성 제안으로 보여준다. 백엔드는 trim/빈 값/50자 초과/`/` 포함(다른 라우트에서 태그가
+  경로 파라미터로도 쓰여 조회·삭제·이름변경이 막히는 문제 방지)만 검증하고 나머지는 자유롭게 허용
+  (`backend/routers/admin_ai_tags.py`, `frontend/assets/js/tag-modal.js`)
+- **여러 장 사진에 태그 일괄 적용/삭제**: 사진 탐색·태그 메뉴의 사진 그리드에 다중선택(체크박스)을
+  추가해 선택한 여러 장에 한 번에 태그를 추가할 수 있다. 태그 메뉴의 "직접추가" 필터에서는 선택한
+  사진에서 태그를 일괄 삭제하는 기능도 제공한다(AI/폴더명 태그의 개별 삭제는 기존과 동일하게 유지).
+  순차 API 호출이라 일부 실패해도 나머지는 계속 진행하고 실패 개수와 사유를 알려준다
+  (`frontend/assets/js/pages/admin-tags.js`, `frontend/assets/js/pages/admin-browse.js`)
+
 ## [2.6.0] - 2026-08-05
 
 ### Changed
@@ -1120,7 +1134,8 @@ Phase 2 — AI 얼굴 인식 스마트 앨범. NAS 로컬 AI(InsightFace)로 사
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v2.6.0...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v2.7.0...HEAD
+[2.7.0]: https://github.com/euikuk-jeong/lumisshow/compare/v2.6.0...v2.7.0
 [2.6.0]: https://github.com/euikuk-jeong/lumisshow/compare/v2.5.0...v2.6.0
 [2.5.0]: https://github.com/euikuk-jeong/lumisshow/compare/v2.4.1...v2.5.0
 [2.4.1]: https://github.com/euikuk-jeong/lumisshow/compare/v2.4.0...v2.4.1
