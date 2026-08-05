@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.7.1] - 2026-08-05
+
+### Fixed
+- **확대 상태에서 마우스 가운데 버튼 줌 리셋 안 되는 문제**: v2.6.0에서 라이트박스·공유뷰어 제스처를
+  `photo-zoom-viewer.js` 공용 모듈로 통합하며 pointerdown 핸들러가 마우스 버튼 구분 없이
+  zoom>1이면 preventDefault·setPointerCapture를 걸었고, 이로 인해 뒤이어 발생해야 할
+  mousedown(가운데 버튼 줌 리셋 핸들러)이 억제되어 라이트박스·공유뷰어 양쪽 모두 확대 중
+  가운데 버튼 리셋이 동작하지 않았다. 마우스 비-좌클릭 버튼을 pointerdown 팬 로직에서 제외
+  (`frontend/assets/js/photo-zoom-viewer.js`)
+
 ## [2.7.0] - 2026-08-05
 
 ### Added
@@ -1134,7 +1144,8 @@ Phase 2 — AI 얼굴 인식 스마트 앨범. NAS 로컬 AI(InsightFace)로 사
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v2.7.0...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v2.7.1...HEAD
+[2.7.1]: https://github.com/euikuk-jeong/lumisshow/compare/v2.7.0...v2.7.1
 [2.7.0]: https://github.com/euikuk-jeong/lumisshow/compare/v2.6.0...v2.7.0
 [2.6.0]: https://github.com/euikuk-jeong/lumisshow/compare/v2.5.0...v2.6.0
 [2.5.0]: https://github.com/euikuk-jeong/lumisshow/compare/v2.4.1...v2.5.0
