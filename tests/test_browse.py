@@ -217,6 +217,19 @@ async def test_search_by_tag_no_match_returns_empty(auth_client):
     assert data["total"] == 0
 
 
+async def test_search_excludes_disabled_category_tags(auth_client):
+    """위치 인식을 끄면 photo_locations(source='location') 태그는 DB에 있어도
+    검색에서 제외돼야 한다 — 파일명에 없는 검색어라 태그 매칭이 없으면 0건."""
+    await _seed_tag("서울", "sub/nested.jpg", source="location")
+    await auth_client.patch("/api/admin/ai/settings", json={"location_enabled": False})
+    r = await auth_client.get("/api/admin/search?q=서울")
+    assert r.json()["total"] == 0
+
+    await auth_client.patch("/api/admin/ai/settings", json={"location_enabled": True})
+    r = await auth_client.get("/api/admin/search?q=서울")
+    assert r.json()["total"] == 1
+
+
 async def test_search_survives_ai_db_failure(auth_client, monkeypatch):
     """ai.db(photo_tags) 조회가 실패해도(예: 미초기화·잠김) 검색 자체는 500이 아니라
     파일명 매칭만으로 정상 응답해야 한다(share.py Phase 6와 동일한 격리 원칙)."""
@@ -371,6 +384,24 @@ async def test_photo_info_absolute_path(auth_client, photo_root):
     r = await auth_client.get(f"/api/admin/photo-info?path={abs_path}")
     assert r.status_code == 200
     assert r.json()["filename"] == "photo0.jpg"
+
+
+async def test_photo_info_excludes_disabled_category_tags(auth_client):
+    """얼굴 인식을 끄면 DB에 person 태그가 남아있어도 photo-info 응답에서 제외돼야
+    한다(기존 데이터는 보존하되 노출만 막는다)."""
+    await _seed_tag("홍길동", "photo0.jpg", source="person")
+    await _seed_tag("캠핑", "photo0.jpg", source="ai")
+
+    await auth_client.patch("/api/admin/ai/settings", json={"face_enabled": False})
+    r = await auth_client.get("/api/admin/photo-info?path=photo0.jpg")
+    data = r.json()
+    assert data["person_tags"] == []
+    assert data["ai_tags"] == ["캠핑"]  # 다른 카테고리는 그대로 노출
+
+    # 다시 켜면 기존 DB 값이 그대로 복원되어 보인다(삭제된 적 없으므로)
+    await auth_client.patch("/api/admin/ai/settings", json={"face_enabled": True})
+    r = await auth_client.get("/api/admin/photo-info?path=photo0.jpg")
+    assert r.json()["person_tags"] == ["홍길동"]
 
 
 # ── browse hidden paths ───────────────────────────────────────────────────────

@@ -31,10 +31,11 @@ from backend.models.schemas import (
     build_share_photo_item,
     build_slideshow_defaults,
 )
+from backend.services.ai_settings import CATEGORY_SETTING_KEYS, read_ai_settings
 from backend.services.auth import admin_image_auth, get_current_admin
 from backend.services.paths import build_filename_index
 from backend.services.photo_meta import load_photo_meta
-from backend.services.photo_tags import ADMIN_INFO_PANEL_SOURCES, load_photo_tags
+from backend.services.photo_tags import ADMIN_INFO_PANEL_SOURCES, enabled_sources, load_photo_tags
 from backend.services.settings import get_settings
 
 router = APIRouter(prefix="/api/admin", tags=["admin-people"])
@@ -698,7 +699,8 @@ async def list_person_photos_detail(
     paths = all_paths[offset: offset + size]
 
     meta_map = await load_photo_meta(paths, app_db)
-    tags_map = await load_photo_tags(paths, db, ADMIN_INFO_PANEL_SOURCES)
+    allowed = set(ADMIN_INFO_PANEL_SOURCES) & set(enabled_sources(await read_ai_settings(db)))
+    tags_map = await load_photo_tags(paths, db, tuple(allowed))
     photos = [
         build_share_photo_item(
             id=offset + i,
@@ -1121,35 +1123,12 @@ async def create_job(
     return {"id": cur.lastrowid, "type": body.type, "duplicated": False}
 
 
-_CATEGORY_SETTING_KEYS = ("face_enabled", "location_enabled", "path_enabled", "ai_tag_enabled")
-
-
-async def _read_ai_settings(db) -> dict:
-    async with db.execute(
-        "SELECT key, value FROM ai_settings WHERE key IN "
-        "('scan_hour', 'tag_threshold', 'face_enabled', 'location_enabled', "
-        "'path_enabled', 'ai_tag_enabled')"
-    ) as cur:
-        rows = await cur.fetchall()
-    values = {row["key"]: row["value"] for row in rows}
-    result = {
-        "scan_hour": int(values["scan_hour"]) if "scan_hour" in values else None,
-        "tag_threshold": float(values["tag_threshold"]) if "tag_threshold" in values else None,
-    }
-    # 카테고리 플래그는 키가 없으면 기본 활성화(true) — 이 기능 도입 이전과 동일하게
-    # 전부 켜진 상태로 취급해야 기존 사용자 동작이 안 바뀐다. ai_worker의
-    # category_flags()와 "1"/"0" 문자열 규약을 동일하게 맞춰야 한다.
-    for key in _CATEGORY_SETTING_KEYS:
-        result[key] = values.get(key, "1") != "0"
-    return result
-
-
 @router.get("/ai/settings")
 async def get_ai_settings(_: str = Depends(get_current_admin), db=Depends(get_ai_db)):
     """scan_hour: 야간 스캔 시각(AI_SCAN_HOUR), tag_threshold: CLIP 태그 부여 임계값
     (AI_TAG_THRESHOLD). 둘 다 null이면 워커 환경변수 사용. face_enabled/
     location_enabled/path_enabled/ai_tag_enabled: 카테고리별 on/off, 기본 true."""
-    return await _read_ai_settings(db)
+    return await read_ai_settings(db)
 
 
 @router.patch("/ai/settings")
@@ -1166,7 +1145,7 @@ async def update_ai_settings(
             "INSERT OR REPLACE INTO ai_settings (key, value) VALUES ('tag_threshold', ?)",
             (str(body.tag_threshold),),
         )
-    for key in _CATEGORY_SETTING_KEYS:
+    for key in CATEGORY_SETTING_KEYS:
         value = getattr(body, key)
         if value is not None:
             await db.execute(
@@ -1174,4 +1153,46 @@ async def update_ai_settings(
                 (key, "1" if value else "0"),
             )
     await db.commit()
-    return await _read_ai_settings(db)
+    return await read_ai_settings(db)
+
+
+# 카테고리별 DB 전량 삭제 — "끄면 신규 생성만 막고 기존 데이터는 보존" 원칙과
+# 별개로, admin이 명시적으로 과거 데이터까지 지우고 싶을 때 쓰는 별도 액션.
+# 얼굴은 위치/사물과 달리 재활성화 후 자동 백필 메커니즘이 없다(ai_worker/CLAUDE.md
+# "카테고리별 on/off" 참고) — 삭제 후 다시 켜도 mtime이 바뀌지 않는 기존 사진은
+# 자동으로 재인식되지 않는다. persons(인물 프로필)는 유지해 재스캔 시 기존
+# 인물과 다시 매칭할 수 있게 한다.
+_PURGE_CATEGORIES = {"face", "location", "path", "ai_tag"}
+
+
+@router.post("/ai/categories/{category}/purge")
+async def purge_ai_category(
+    category: str, _: str = Depends(get_current_admin), db=Depends(get_ai_db)
+):
+    if category not in _PURGE_CATEGORIES:
+        raise HTTPException(status_code=400, detail=f"category는 {_PURGE_CATEGORIES} 중 하나")
+
+    settings = await read_ai_settings(db)
+    if settings[f"{category}_enabled"]:
+        raise HTTPException(
+            status_code=409,
+            detail="카테고리가 켜져 있는 동안은 삭제할 수 없습니다. 먼저 꺼주세요.",
+        )
+
+    if category == "face":
+        # faces 삭제는 FK CASCADE로 face_labels/face_matches까지 함께 지운다.
+        await db.execute("DELETE FROM faces")
+        await db.execute("DELETE FROM photo_tags WHERE source = 'person'")
+        await db.execute("UPDATE photos_analyzed SET face_count = 0")
+    elif category == "location":
+        await db.execute("DELETE FROM photo_locations")
+        await db.execute("DELETE FROM photo_tags WHERE source = 'location'")
+    elif category == "ai_tag":
+        await db.execute("DELETE FROM photo_embeddings")
+        await db.execute("DELETE FROM photo_tags WHERE source = 'ai'")
+    elif category == "path":
+        await db.execute("DELETE FROM photo_tags WHERE source = 'path'")
+        await db.execute("UPDATE photos_analyzed SET path_tag_done = 0")
+
+    await db.commit()
+    return {"category": category, "purged": True}

@@ -24,7 +24,8 @@ from backend.services.auth import (
 )
 from backend.services.paths import assert_within_photo_root, resolve_abs
 from backend.services.photo_meta import load_photo_meta
-from backend.services.photo_tags import SHARE_INFO_PANEL_SOURCES, load_photo_tags
+from backend.services.ai_settings import read_ai_settings
+from backend.services.photo_tags import SHARE_INFO_PANEL_SOURCES, enabled_sources, load_photo_tags
 from backend.services.settings import get_settings
 from backend.services.thumbnail import generate_thumbnail
 from backend.services.zip_stream import zip_generator
@@ -348,7 +349,8 @@ async def get_photos(
     # CLIP 태깅 실패가 얼굴 스캔을 막지 않는 것(pipeline.py의 best-effort 원칙)과 같은
     # 이유로, 태그가 안 붙는 건 감수해도 앨범 자체가 안 열리는 건 안 된다.
     try:
-        tags_map = await load_photo_tags(file_paths, ai_db, SHARE_INFO_PANEL_SOURCES)
+        allowed = set(SHARE_INFO_PANEL_SOURCES) & set(enabled_sources(await read_ai_settings(ai_db)))
+        tags_map = await load_photo_tags(file_paths, ai_db, tuple(allowed))
     except Exception:
         tags_map = {}
 

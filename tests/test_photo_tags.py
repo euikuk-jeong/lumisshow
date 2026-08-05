@@ -2,7 +2,9 @@
 
 import aiosqlite
 
-from backend.services.photo_tags import load_photo_tags, search_tag_matched_paths
+from backend.services.photo_tags import enabled_sources, load_photo_tags, search_tag_matched_paths
+
+_ALL_SOURCES = ("ai", "manual", "person", "path", "location")
 
 
 async def _seed_tags(rows: list[tuple[str, str, str]]) -> None:
@@ -101,9 +103,9 @@ async def test_search_tag_matched_paths_substring_match_across_sources(client):
 
     async with aiosqlite.connect(_ai_db_path()) as db:
         db.row_factory = aiosqlite.Row
-        assert await search_tag_matched_paths("캠핑", db) == {"2024/a.jpg"}
-        assert await search_tag_matched_paths("지우", db) == {"2024/b.jpg"}
-        assert await search_tag_matched_paths("서울", db) == {"2024/c.jpg"}
+        assert await search_tag_matched_paths("캠핑", db, _ALL_SOURCES) == {"2024/a.jpg"}
+        assert await search_tag_matched_paths("지우", db, _ALL_SOURCES) == {"2024/b.jpg"}
+        assert await search_tag_matched_paths("서울", db, _ALL_SOURCES) == {"2024/c.jpg"}
 
 
 async def test_search_tag_matched_paths_no_match_returns_empty_set(client):
@@ -112,7 +114,7 @@ async def test_search_tag_matched_paths_no_match_returns_empty_set(client):
 
     async with aiosqlite.connect(_ai_db_path()) as db:
         db.row_factory = aiosqlite.Row
-        assert await search_tag_matched_paths("없는태그", db) == set()
+        assert await search_tag_matched_paths("없는태그", db, _ALL_SOURCES) == set()
 
 
 async def test_search_tag_matched_paths_deduplicates_multiple_tag_hits(client):
@@ -126,7 +128,7 @@ async def test_search_tag_matched_paths_deduplicates_multiple_tag_hits(client):
 
     async with aiosqlite.connect(_ai_db_path()) as db:
         db.row_factory = aiosqlite.Row
-        result = await search_tag_matched_paths("캠핑", db)
+        result = await search_tag_matched_paths("캠핑", db, _ALL_SOURCES)
     assert result == {"2024/a.jpg"}
 
 
@@ -138,4 +140,45 @@ async def test_search_tag_matched_paths_escapes_like_wildcards(client):
 
     async with aiosqlite.connect(_ai_db_path()) as db:
         db.row_factory = aiosqlite.Row
-        assert await search_tag_matched_paths("_", db) == set()
+        assert await search_tag_matched_paths("_", db, _ALL_SOURCES) == set()
+
+
+async def test_search_tag_matched_paths_filters_by_sources(client):
+    """카테고리 off로 sources에서 제외된 source의 태그는 검색에 안 걸려야 한다."""
+    await _seed_tags([
+        ("2024/a.jpg", "캠핑", "ai"),
+        ("2024/b.jpg", "캠핑장", "path"),
+    ])
+    from backend.models.ai_database import _ai_db_path
+
+    async with aiosqlite.connect(_ai_db_path()) as db:
+        db.row_factory = aiosqlite.Row
+        # path 소스 제외 — a.jpg만 걸림
+        assert await search_tag_matched_paths("캠핑", db, ("ai", "manual")) == {"2024/a.jpg"}
+
+
+async def test_search_tag_matched_paths_empty_sources_returns_empty_set(client):
+    await _seed_tags([("2024/a.jpg", "캠핑", "ai")])
+    from backend.models.ai_database import _ai_db_path
+
+    async with aiosqlite.connect(_ai_db_path()) as db:
+        db.row_factory = aiosqlite.Row
+        assert await search_tag_matched_paths("캠핑", db, ()) == set()
+
+
+# ── enabled_sources ────────────────────────────────────────────────────────
+
+
+def test_enabled_sources_all_on_returns_all_five():
+    flags = {"face_enabled": True, "location_enabled": True, "path_enabled": True, "ai_tag_enabled": True}
+    assert set(enabled_sources(flags)) == {"manual", "person", "location", "path", "ai"}
+
+
+def test_enabled_sources_excludes_disabled_categories():
+    flags = {"face_enabled": False, "location_enabled": True, "path_enabled": False, "ai_tag_enabled": True}
+    assert set(enabled_sources(flags)) == {"manual", "location", "ai"}
+
+
+def test_enabled_sources_manual_always_included():
+    flags = {"face_enabled": False, "location_enabled": False, "path_enabled": False, "ai_tag_enabled": False}
+    assert enabled_sources(flags) == ("manual",)

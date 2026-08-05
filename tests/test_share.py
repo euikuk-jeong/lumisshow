@@ -253,6 +253,29 @@ async def test_get_photos_exposes_only_ai_path_manual_tags(admin_client):
     assert photo["manual_tags"] == ["눈사람"]
 
 
+async def test_get_photos_excludes_disabled_category_tags(admin_client):
+    """사물 인식(AI 태그)을 끄면 공유 뷰어에서도 DB에 남은 ai 태그가 노출되면 안 된다."""
+    import aiosqlite
+
+    from backend.models.ai_database import _ai_db_path
+
+    token = await _setup_link(admin_client, with_photos=True)
+    await _auth(admin_client, token)
+
+    async with aiosqlite.connect(_ai_db_path()) as db:
+        await db.execute(
+            "INSERT INTO photo_tags (photo_path, tag, source) VALUES "
+            "('a.jpg', '캠핑', 'ai'), ('a.jpg', '서울대공원', 'path')"
+        )
+        await db.commit()
+
+    await admin_client.patch("/api/admin/ai/settings", json={"ai_tag_enabled": False})
+    photos = (await admin_client.get(f"/api/share/{token}/photos")).json()["photos"]
+    photo = next(p for p in photos if p["url"] == "/media/a.jpg")
+    assert photo["ai_tags"] == []
+    assert photo["path_tags"] == ["서울대공원"]
+
+
 async def test_get_photos_survives_ai_db_failure(admin_client, monkeypatch):
     """ai.db(photo_tags) 조회가 실패해도(예: 잠김·손상) 공유 앨범 조회 자체는
     500이 아니라 200으로 응답해야 한다 — 태그만 빠지고 나머지는 정상 동작

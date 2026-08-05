@@ -44,15 +44,40 @@ async def load_photo_tags(
     return result
 
 
-async def search_tag_matched_paths(query: str, db) -> set[str]:
-    """query를 부분 문자열로 포함하는 tag가 있는 photo_path 집합(source 구분 없이
-    전부) — Admin 사진 탐색 검색(admin_browse.py)이 파일명 검색과 OR로 합쳐 쓴다.
-    source를 안 가리는 이유: 검색은 노출 범위 통제가 필요한 화면(정보 패널)이
-    아니라 Admin 본인만 보는 탐색기이므로, person(확정 인물명)·location까지 전부
-    검색 대상이어야 유용하다."""
+# ai_settings 카테고리 플래그 키(services/ai_settings.py.CATEGORY_SETTING_KEYS와 값은 같으나
+# photo_tags.source 이름으로 변환된 버전) → source 매핑. manual은 토글이 없어
+# 항상 검색/노출 대상.
+_CATEGORY_TO_SOURCE = {
+    "face_enabled": "person",
+    "location_enabled": "location",
+    "path_enabled": "path",
+    "ai_tag_enabled": "ai",
+}
+
+
+def enabled_sources(category_flags: dict) -> tuple[str, ...]:
+    """{"face_enabled": bool, ...} → 꺼진 카테고리를 제외한 source 튜플(manual 포함).
+
+    photo-info(정보 패널)·검색 양쪽이 "꺼진 카테고리는 기존 DB에 있어도 미표시"
+    원칙을 공유하도록 하나로 모은 헬퍼."""
+    return ("manual",) + tuple(
+        source for key, source in _CATEGORY_TO_SOURCE.items() if category_flags.get(key, True)
+    )
+
+
+async def search_tag_matched_paths(query: str, db, sources: tuple[str, ...]) -> set[str]:
+    """query를 부분 문자열로 포함하는 tag가 있는 photo_path 집합(sources로 한정) —
+    Admin 사진 탐색 검색(admin_browse.py)이 파일명 검색과 OR로 합쳐 쓴다.
+    원래는 source 구분 없이 전체가 대상이었으나(검색은 정보 패널과 달리 노출 범위
+    통제가 필요 없는 Admin 전용 화면이라는 이유), 카테고리 off 시 "기존 DB에
+    있어도 검색에서 제외" 요구사항 추가로 enabled_sources() 결과를 받아 필터한다."""
+    if not sources:
+        return set()
     like = "%" + query.translate(str.maketrans({"\\": "\\\\", "%": "\\%", "_": "\\_"})) + "%"
+    placeholders = ",".join("?" * len(sources))
     async with db.execute(
-        "SELECT DISTINCT photo_path FROM photo_tags WHERE tag LIKE ? ESCAPE '\\'",
-        (like,),
+        f"SELECT DISTINCT photo_path FROM photo_tags WHERE tag LIKE ? ESCAPE '\\' "
+        f"AND source IN ({placeholders})",
+        (like, *sources),
     ) as cur:
         return {r["photo_path"] for r in await cur.fetchall()}

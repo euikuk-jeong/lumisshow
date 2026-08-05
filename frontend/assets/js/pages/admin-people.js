@@ -4,7 +4,30 @@ import { esc } from '../utils.js';
 
 // ── 인물 목록 (/admin/people) ─────────────────────────────────────────
 
+const _FACE_DISABLED_MSG = '기능을 사용하려면 설정에서 AI 인식 카테고리에서 얼굴 인식을 켜 주세요';
+
+async function _faceEnabled() {
+  // ai.db 미구성 등으로 조회 실패 시 얼굴 탭 자체를 막으면 안 됨 — 켜진 것으로
+  // 취급(admin-settings.js의 동일한 try/catch 원칙, fail-open).
+  try {
+    const settings = await api.get('/api/admin/ai/settings');
+    return settings.face_enabled !== false;
+  } catch {
+    return true;
+  }
+}
+
+function _renderFaceDisabled() {
+  renderAdminShell(`
+    <div class="page-header">
+      <div><h1 class="page-title">인물</h1></div>
+    </div>
+    <div class="empty-state"><h3>${_FACE_DISABLED_MSG}</h3></div>
+  `, '/admin/people');
+}
+
 export async function renderAdminPeople() {
+  if (!(await _faceEnabled())) { _renderFaceDisabled(); return; }
   renderAdminShell(`
     <div class="page-header">
       <div>
@@ -251,6 +274,7 @@ let _similarSeed = null;     // { faceId, photoPath } — 'similar' 모드에서
 let _offset = 0;
 
 export async function renderUnassignedFaces() {
+  if (!(await _faceEnabled())) { _renderFaceDisabled(); return; }
   _selected = new Set();
   _mode = 'default';
   _similarSeed = null;
@@ -434,6 +458,7 @@ async function labelSelected(personId) {
 // ── 무시된 얼굴 (/admin/people/ignored) — 무시 해제·인물 재지정 ───────
 
 export async function renderIgnoredFaces() {
+  if (!(await _faceEnabled())) { _renderFaceDisabled(); return; }
   _selected = new Set();
   _offset = 0;
 
