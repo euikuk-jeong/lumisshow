@@ -166,16 +166,24 @@ async def rename_tag(
 async def add_manual_tag(
     body: ManualTagCreate, _: str = Depends(get_current_admin), db=Depends(get_ai_db)
 ):
-    if body.tag not in MANUAL_TAG_VOCAB:
-        raise HTTPException(status_code=400, detail="어휘 목록에 없는 태그입니다")
+    tag = body.tag.strip()
+    if not tag:
+        raise HTTPException(status_code=400, detail="태그를 입력하세요")
+    if len(tag) > 50:
+        raise HTTPException(status_code=400, detail="태그는 50자 이내로 입력하세요")
+    if "/" in tag:
+        # tag는 GET/DELETE/PUT 라우트에서 경로 파라미터로도 쓰인다 — "/"가 들어가면
+        # 그 태그를 다시 조회·삭제·이름변경할 방법이 없어진다(우회는 %2F 인코딩인데
+        # ASGI 서버 단에서 디코딩되어 라우팅이 깨짐).
+        raise HTTPException(status_code=400, detail="태그에 '/'는 사용할 수 없습니다")
     cur = await db.execute(
         """INSERT INTO photo_tags (photo_path, tag, source) VALUES (?, ?, 'manual')
            ON CONFLICT(photo_path, tag, source) DO NOTHING""",
-        (body.photo_path, body.tag),
+        (body.photo_path, tag),
     )
     await db.commit()
     return {
-        "photo_path": body.photo_path, "tag": body.tag, "source": "manual",
+        "photo_path": body.photo_path, "tag": tag, "source": "manual",
         "added": bool(cur.rowcount),
     }
 

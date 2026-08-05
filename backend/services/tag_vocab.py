@@ -1,4 +1,7 @@
-"""Admin 수동 태그 추가(POST /api/admin/tags/manual)용 어휘 목록.
+"""Admin 수동 태그 추가(POST /api/admin/tags/manual) 입력 자동완성 제안 목록.
+
+자유 텍스트 입력을 막지는 않는다(POST /tags/manual은 임의 문자열을 받음) —
+이 목록은 GET /tags/vocab으로 내려가 프론트 입력창의 추천 후보로만 쓰인다.
 
 ai_worker/tag_vocab.py의 label(한국어)만 복제한다 — 컨테이너가 분리되어 코드를
 직접 공유할 수 없기 때문(ai.db 스키마를 backend/models/ai_database.py와
