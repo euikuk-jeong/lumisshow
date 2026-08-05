@@ -132,6 +132,9 @@ export function createPhotoZoomViewer({
 
   bodyEl.addEventListener('pointerdown', e => {
     if (scrollableSelector && e.target.closest(scrollableSelector)) return;
+    // 마우스 가운데/오른쪽 버튼은 팬 대상이 아니다 — 이 핸들러가 관여하면
+    // preventDefault·setPointerCapture가 걸려 가운데버튼 줌 리셋(mousedown)이 씹힌다
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
     activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
     if (e.pointerType === 'touch') bodyEl.setPointerCapture(e.pointerId);
 
