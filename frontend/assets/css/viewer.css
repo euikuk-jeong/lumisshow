@@ -259,10 +259,8 @@
   pointer-events: none;
 }
 
-/* 스와이프 취소/완료 시 화면 밖 대상 위치까지 부드럽게 이동시키는 스냅 애니메이션 */
-.spv-img.spv-snapping, .spv-peek-img.spv-snapping {
-  transition: opacity 0.15s, transform 0.25s ease;
-}
+/* 스와이프 취소/완료 시 화면 밖 대상 위치까지 부드럽게 이동시키는 스냅 애니메이션
+   — 공용 클래스는 base.css의 .pv-snapping (photo-zoom-viewer.js가 부착) */
 
 .spv-nav {
   position: absolute;

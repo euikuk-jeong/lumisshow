@@ -14,7 +14,7 @@
  *                             누를 수 있는 채로 두는 게 태그 추가 같은 반복 동작에 더 맞음).
  */
 import { api } from './api.js';
-import { startedInEdgeZone, resolveSwipeDirection } from './touch-gesture.js';
+import { createPhotoZoomViewer } from './photo-zoom-viewer.js';
 import { esc } from './utils.js';
 
 export function openLightbox(paths, startIdx, options = {}) {
@@ -23,37 +23,41 @@ export function openLightbox(paths, startIdx, options = {}) {
 
   const hasActions   = options.onSetCover || options.onDelete || options.extraAction;
   const hasSelection = !!options.getSelectionState;
-  const hasFooter    = hasActions || hasSelection;
 
   const overlay = document.createElement('div');
   overlay.className = 'lightbox-overlay';
   overlay.innerHTML = `
     <button class="lightbox-info-btn" id="lb-btn-info" title="정보">i</button>
     <button class="lightbox-close" title="닫기">✕</button>
-    <button class="lightbox-nav lightbox-prev">‹</button>
     <div class="lightbox-body">
+      <button class="lightbox-nav lightbox-prev">‹</button>
+      <img class="lightbox-peek-img lightbox-peek-prev" alt="">
       <img class="lightbox-img" src="" alt="">
+      <img class="lightbox-peek-img lightbox-peek-next" alt="">
       <div class="lightbox-info" id="lb-info" style="display:none"></div>
-      <div class="lightbox-caption"></div>
-      ${hasFooter ? `<div class="lightbox-footer">
-        ${hasSelection ? `<div class="lightbox-sel-area">
-          <button class="lightbox-action-btn" id="lb-btn-select"></button>
-          <span class="lb-sel-count" id="lb-sel-count"></span>
-        </div>` : '<div></div>'}
-        ${hasActions ? `<div class="lightbox-actions">
-          ${options.onSetCover  ? '<button class="lightbox-action-btn" id="lb-btn-cover">커버로 설정</button>' : ''}
-          ${options.extraAction ? `<button class="lightbox-action-btn" id="lb-btn-extra">${options.extraAction.label}</button>` : ''}
-          ${options.onDelete    ? `<button class="lightbox-action-btn lightbox-action-danger" id="lb-btn-delete">${options.deleteLabel || '앨범에서 삭제'}</button>` : ''}
-        </div>` : ''}
-      </div>` : ''}
+      <button class="lightbox-nav lightbox-next">›</button>
     </div>
-    <button class="lightbox-nav lightbox-next">›</button>`;
+    <div class="lightbox-footer">
+      <div class="lightbox-caption"></div>
+      ${hasSelection ? `<div class="lightbox-sel-area">
+        <button class="lightbox-action-btn" id="lb-btn-select"></button>
+        <span class="lb-sel-count" id="lb-sel-count"></span>
+      </div>` : ''}
+      ${hasActions ? `<div class="lightbox-actions">
+        ${options.onSetCover  ? '<button class="lightbox-action-btn" id="lb-btn-cover">커버로 설정</button>' : ''}
+        ${options.extraAction ? `<button class="lightbox-action-btn" id="lb-btn-extra">${options.extraAction.label}</button>` : ''}
+        ${options.onDelete    ? `<button class="lightbox-action-btn lightbox-action-danger" id="lb-btn-delete">${options.deleteLabel || '앨범에서 삭제'}</button>` : ''}
+      </div>` : ''}
+    </div>`;
   document.body.appendChild(overlay);
 
-  const imgEl     = overlay.querySelector('.lightbox-img');
-  const captionEl = overlay.querySelector('.lightbox-caption');
-  const infoBtn   = overlay.querySelector('#lb-btn-info');
-  const infoEl    = overlay.querySelector('#lb-info');
+  const bodyEl     = overlay.querySelector('.lightbox-body');
+  const imgEl      = overlay.querySelector('.lightbox-img');
+  const peekPrevEl = overlay.querySelector('.lightbox-peek-prev');
+  const peekNextEl = overlay.querySelector('.lightbox-peek-next');
+  const captionEl  = overlay.querySelector('.lightbox-caption');
+  const infoBtn    = overlay.querySelector('#lb-btn-info');
+  const infoEl     = overlay.querySelector('#lb-info');
 
   // ── 정보 패널 (i 버튼: EXIF·태그, person/location 포함 — Admin 전용) ──
   // 매번 새로 조회한다(캐싱 안 함) — admin-tags.js의 "+ 태그 추가"(extraAction)로
@@ -126,117 +130,16 @@ export function openLightbox(paths, startIdx, options = {}) {
     if (infoVisible) refreshInfoPanel();
   });
 
-  // ── 확대/이동 (wheel 줌, 드래그 팬, 더블클릭 토글) ──
-  let scale = 1, tx = 0, ty = 0;
-
-  function applyTransform() {
-    imgEl.style.transform = scale === 1 ? '' : `translate(${tx}px, ${ty}px) scale(${scale})`;
-    imgEl.style.cursor = scale > 1 ? 'grab' : '';
-  }
-
-  function resetZoom() {
-    scale = 1; tx = 0; ty = 0;
-    applyTransform();
-  }
-
-  // 커서 위치 고정 줌: transform-origin이 중앙이므로 중앙→커서 벡터가 k배 되는 만큼 보정
-  function zoomAt(clientX, clientY, newScale) {
-    const k = newScale / scale;
-    const rect = imgEl.getBoundingClientRect();
-    const dx = clientX - (rect.left + rect.width / 2);
-    const dy = clientY - (rect.top + rect.height / 2);
-    tx += dx * (1 - k);
-    ty += dy * (1 - k);
-    scale = newScale;
-    if (scale === 1) { tx = 0; ty = 0; }
-    applyTransform();
-  }
-
-  imgEl.addEventListener('wheel', e => {
-    e.preventDefault();
-    const next = Math.min(6, Math.max(1, scale * (e.deltaY < 0 ? 1.2 : 1 / 1.2)));
-    zoomAt(e.clientX, e.clientY, next);
-  }, { passive: false });
-
-  imgEl.addEventListener('dblclick', e => {
-    if (scale > 1) resetZoom();
-    else zoomAt(e.clientX, e.clientY, 2.5);
+  // ── 확대/이동/스와이프 (공유뷰어와 공용 — photo-zoom-viewer.js) ──
+  const zoomViewer = createPhotoZoomViewer({
+    bodyEl, imgEl, peekPrevEl, peekNextEl,
+    getUrl: i => localPaths[i] != null ? `/api/admin/photo?path=${encodeURIComponent(localPaths[i])}` : null,
+    getCount: () => localPaths.length,
+    getIndex: () => idx,
+    onIndexChanged: afterShow,
+    scrollableSelector: '.lightbox-info',
   });
 
-  let dragging = null;
-  let pinch = null;
-  let swipeStart = null;
-  const activePointers = new Map();
-
-  function pointDist(a, b) { return Math.hypot(a.x - b.x, a.y - b.y); }
-  function pointMid(a, b) { return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }; }
-
-  imgEl.addEventListener('pointerdown', e => {
-    activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
-    if (e.pointerType === 'touch') imgEl.setPointerCapture(e.pointerId);
-
-    if (activePointers.size >= 2) {
-      e.preventDefault();
-      dragging = null;
-      swipeStart = null;
-      const [p1, p2] = [...activePointers.values()];
-      pinch = { startDist: pointDist(p1, p2), startScale: scale, lastMid: pointMid(p1, p2) };
-      return;
-    }
-    if (scale === 1) {
-      if (e.pointerType === 'touch') swipeStart = { x: e.clientX, y: e.clientY };
-      return;
-    }
-    e.preventDefault();
-    dragging = { x: e.clientX, y: e.clientY };
-    imgEl.setPointerCapture(e.pointerId);
-    imgEl.style.cursor = 'grabbing';
-  });
-  imgEl.addEventListener('pointermove', e => {
-    if (!activePointers.has(e.pointerId)) return;
-    activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
-
-    if (pinch && activePointers.size >= 2) {
-      const [p1, p2] = [...activePointers.values()];
-      const mid = pointMid(p1, p2);
-      tx += mid.x - pinch.lastMid.x;
-      ty += mid.y - pinch.lastMid.y;
-      pinch.lastMid = mid;
-      const dist = pointDist(p1, p2);
-      const newScale = Math.min(6, Math.max(1, pinch.startScale * (dist / pinch.startDist)));
-      zoomAt(mid.x, mid.y, newScale);
-      return;
-    }
-
-    if (!dragging) return;
-    tx += e.clientX - dragging.x;
-    ty += e.clientY - dragging.y;
-    dragging = { x: e.clientX, y: e.clientY };
-    applyTransform();
-  });
-  function endPointer(e) {
-    if (swipeStart && activePointers.size === 1) {
-      const rect = overlay.getBoundingClientRect();
-      const dx = e.clientX - swipeStart.x;
-      const dy = e.clientY - swipeStart.y;
-      const startedInEdge = startedInEdgeZone(swipeStart.x, rect.left, rect.right);
-      const dir = resolveSwipeDirection({ dx, dy, startedInEdge });
-      if (dir === 1 && idx < localPaths.length - 1) show(idx + 1);
-      else if (dir === -1 && idx > 0) show(idx - 1);
-    }
-    swipeStart = null;
-    activePointers.delete(e.pointerId);
-    if (activePointers.size < 2) pinch = null;
-    if (activePointers.size === 1 && scale > 1) {
-      const [p] = [...activePointers.values()];
-      dragging = { x: p.x, y: p.y };
-    } else {
-      dragging = null;
-    }
-    applyTransform();
-  }
-  imgEl.addEventListener('pointerup', endPointer);
-  imgEl.addEventListener('pointercancel', endPointer);
   const prevBtn   = overlay.querySelector('.lightbox-prev');
   const nextBtn   = overlay.querySelector('.lightbox-next');
   const coverBtn  = overlay.querySelector('#lb-btn-cover');
@@ -253,12 +156,9 @@ export function openLightbox(paths, startIdx, options = {}) {
     if (selCountEl) selCountEl.textContent = `(${selectedCount.toLocaleString()}/${totalCount.toLocaleString()})`;
   }
 
-  function show(i) {
+  // 이미지 로드 완료 후 photo-zoom-viewer.js가 호출 — 캡션/버튼 등 idx 종속 UI 갱신
+  function afterShow(i) {
     idx = i;
-    resetZoom();
-    imgEl.style.opacity = '0.4';
-    imgEl.onload = () => { imgEl.style.opacity = '1'; };
-    imgEl.src = `/api/admin/photo?path=${encodeURIComponent(localPaths[i])}`;
     captionEl.textContent = `${localPaths[i].split('/').pop()}  (${(i + 1).toLocaleString()} / ${localPaths.length.toLocaleString()})`;
     prevBtn.style.visibility = i > 0 ? 'visible' : 'hidden';
     nextBtn.style.visibility = i < localPaths.length - 1 ? 'visible' : 'hidden';
@@ -271,6 +171,8 @@ export function openLightbox(paths, startIdx, options = {}) {
     refreshInfoPanel();
   }
 
+  const show = i => zoomViewer.goTo(i);
+
   let closed = false;
   function close() {
     if (closed) return;
@@ -281,13 +183,17 @@ export function openLightbox(paths, startIdx, options = {}) {
   }
 
   function onKey(e) {
-    if (e.key === 'Escape') close();
+    if (e.key === 'Escape') { close(); return; }
+    if (e.target.closest('input, textarea') || e.isComposing) return;
     if (e.key === 'ArrowLeft'  && idx > 0) show(idx - 1);
     if (e.key === 'ArrowRight' && idx < localPaths.length - 1) show(idx + 1);
+    if (e.key === '+' || e.key === '=') zoomViewer.changeZoom(1.3);
+    if (e.key === '-') zoomViewer.changeZoom(1 / 1.3);
+    if (e.key === '0') zoomViewer.resetZoom();
+    if (e.key === 'i' || e.key === 'I') infoBtn.click();
   }
 
   overlay.querySelector('.lightbox-close').addEventListener('click', close);
-  overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
   prevBtn.addEventListener('click', () => show(idx - 1));
   nextBtn.addEventListener('click', () => show(idx + 1));
   document.addEventListener('keydown', onKey);

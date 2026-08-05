@@ -302,4 +302,8 @@ button { cursor: pointer; font: inherit; }
 }
 .badge-active   { background: #052e16; color: var(--success); }
 .badge-inactive { background: #1a1a1a; color: var(--muted); }
+
+/* ── 전체화면 사진 뷰어 공용(Admin 라이트박스 · 공유뷰어) ──── */
+/* photo-zoom-viewer.js가 스와이프 스냅 애니메이션에 부착/해제하는 공용 클래스 */
+.pv-snapping { transition: opacity 0.15s, transform 0.25s ease; }
 .badge-expired  { background: #451a03; color: var(--warning); }

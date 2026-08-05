@@ -22,6 +22,7 @@ assets/js/
   utils.js                        # esc() HTML 이스케이프 등
   date-scroll-indicator.js        # 날짜별 보기 스크롤 중 년/월/일 배지 표시 (browse/album-edit/person-photos 공용)
   lightbox.js                     # Admin 전체크기 사진 뷰어 (openLightbox, browse/album-edit/tags/person-detail/person-photos 공용). i 버튼으로 EXIF·태그 정보 패널(GET /api/admin/photo-info) 조회
+  photo-zoom-viewer.js            # Admin 라이트박스·공유뷰어(album-view.js) 공용 줌/팬/핀치/스와이프 제스처 엔진 (createPhotoZoomViewer)
   tag-modal.js                    # Phase 9: 수동 태그 추가 모달(openAddTagModal, 자유 텍스트 입력+datalist 자동완성) + 일괄 적용/삭제 순차 헬퍼(applyTagToPhotos/deleteTagFromPhotos). admin-tags.js·admin-browse.js 공용
   pages/
     admin-login.js                # 로그인 폼
@@ -87,3 +88,13 @@ CSS animation 우선(GPU 가속). `EFFECTS` 배열에서 랜덤 선택. 수동 �
 
 ### 음악 목록 드래그앤드롭
 HTML5 DnD (`draggable="true"` + `dragstart/dragover/dragleave/drop/dragend`). `dragstart`에서 `setTimeout` 지연으로 ghost 이미지 캡처 후 `.dragging` 스타일 적용. 인덱스 보정: 앞→뒤 이동 시 `splice` 후 `idx - 1`에 삽입.
+
+### 전체화면 사진 뷰어 제스처 (`photo-zoom-viewer.js`)
+Admin 라이트박스(`lightbox.js`)와 공유뷰어(`album-view.js`의 `_openSharePhotoViewer`)가 휠 줌·더블클릭 줌·핀치 줌·드래그 팬·스와이프 넘기기·마우스 가운데 버튼 리셋을 공용 모듈로 공유한다(슬라이드쇼는 대상 아님 — Ken Burns 자동 효과만 있고 사용자 줌이 없음).
+
+- **Pointer Events 통합**: mousedown/touchstart 등을 따로 두지 않고 pointerdown/move/up/cancel 하나로 마우스·터치를 함께 처리한다. `bodyEl`(뷰어 뷰포트)에 바인딩 — `imgEl`에 바인딩하면 letterbox 여백에서 제스처가 씹힌다.
+- **이미지 로드·인덱스 이동을 모듈이 소유**: 버튼 클릭·키보드·스와이프 커밋이 모두 `goTo(idx)` 한 경로를 통과하고, 새 이미지의 `load` 이벤트가 발생한 뒤에만 idx를 갱신한다. 스와이프 커밋 시 이 순서를 지키지 않으면 peek 이미지가 슬라이드로 도착하는 시점과 실제 이미지 교체 시점이 어긋나 깜빡임이 생긴다. 캡션·카운터·정보패널 등 idx 종속 UI 갱신은 `onIndexChanged(idx)` 콜백으로 호출자에게 위임한다.
+- **peek 슬라이드 애니메이션**: `peekPrevEl`/`peekNextEl`을 넘기면 스와이프 중 이전/다음 사진이 화면 밖에서 따라오다 완료 시 제자리로 스냅한다(`.pv-snapping`, `base.css`). 넘기지 않으면 스와이프 시 즉시 전환.
+- **줌 배율**: 최대 6×, 더블클릭 시 2×(양쪽 동일). 스와이프 넘기기는 터치 전용 — 마우스 드래그로는 넘기지 않는다.
+- **휠 줌 예외 영역**: `scrollableSelector` 옵션으로 지정한 셀렉터(예: `.lightbox-info`) 안에서는 휠이 확대/축소 대신 그 요소 자체 스크롤로 동작한다.
+- **모듈이 관여하지 않는 것**: 배경 클릭 닫기(양쪽 다 없음 — 2026-08 통일 시 제거), 확대 중 이전/다음 버튼 숨김(`onZoomChange` 콜백으로 각 뷰어가 직접 결정 — 공유뷰어만 적용, 라이트박스는 원래부터 없던 동작이라 유지), 확대 중 화살표 키 이동 가능 여부(공유뷰어는 막고 라이트박스는 허용 — 기존 동작 유지, 리팩터링 시 의도적으로 통일하지 않음).

@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.6.0] - 2026-08-05
+
+### Changed
+- **전체화면 사진 뷰어 제스처를 공용 모듈로 통합**: Admin 라이트박스와 공유뷰어가 줌/팬/핀치/스와이프를
+  각자 따로 구현해 최대 줌(4x/6x)·더블클릭 배율(2x/2.5x) 등 동작이 미묘하게 달랐다.
+  `photo-zoom-viewer.js` 공용 모듈로 통합해 Pointer Events로 마우스·터치 제스처를 함께 처리하고,
+  최대 줌 6x·더블클릭 2x로 통일. 스와이프 시 이전/다음 사진이 옆에서 따라오는 peek 슬라이드
+  애니메이션과 마우스 가운데 버튼 줌 리셋을 라이트박스에도 적용. 라이트박스의 배경 클릭 닫기는
+  제거(양쪽 다 ✕/ESC만 닫힘), +/-/0 줌 단축키와 i 정보 단축키를 라이트박스에 추가
+  (`frontend/assets/js/photo-zoom-viewer.js`, `frontend/assets/js/lightbox.js`,
+  `frontend/assets/js/pages/album-view.js`, `frontend/assets/css/admin.css`)
+
 ## [2.5.0] - 2026-08-05
 
 ### Changed
@@ -1108,7 +1120,8 @@ Phase 2 — AI 얼굴 인식 스마트 앨범. NAS 로컬 AI(InsightFace)로 사
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v2.5.0...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v2.6.0...HEAD
+[2.6.0]: https://github.com/euikuk-jeong/lumisshow/compare/v2.5.0...v2.6.0
 [2.5.0]: https://github.com/euikuk-jeong/lumisshow/compare/v2.4.1...v2.5.0
 [2.4.1]: https://github.com/euikuk-jeong/lumisshow/compare/v2.4.0...v2.4.1
 [2.4.0]: https://github.com/euikuk-jeong/lumisshow/compare/v2.3.1...v2.4.0
