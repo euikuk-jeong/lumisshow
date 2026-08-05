@@ -354,9 +354,11 @@ admin이 어휘/threshold를 바꾼 뒤, 또는 이 기능 도입 이전 사진�
 (CLIP 모델도 로딩하지 않음).
 
 완료 시 `notify.notify_tag_backfill_result()`로 Discord 알림(신규 임베딩/
-재채점/위치보완/에러 건수 + 폴더명 태깅 건수 + 소요시간). Admin UI 버튼은
-아직 없음(Admin 태그 관리 화면과 함께 후속 phase 예정) — 지금은 CLI 또는
-`POST /api/admin/ai/jobs`를 직접 호출해야 한다.
+재채점/위치보완/에러 건수 + 폴더명 태깅 건수 + 소요시간). Admin 태그 관리
+화면(`frontend/assets/js/pages/admin-tags.js`)의 "AI 태그 재계산" 버튼이
+`POST /api/admin/ai/jobs` `{"type": "tag_backfill"}`을 호출해 트리거한다
+(CLI 직접 실행도 계속 가능). 같은 화면에 "폴더 태그 재계산"(`path_tag_reset`)·
+"위치 태그 한글 재번역"(`location_tag_reset`) 버튼도 함께 있다.
 
 ### 경로 규약
 `faces.photo_path`, `photos_analyzed.path`는 **PHOTO_ROOT 상대 경로 + `/` 구분자**
@@ -389,7 +391,7 @@ buffalo_l 사전학습 가중치는 **non-commercial** — 본 프로젝트는 �
 - [x] M1 검증: 샘플 1,000장·정답 셋 44명/1,235라벨 — **threshold 0.45에서 precision 99.9%/recall 97.9%**
       (타인 음성 샘플은 미측정 → 운영 교정 로그로 보완 예정)
 - [x] M2 구현: daemon 모드(야간 스케줄+jobs 폴링), Dockerfile.ai, compose 서비스, release.yml 워커 이미지
-- [ ] M2 배포: NAS 컨테이너 기동 + 초기 전체 인덱싱 (5만 장, 야간 배치 며칠)
+- [x] M2 배포: NAS 컨테이너 기동 + 초기 전체 인덱싱 (5만 장, 야간 배치 며칠)
 - [x] M3: backend `admin_people.py`(인물 CRUD·라벨 교정·크롭 서빙·잡 트리거) +
       Admin 'People' UI(목록/상세 교정/미분류 지정/인물 앨범 생성)
 - [ ] M4: 실사용 튜닝 (교정 로그 지표, 시간 기반 후처리)
