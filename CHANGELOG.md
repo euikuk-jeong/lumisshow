@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.7.2] - 2026-08-05
+
+### Security
+- **`admin_img_session` 쿠키 SameSite를 Lax에서 Strict로 강화**: 이 쿠키로 인증하는
+  `/thumb`, `/photo`, `/faces/{id}/crop`, `/api/admin/tags/xmp-export`는 전부 GET
+  엔드포인트인데, Lax는 크로스사이트 최상위 GET 네비게이션에도 쿠키를 실어 보내
+  로그인된 관리자가 외부 링크를 클릭하면 인증된 상태로 강제 다운로드가 발생할 수
+  있었다. 이 쿠키는 항상 같은 오리진(Admin SPA)에서만 쓰여 Strict로 좁혀도 기능
+  영향은 없다 (`backend/routers/auth.py`)
+
 ## [2.7.1] - 2026-08-05
 
 ### Fixed
@@ -1144,7 +1154,8 @@ Phase 2 — AI 얼굴 인식 스마트 앨범. NAS 로컬 AI(InsightFace)로 사
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v2.7.1...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v2.7.2...HEAD
+[2.7.2]: https://github.com/euikuk-jeong/lumisshow/compare/v2.7.1...v2.7.2
 [2.7.1]: https://github.com/euikuk-jeong/lumisshow/compare/v2.7.0...v2.7.1
 [2.7.0]: https://github.com/euikuk-jeong/lumisshow/compare/v2.6.0...v2.7.0
 [2.6.0]: https://github.com/euikuk-jeong/lumisshow/compare/v2.5.0...v2.6.0
