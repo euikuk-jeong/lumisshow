@@ -3,6 +3,7 @@ import { renderAdminShell } from '../layout.js';
 import { esc } from '../utils.js';
 import { openLightbox } from '../lightbox.js';
 import { initDateScrollIndicator } from '../date-scroll-indicator.js';
+import { openAddTagModal } from '../tag-modal.js';
 
 export async function renderAdminBrowse() {
   const params  = new URLSearchParams(location.search);
@@ -36,9 +37,12 @@ export async function renderAdminBrowse() {
     <div class="date-scroll-indicator" id="date-scroll-indicator"></div>
     <div class="browse-selection-bar" id="selection-bar">
       <span id="selection-count">0개 선택됨</span>
-      <button class="btn btn-primary" id="btn-add-selected" ${!albumId ? 'disabled' : ''}>
-        ${albumId ? '선택 사진 추가' : '앨범을 선택해 사진 추가'}
-      </button>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-ghost" id="btn-bulk-add-tag">+ 태그 추가</button>
+        <button class="btn btn-primary" id="btn-add-selected" ${!albumId ? 'disabled' : ''}>
+          ${albumId ? '선택 사진 추가' : '앨범을 선택해 사진 추가'}
+        </button>
+      </div>
     </div>
   `, '/admin/browse');
 
@@ -123,6 +127,20 @@ export async function renderAdminBrowse() {
   if (albumId) {
     document.getElementById('btn-add-selected').addEventListener('click', () => addSelected(albumId, state, backUrl));
   }
+
+  document.getElementById('btn-bulk-add-tag').addEventListener('click', () => {
+    if (!state.selected.size) return;
+    openAddTagModal(Array.from(state.selected), {
+      onDone: ({ tag, success, fail, firstError }) => {
+        state.selected.clear();
+        renderBrowseResult(state);
+        updateSelectionBar(state.selected.size);
+        alert(fail
+          ? `"${tag}" ${success}장 추가, ${fail}장 실패${firstError ? `\n(${firstError})` : ''}`
+          : `"${tag}" ${success}장에 추가했습니다.`);
+      },
+    });
+  });
 
   await loadBrowse(state, '');
 }

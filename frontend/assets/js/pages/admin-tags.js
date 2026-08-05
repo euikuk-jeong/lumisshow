@@ -2,6 +2,7 @@ import { api } from '../api.js';
 import { renderAdminShell } from '../layout.js';
 import { esc } from '../utils.js';
 import { openLightbox } from '../lightbox.js';
+import { openAddTagModal, deleteTagFromPhotos } from '../tag-modal.js';
 
 const SOURCE_LABELS = { ai: 'AI', manual: '직접추가', path: '폴더명', location: '위치' };
 const EDITABLE_SOURCES = new Set(['ai', 'manual', 'path']);
@@ -176,23 +177,98 @@ export async function renderAdminTagPhotos() {
       </div>
     </div>
     <div id="tag-photos-content"><div class="loading"></div></div>
+    <div class="browse-selection-bar" id="tag-selection-bar">
+      <span id="tag-selection-count">0개 선택됨</span>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-primary" id="btn-bulk-add-tag">+ 태그 추가</button>
+        ${source === 'manual' ? '<button class="btn btn-ghost" id="btn-bulk-delete-tag">태그 삭제</button>' : ''}
+      </div>
+    </div>
   `, '/admin/tags');
 
   const contentEl = document.getElementById('tag-photos-content');
+  const subtitle = document.getElementById('tag-photos-subtitle');
+  const state = { selected: new Set() };
   let photos = [];
-  try {
+
+  const setSubtitle = () => {
+    subtitle.textContent = `${SOURCE_LABELS[source] || source} · ${photos.length.toLocaleString()}장`;
+  };
+
+  function updateSelectionBar() {
+    const count = state.selected.size;
+    document.getElementById('tag-selection-count').textContent = `${count.toLocaleString()}개 선택됨`;
+    document.getElementById('tag-selection-bar').classList.toggle('visible', count > 0);
+  }
+
+  function refresh() {
+    if (!photos.length) {
+      contentEl.className = '';
+      contentEl.innerHTML = `<div class="empty-state"><h3>사진이 없습니다</h3></div>`;
+      return;
+    }
+    contentEl.className = 'photo-grid';
+    contentEl.innerHTML = photos.map((p, i) => `
+      <div class="photo-thumb selectable${state.selected.has(p.file_path) ? ' selected' : ''}"
+           data-idx="${i}" data-path="${esc(p.file_path)}" title="${esc(p.file_path)}">
+        <img src="${p.thumb_small_url}" alt="" loading="lazy" onerror="this.style.opacity='0.3'">
+        <input type="checkbox" ${state.selected.has(p.file_path) ? 'checked' : ''}>
+      </div>`).join('');
+  }
+
+  async function loadPhotos() {
     const res = await api.get(`/api/admin/tags/${encodeURIComponent(tag)}/photos?source=${source}`);
     photos = res.photos;
+    state.selected.clear();
+    updateSelectionBar();
+    setSubtitle();
+    refresh();
+  }
+
+  try {
+    await loadPhotos();
   } catch (e) {
     contentEl.innerHTML = `<div class="alert alert-error">${esc(e.message)}</div>`;
     return;
   }
 
-  const subtitle = document.getElementById('tag-photos-subtitle');
-  const setSubtitle = () => {
-    subtitle.textContent = `${SOURCE_LABELS[source] || source} · ${photos.length.toLocaleString()}장`;
-  };
-  setSubtitle();
+  document.getElementById('btn-bulk-add-tag').addEventListener('click', () => {
+    if (!state.selected.size) return;
+    openAddTagModal(Array.from(state.selected), {
+      onDone: ({ tag: newTag, success, fail, firstError }) => {
+        state.selected.clear();
+        updateSelectionBar();
+        refresh();
+        alert(fail
+          ? `"${newTag}" ${success}장 추가, ${fail}장 실패${firstError ? `\n(${firstError})` : ''}`
+          : `"${newTag}" ${success}장에 추가했습니다.`);
+      },
+    });
+  });
+
+  const bulkDeleteBtn = document.getElementById('btn-bulk-delete-tag');
+  if (bulkDeleteBtn) {
+    bulkDeleteBtn.addEventListener('click', async () => {
+      const paths = Array.from(state.selected);
+      if (!paths.length) return;
+      if (!confirm(`선택한 ${paths.length.toLocaleString()}장에서 "${tag}" 태그를 삭제할까요?`)) return;
+      bulkDeleteBtn.disabled = true;
+      try {
+        const { success, fail, firstError } = await deleteTagFromPhotos(paths, tag, source, {
+          onProgress: (i, total) => { bulkDeleteBtn.textContent = `삭제 중... (${i}/${total})`; },
+        });
+        await loadPhotos();
+        alert(fail
+          ? `${success}장 삭제, ${fail}장 실패${firstError ? `\n(${firstError})` : ''}`
+          : `${success}장에서 태그를 삭제했습니다.`);
+      } catch (e) {
+        alert(e.message);
+      } finally {
+        bulkDeleteBtn.disabled = false;
+        bulkDeleteBtn.textContent = '태그 삭제';
+      }
+    });
+  }
 
   const renameBtn = document.getElementById('btn-rename-tag');
   if (renameBtn) {
@@ -208,27 +284,39 @@ export async function renderAdminTagPhotos() {
     });
   }
 
-  function refresh() {
-    if (!photos.length) {
-      contentEl.className = '';
-      contentEl.innerHTML = `<div class="empty-state"><h3>사진이 없습니다</h3></div>`;
-      return;
+  function toggleSelect(path) {
+    if (state.selected.has(path)) state.selected.delete(path);
+    else state.selected.add(path);
+    updateSelectionBar();
+    const item = contentEl.querySelector(`.selectable[data-path="${CSS.escape(path)}"]`);
+    if (item) {
+      item.classList.toggle('selected', state.selected.has(path));
+      const cb = item.querySelector('input[type=checkbox]');
+      if (cb) cb.checked = state.selected.has(path);
     }
-    contentEl.className = 'photo-grid';
-    contentEl.innerHTML = photos.map((p, i) => `
-      <div class="photo-thumb" data-idx="${i}" title="${esc(p.file_path)}">
-        <img src="${p.thumb_small_url}" alt="" loading="lazy" onerror="this.style.opacity='0.3'">
-      </div>`).join('');
   }
 
   contentEl.addEventListener('click', e => {
+    // 체크박스 클릭 → 선택 토글만 하고 라이트박스는 열지 않는다.
+    if (e.target.type === 'checkbox') {
+      const item = e.target.closest('.selectable[data-path]');
+      if (item) toggleSelect(item.dataset.path);
+      return;
+    }
+
     const item = e.target.closest('[data-idx]');
     if (!item) return;
     const lightboxOptions = {
       extraAction: {
         label: '+ 태그 추가',
-        onClick: path => openAddTagModal(path),
+        onClick: path => openAddTagModal([path]),
       },
+      getSelectionState: path => ({
+        isSelected: state.selected.has(path),
+        selectedCount: state.selected.size,
+        totalCount: photos.length,
+      }),
+      onToggleSelect: path => toggleSelect(path),
     };
     if (EDITABLE_SOURCES.has(source)) {
       lightboxOptions.deleteLabel = '태그 삭제';
@@ -238,60 +326,12 @@ export async function renderAdminTagPhotos() {
           `/api/admin/tags/${encodeURIComponent(tag)}/photo?path=${encodeURIComponent(path)}&source=${source}`
         );
         photos = photos.filter(p => p.file_path !== path);
+        state.selected.delete(path);
+        updateSelectionBar();
         setSubtitle();
         refresh();
       };
     }
     openLightbox(photos.map(p => p.file_path), Number(item.dataset.idx), lightboxOptions);
   });
-
-  refresh();
-}
-
-// ── 수동 태그 추가 모달 ──────────────────────────────────────────────────
-
-async function openAddTagModal(photoPath) {
-  const overlay = document.createElement('div');
-  overlay.className = 'modal-overlay';
-  // 라이트박스(.lightbox-overlay, z-index:500)가 열린 채로 이 모달이 뜨므로
-  // .modal-overlay의 기본 z-index(300)로는 라이트박스 뒤에 가려 보이지도, 클릭도
-  // 안 된다 — 인라인으로 라이트박스보다 높게 지정.
-  overlay.style.zIndex = '600';
-  overlay.innerHTML = `
-    <div class="modal" style="max-width:360px">
-      <p class="modal-title">태그 추가</p>
-      <p class="text-muted text-sm" style="margin:0 0 10px">${esc(photoPath)}</p>
-      <select id="add-tag-select" class="form-input"><option>불러오는 중...</option></select>
-      <div class="modal-actions">
-        <button class="btn btn-ghost" id="modal-cancel">취소</button>
-        <button class="btn btn-primary" id="modal-confirm">추가</button>
-      </div>
-    </div>`;
-  document.body.appendChild(overlay);
-  // 라이트박스의 document 레벨 keydown 리스너(화살표=사진 이동, Esc=닫기)가
-  // select 조작 중에도 함께 반응하지 않도록 이 오버레이에서 전파를 막는다.
-  overlay.addEventListener('keydown', e => e.stopPropagation());
-  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
-  overlay.querySelector('#modal-cancel').addEventListener('click', () => overlay.remove());
-
-  overlay.querySelector('#modal-confirm').addEventListener('click', async () => {
-    const tag = overlay.querySelector('#add-tag-select').value;
-    if (!tag) return;
-    try {
-      const r = await api.post('/api/admin/tags/manual', { photo_path: photoPath, tag });
-      overlay.remove();
-      alert(r.added ? `"${tag}" 태그를 추가했습니다.` : `이미 "${tag}" 태그가 있습니다.`);
-    } catch (e) { alert(e.message); }
-  });
-
-  try {
-    const { vocab } = await api.get('/api/admin/tags/vocab');
-    const select = document.getElementById('add-tag-select');
-    if (select) {
-      select.innerHTML = vocab.map(t => `<option value="${esc(t)}">${esc(t)}</option>`).join('');
-    }
-  } catch (e) {
-    const select = document.getElementById('add-tag-select');
-    if (select) select.innerHTML = `<option value="">불러오기 실패</option>`;
-  }
 }

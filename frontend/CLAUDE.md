@@ -22,6 +22,7 @@ assets/js/
   utils.js                        # esc() HTML 이스케이프 등
   date-scroll-indicator.js        # 날짜별 보기 스크롤 중 년/월/일 배지 표시 (browse/album-edit/person-photos 공용)
   lightbox.js                     # Admin 전체크기 사진 뷰어 (openLightbox, browse/album-edit/tags/person-detail/person-photos 공용). i 버튼으로 EXIF·태그 정보 패널(GET /api/admin/photo-info) 조회
+  tag-modal.js                    # Phase 9: 수동 태그 추가 모달(openAddTagModal, 자유 텍스트 입력+datalist 자동완성) + 일괄 적용/삭제 순차 헬퍼(applyTagToPhotos/deleteTagFromPhotos). admin-tags.js·admin-browse.js 공용
   pages/
     admin-login.js                # 로그인 폼
     admin-albums.js               # 앨범 목록
@@ -30,7 +31,7 @@ assets/js/
     admin-people.js               # Phase 2: 인물 목록·미분류 얼굴 지정·AI 잡 트리거
     admin-person-detail.js        # Phase 2: 인물 상세 (추정 얼굴 교정, 인물 앨범 생성)
     admin-person-photos.js        # Phase 2: 인물 전체 사진 — 확정 얼굴만, 그리드/리스트/날짜별 보기·정렬 (라이트박스·슬라이드쇼 진입)
-    admin-tags.js                  # Phase 5: 태그 목록(source별 필터·검색)·태그별 사진 그리드·AI 태그 재계산/폴더 태그 재계산 트리거·수동 태그 추가 모달
+    admin-tags.js                  # Phase 5: 태그 목록(source별 필터·검색)·태그별 사진 그리드·AI 태그 재계산/폴더 태그 재계산 트리거. Phase 9: 그리드 다중선택(체크박스)+일괄 태그 추가/삭제(직접추가 소스만), 태그 추가 모달은 tag-modal.js 공용 모듈 사용
     album-view.js                 # 공유 링크 뷰어 메인
     share-auth.js                 # 공유 링크 패스워드 입력
     slideshow.js                  # 슬라이드쇼 엔진 (데이터 소스 provider: 공유 링크 / Admin 인물)

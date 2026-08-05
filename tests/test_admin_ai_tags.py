@@ -228,9 +228,36 @@ async def test_add_manual_tag_inserts_row(admin_client):
     ]
 
 
-async def test_add_manual_tag_rejects_non_vocab_tag(admin_client):
+async def test_add_manual_tag_accepts_freeform_tag(admin_client):
     r = await admin_client.post(
         "/api/admin/tags/manual", json={"photo_path": "2024/a.jpg", "tag": "존재하지않는태그"}
+    )
+    assert r.status_code == 201
+    assert r.json()["tag"] == "존재하지않는태그"
+    assert await _tag_rows(tag="존재하지않는태그", source="manual") == [
+        {"photo_path": "2024/a.jpg", "tag": "존재하지않는태그", "source": "manual"}
+    ]
+
+
+async def test_add_manual_tag_trims_whitespace(admin_client):
+    r = await admin_client.post(
+        "/api/admin/tags/manual", json={"photo_path": "2024/a.jpg", "tag": "  캠핑  "}
+    )
+    assert r.status_code == 201
+    assert r.json()["tag"] == "캠핑"
+
+
+async def test_add_manual_tag_rejects_blank_tag(admin_client):
+    r = await admin_client.post(
+        "/api/admin/tags/manual", json={"photo_path": "2024/a.jpg", "tag": "   "}
+    )
+    assert r.status_code == 400
+    assert await _tag_rows() == []
+
+
+async def test_add_manual_tag_rejects_slash_in_tag(admin_client):
+    r = await admin_client.post(
+        "/api/admin/tags/manual", json={"photo_path": "2024/a.jpg", "tag": "가족/여행"}
     )
     assert r.status_code == 400
     assert await _tag_rows() == []
