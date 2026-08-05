@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.8.0] - 2026-08-06
+
+### Added
+- **AI 인식 카테고리 on/off 시 UX 개선**: v2.1.0에서 도입한 얼굴/위치/폴더명/사물 인식
+  카테고리별 on/off가 지금까지는 "이후 신규 스캔만 막고 기존 DB는 그대로 조회"였는데,
+  꺼진 카테고리의 기존 데이터가 화면에 계속 보여 혼란을 줄 수 있었다. 카테고리를 끄면
+  DB에 데이터가 남아있어도 사진 정보 보기·검색·태그 탭에서 제외하도록 변경
+  (`backend/services/photo_tags.py`의 `enabled_sources`, `admin_browse.py`/`share.py`/
+  `admin_people.py` 3개 정보 패널 경로 전부 적용, `frontend/assets/js/pages/admin-tags.js`)
+- **얼굴 인식 꺼짐 안내**: 인물 탭 진입 시 얼굴 인식이 꺼져 있으면 스캔/재매칭 등 컨트롤
+  대신 "기능을 사용하려면 설정에서 AI 인식 카테고리에서 얼굴 인식을 켜 주세요" 안내
+  문구만 표시 (`frontend/assets/js/pages/admin-people.js`)
+- **AI 인식 카테고리별 DB 삭제**: 설정 화면에 카테고리별 "DB 삭제" 버튼 추가. 해당
+  카테고리가 꺼진 상태에서만 활성화되고, 2차 확인 대화상자에 삭제 대상과 되돌릴 수
+  없다는 경고를 표시한다. 얼굴 인식은 위치·사물과 달리 재활성화 후 자동으로 소급
+  재인식되지 않는다는 점을 별도로 경고한다. 얼굴 삭제 시에도 인물 프로필(이름)은
+  유지해 나중에 재스캔하면 같은 인물과 다시 매칭할 수 있게 했다
+  (`backend/routers/admin_people.py`의 `POST /api/admin/ai/categories/{category}/purge`,
+  `frontend/assets/js/pages/admin-settings.js`)
+
 ## [2.7.3] - 2026-08-06
 
 ### Fixed
@@ -1166,7 +1186,8 @@ Phase 2 — AI 얼굴 인식 스마트 앨범. NAS 로컬 AI(InsightFace)로 사
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v2.7.3...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v2.8.0...HEAD
+[2.8.0]: https://github.com/euikuk-jeong/lumisshow/compare/v2.7.3...v2.8.0
 [2.7.3]: https://github.com/euikuk-jeong/lumisshow/compare/v2.7.2...v2.7.3
 [2.7.2]: https://github.com/euikuk-jeong/lumisshow/compare/v2.7.1...v2.7.2
 [2.7.1]: https://github.com/euikuk-jeong/lumisshow/compare/v2.7.0...v2.7.1
