@@ -21,9 +21,15 @@ from backend.models.schemas import (
 )
 
 _AUDIO_EXTENSIONS = {'.mp3', '.flac', '.ogg', '.m4a', '.wav', '.aac', '.opus'}
+from backend.services.ai_settings import read_ai_settings
 from backend.services.auth import admin_image_auth, get_current_admin
 from backend.services.photo_meta import load_photo_meta
-from backend.services.photo_tags import ADMIN_INFO_PANEL_SOURCES, load_photo_tags, search_tag_matched_paths
+from backend.services.photo_tags import (
+    ADMIN_INFO_PANEL_SOURCES,
+    enabled_sources,
+    load_photo_tags,
+    search_tag_matched_paths,
+)
 from backend.services.settings import get_settings
 from backend.services.thumbnail import IMAGE_EXTENSIONS, generate_thumbnail
 
@@ -218,8 +224,10 @@ async def search(
         ql = q.lower()
         # ai.db 조회 실패(미초기화 등)가 파일명 검색 자체를 막으면 안 됨 — 태그
         # 매칭 없이 파일명 검색만으로 폴백(share.py Phase 6와 동일한 격리 원칙).
+        # 꺼진 카테고리의 태그는 기존 DB에 남아있어도 검색 대상에서 제외한다.
         try:
-            tag_paths = await search_tag_matched_paths(q, ai_db)
+            sources = enabled_sources(await read_ai_settings(ai_db))
+            tag_paths = await search_tag_matched_paths(q, ai_db, sources)
         except Exception:
             tag_paths = set()
         # tag_paths가 비어 있으면(태그 매칭 0건, 흔한 경우) 뒤 조건은 아예 평가 안 함 —
@@ -332,7 +340,8 @@ async def admin_photo_info(
 ):
     """Admin 라이트박스(i 버튼)용 단일 사진 EXIF·태그 조회. person/location 포함
     전체 source(ADMIN_INFO_PANEL_SOURCES) 노출 — Admin 전용이라 뷰어별 노출 범위
-    분기가 필요 없다."""
+    분기가 필요 없다. 단, AI 인식 카테고리가 꺼져 있으면 DB에 남아있어도 그
+    source는 제외한다(enabled_sources)."""
     root = _photo_root()
     if os.path.isabs(path):
         full_path = os.path.realpath(path)
@@ -345,7 +354,8 @@ async def admin_photo_info(
 
     rel = os.path.relpath(full_path, root).replace("\\", "/")
     meta = (await load_photo_meta([rel], db)).get(rel, {})
-    tags = (await load_photo_tags([rel], ai_db, ADMIN_INFO_PANEL_SOURCES)).get(rel, {})
+    allowed = set(ADMIN_INFO_PANEL_SOURCES) & set(enabled_sources(await read_ai_settings(ai_db)))
+    tags = (await load_photo_tags([rel], ai_db, tuple(allowed))).get(rel, {})
     return PhotoInfoResponse(
         filename=os.path.basename(full_path),
         person_tags=tags.get("person", []),

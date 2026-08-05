@@ -78,7 +78,7 @@ CSS animation 우선(GPU 가속). `EFFECTS` 배열에서 랜덤 선택. 수동 �
 
 태그 5개 행(인물/위치/태그/폴더명/직접 추가)은 `SharePhotoItem`의 `person_tags`/`location_tags`/`ai_tags`/`path_tags`/`manual_tags`를 그대로 표시 — 뷰어별 노출 범위(공유 링크는 person/location 비노출)는 백엔드(`services/photo_tags.py`)가 이미 걸러 보내므로 프론트에서 재분기하지 않는다.
 
-**Admin 라이트박스(`lightbox.js`)의 "정보보기" 버튼**(하단 액션 바, `#lb-btn-info`): 슬라이드쇼와 달리 라이트박스는 사진 목록을 경로 문자열 배열로만 받아(EXIF·태그 미포함) 열리므로, 버튼 클릭 시 `GET /api/admin/photo-info?path=`로 사진 1장분을 그때그때 조회한다. 원래 뷰포트 좌상단 플로팅 아이콘이었으나 `.lightbox-body`가 stacking 순서상 위에 그려져 클릭이 막혀(2026-08) 하단 액션 버튼으로 이동함 — 단축키 `i`는 유지. 캐싱은 하지 않는다 — admin-tags.js의 "+ 태그 추가"(`extraAction`)로 패널이 열린 채 태그가 바뀔 수 있어, 캐시를 두면 갱신 후에도 이전 태그 목록이 남아있는 문제가 생긴다. 응답이 도착했을 때 패널이 이미 닫혔거나 다른 사진으로 넘어갔으면(`localPaths[idx] !== path`) 버린다. Admin 전용이라 `person_tags`/`location_tags`도 항상 채워져 인물 태그가 함께 표시된다(백엔드 `ADMIN_INFO_PANEL_SOURCES`).
+**Admin 라이트박스(`lightbox.js`)의 "정보보기" 버튼**(하단 액션 바, `#lb-btn-info`): 슬라이드쇼와 달리 라이트박스는 사진 목록을 경로 문자열 배열로만 받아(EXIF·태그 미포함) 열리므로, 버튼 클릭 시 `GET /api/admin/photo-info?path=`로 사진 1장분을 그때그때 조회한다. 원래 뷰포트 좌상단 플로팅 아이콘이었으나 `.lightbox-body`가 stacking 순서상 위에 그려져 클릭이 막혀(2026-08) 하단 액션 버튼으로 이동함 — 단축키 `i`는 유지. 캐싱은 하지 않는다 — admin-tags.js의 "+ 태그 추가"(`extraAction`)로 패널이 열린 채 태그가 바뀔 수 있어, 캐시를 두면 갱신 후에도 이전 태그 목록이 남아있는 문제가 생긴다. 응답이 도착했을 때 패널이 이미 닫혔거나 다른 사진으로 넘어갔으면(`localPaths[idx] !== path`) 버린다. Admin 전용이라 `person_tags`/`location_tags`도 함께 채워져 인물 태그가 표시된다(백엔드 `ADMIN_INFO_PANEL_SOURCES`) — 단, 설정에서 AI 인식 카테고리를 꺼두면(v2.1.0+) DB에 남아있어도 해당 source는 백엔드가 제외하고 보낸다(`enabled_sources()`).
 
 ### 음악 파일 선택 모달 (Admin)
 - `GET /api/admin/music` → 서버 목록 로드

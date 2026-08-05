@@ -49,6 +49,21 @@ export async function renderAdminTags() {
     return;
   }
 
+  // ai.db 미구성 등으로 설정 조회가 실패해도 태그 목록 자체는 정상 표시해야 함
+  // (fail-open — 카테고리 전부 켜진 것으로 취급, admin-people.js와 동일 원칙).
+  let disabledSources = new Set();
+  try {
+    const settings = await api.get('/api/admin/ai/settings');
+    if (settings.ai_tag_enabled === false) disabledSources.add('ai');
+    if (settings.path_enabled === false) disabledSources.add('path');
+    if (settings.location_enabled === false) disabledSources.add('location');
+  } catch { /* fail-open */ }
+  // 꺼진 카테고리는 DB에 남아있어도 태그 탭에서 제외(pill도 비활성화, 아래 참고)
+  tags = tags.filter(t => !disabledSources.has(t.source));
+  document.querySelectorAll('#tags-source-filter [data-source]').forEach(btn => {
+    if (disabledSources.has(btn.dataset.source)) btn.disabled = true;
+  });
+
   let sourceFilter = 'all';
 
   function renderGrid(list) {

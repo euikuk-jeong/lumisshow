@@ -419,6 +419,29 @@ async def test_person_photos_detail_includes_all_source_tags(admin_client):
     assert photo["manual_tags"] == ["눈사람"]
 
 
+async def test_person_photos_detail_excludes_disabled_category_tags(admin_client):
+    """위치 인식을 끄면 DB에 남아있는 location 태그도 응답에서 제외돼야 한다."""
+    from backend.models.ai_database import _ai_db_path
+
+    face_ids = await _seed_faces(1)
+    pid = (await admin_client.post("/api/admin/people", json={"name": "지우"})).json()["id"]
+    await admin_client.post(f"/api/admin/faces/{face_ids[0]}/label", json={"person_id": pid})
+
+    async with aiosqlite.connect(_ai_db_path()) as db:
+        await db.execute(
+            "INSERT INTO photo_tags (photo_path, tag, source) VALUES "
+            "('2024/photo_0.jpg', '서울', 'location'), "
+            "('2024/photo_0.jpg', '캠핑', 'ai')"
+        )
+        await db.commit()
+
+    await admin_client.patch("/api/admin/ai/settings", json={"location_enabled": False})
+    r = await admin_client.get(f"/api/admin/people/{pid}/photos-detail")
+    photo = r.json()["photos"][0]
+    assert photo["location_tags"] == []
+    assert photo["ai_tags"] == ["캠핑"]
+
+
 async def test_person_photos_detail_source_labeled(admin_client):
     """source=labeled — 확정(라벨) 얼굴 사진만, 추정 매칭 제외. file_path 포함."""
     face_ids = await _seed_faces(3)
@@ -1319,3 +1342,128 @@ async def test_ai_settings_category_flags(admin_client):
     r = await admin_client.patch("/api/admin/ai/settings", json={"face_enabled": True})
     assert r.json()["face_enabled"] is True
     assert r.json()["location_enabled"] is False  # 다른 플래그는 안 건드림
+
+
+# ── 카테고리별 DB 삭제 (purge) ────────────────────────────────────────
+
+async def _row_count(table: str, where: str = "") -> int:
+    from backend.models.ai_database import _ai_db_path
+
+    async with aiosqlite.connect(_ai_db_path()) as db:
+        cur = await db.execute(f"SELECT COUNT(*) FROM {table} {where}")
+        (count,) = await cur.fetchone()
+    return count
+
+
+async def test_purge_rejects_unknown_category(admin_client):
+    r = await admin_client.post("/api/admin/ai/categories/nope/purge")
+    assert r.status_code == 400
+
+
+async def test_purge_rejects_while_category_enabled(admin_client):
+    # 기본값(true)인 상태에서 삭제 시도 → 409, 데이터 보존
+    face_ids = await _seed_faces(2)
+    r = await admin_client.post("/api/admin/ai/categories/face/purge")
+    assert r.status_code == 409
+    assert await _row_count("faces") == len(face_ids)
+
+
+async def test_purge_face_keeps_persons_but_clears_faces_and_person_tags(admin_client):
+    from backend.models.ai_database import _ai_db_path
+
+    face_ids = await _seed_faces(2)
+    async with aiosqlite.connect(_ai_db_path()) as db:
+        cur = await db.execute("INSERT INTO persons (name) VALUES ('철수')")
+        person_id = cur.lastrowid
+        await db.execute(
+            "INSERT INTO face_labels (face_id, person_id) VALUES (?, ?)", (face_ids[0], person_id)
+        )
+        await db.execute(
+            "INSERT INTO photo_tags (photo_path, tag, source, person_id) VALUES (?, ?, 'person', ?)",
+            ("2024/photo_0.jpg", "철수", person_id),
+        )
+        await db.execute(
+            "INSERT INTO photos_analyzed (path, mtime, face_count) VALUES (?, ?, ?)",
+            ("2024/photo_0.jpg", 1.0, 1),
+        )
+        await db.commit()
+
+    await admin_client.patch("/api/admin/ai/settings", json={"face_enabled": False})
+    r = await admin_client.post("/api/admin/ai/categories/face/purge")
+    assert r.status_code == 200
+    assert r.json() == {"category": "face", "purged": True}
+
+    assert await _row_count("faces") == 0
+    assert await _row_count("face_labels") == 0  # FK CASCADE
+    assert await _row_count("photo_tags", "WHERE source = 'person'") == 0
+    assert await _row_count("photos_analyzed", "WHERE face_count != 0") == 0
+    # persons(인물 프로필)는 유지 — 나중에 재스캔 시 같은 인물과 다시 매칭 가능
+    assert await _row_count("persons", f"WHERE id = {person_id}") == 1
+
+
+async def test_purge_location_clears_locations_and_tags(admin_client):
+    from backend.models.ai_database import _ai_db_path
+
+    async with aiosqlite.connect(_ai_db_path()) as db:
+        await db.execute(
+            "INSERT INTO photo_locations (photo_path, city, country) VALUES (?, ?, ?)",
+            ("2024/a.jpg", "서울", "대한민국"),
+        )
+        await db.execute(
+            "INSERT INTO photo_tags (photo_path, tag, source) VALUES (?, ?, 'location')",
+            ("2024/a.jpg", "서울"),
+        )
+        await db.commit()
+
+    await admin_client.patch("/api/admin/ai/settings", json={"location_enabled": False})
+    r = await admin_client.post("/api/admin/ai/categories/location/purge")
+    assert r.status_code == 200
+    assert await _row_count("photo_locations") == 0
+    assert await _row_count("photo_tags", "WHERE source = 'location'") == 0
+
+
+async def test_purge_ai_tag_clears_embeddings_and_tags(admin_client):
+    from backend.models.ai_database import _ai_db_path
+
+    async with aiosqlite.connect(_ai_db_path()) as db:
+        await db.execute(
+            "INSERT INTO photo_embeddings (photo_path, embedding) VALUES (?, ?)",
+            ("2024/a.jpg", b"\x00" * 8),
+        )
+        await db.execute(
+            "INSERT INTO photo_tags (photo_path, tag, source) VALUES (?, ?, 'ai')",
+            ("2024/a.jpg", "캠핑"),
+        )
+        await db.commit()
+
+    await admin_client.patch("/api/admin/ai/settings", json={"ai_tag_enabled": False})
+    r = await admin_client.post("/api/admin/ai/categories/ai_tag/purge")
+    assert r.status_code == 200
+    assert await _row_count("photo_embeddings") == 0
+    assert await _row_count("photo_tags", "WHERE source = 'ai'") == 0
+
+
+async def test_purge_path_clears_tags_and_resets_path_tag_done(admin_client):
+    from backend.models.ai_database import _ai_db_path
+
+    async with aiosqlite.connect(_ai_db_path()) as db:
+        await db.execute(
+            "INSERT INTO photo_tags (photo_path, tag, source) VALUES (?, ?, 'path')",
+            ("2024/a.jpg", "서울대공원"),
+        )
+        await db.execute(
+            "INSERT INTO photos_analyzed (path, mtime, path_tag_done) VALUES (?, ?, 1)",
+            ("2024/a.jpg", 1.0),
+        )
+        await db.commit()
+
+    await admin_client.patch("/api/admin/ai/settings", json={"path_enabled": False})
+    r = await admin_client.post("/api/admin/ai/categories/path/purge")
+    assert r.status_code == 200
+    assert await _row_count("photo_tags", "WHERE source = 'path'") == 0
+    assert await _row_count("photos_analyzed", "WHERE path_tag_done != 0") == 0
+
+
+async def test_purge_requires_auth(client):
+    r = await client.post("/api/admin/ai/categories/face/purge")
+    assert r.status_code in (401, 403)

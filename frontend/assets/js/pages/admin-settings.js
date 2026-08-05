@@ -145,33 +145,46 @@ function renderSettingsForm(settings) {
         <div class="settings-group">
           <div class="settings-item">
             <label class="settings-label">얼굴 인식</label>
-            <select id="s-ai-face-enabled" class="form-input settings-select">
-              <option value="true">켬</option>
-              <option value="false">끔</option>
-            </select>
+            <div class="settings-input-row">
+              <select id="s-ai-face-enabled" class="form-input settings-select">
+                <option value="true">켬</option>
+                <option value="false">끔</option>
+              </select>
+              <button type="button" class="btn btn-danger btn-sm" id="btn-purge-face" disabled>DB 삭제</button>
+            </div>
           </div>
           <div class="settings-item">
             <label class="settings-label">장소(위치) 인식</label>
-            <select id="s-ai-location-enabled" class="form-input settings-select">
-              <option value="true">켬</option>
-              <option value="false">끔</option>
-            </select>
+            <div class="settings-input-row">
+              <select id="s-ai-location-enabled" class="form-input settings-select">
+                <option value="true">켬</option>
+                <option value="false">끔</option>
+              </select>
+              <button type="button" class="btn btn-danger btn-sm" id="btn-purge-location" disabled>DB 삭제</button>
+            </div>
           </div>
           <div class="settings-item">
             <label class="settings-label">폴더명 태깅</label>
-            <select id="s-ai-path-enabled" class="form-input settings-select">
-              <option value="true">켬</option>
-              <option value="false">끔</option>
-            </select>
+            <div class="settings-input-row">
+              <select id="s-ai-path-enabled" class="form-input settings-select">
+                <option value="true">켬</option>
+                <option value="false">끔</option>
+              </select>
+              <button type="button" class="btn btn-danger btn-sm" id="btn-purge-path" disabled>DB 삭제</button>
+            </div>
           </div>
           <div class="settings-item">
             <label class="settings-label">사물 인식(AI 태그)</label>
-            <select id="s-ai-tag-enabled" class="form-input settings-select">
-              <option value="true">켬</option>
-              <option value="false">끔</option>
-            </select>
+            <div class="settings-input-row">
+              <select id="s-ai-tag-enabled" class="form-input settings-select">
+                <option value="true">켬</option>
+                <option value="false">끔</option>
+              </select>
+              <button type="button" class="btn btn-danger btn-sm" id="btn-purge-ai_tag" disabled>DB 삭제</button>
+            </div>
           </div>
         </div>
+        <p class="text-muted text-sm">DB 삭제 버튼은 해당 카테고리가 "끔" 상태로 저장되어 있을 때만 활성화됩니다.</p>
         <div class="settings-actions">
           <button class="btn btn-primary btn-sm" id="btn-save-ai-category">저장</button>
           <span id="ai-category-ok" class="text-success text-sm" style="display:none">저장됨 ✓</span>
@@ -317,14 +330,15 @@ async function initAiScanSection() {
   if (current.tag_threshold != null) thresholdInput.value = String(current.tag_threshold);
 
   const CATEGORY_FIELDS = [
-    ['s-ai-face-enabled', 'face_enabled'],
-    ['s-ai-location-enabled', 'location_enabled'],
-    ['s-ai-path-enabled', 'path_enabled'],
-    ['s-ai-tag-enabled', 'ai_tag_enabled'],
+    ['s-ai-face-enabled', 'face_enabled', 'face'],
+    ['s-ai-location-enabled', 'location_enabled', 'location'],
+    ['s-ai-path-enabled', 'path_enabled', 'path'],
+    ['s-ai-tag-enabled', 'ai_tag_enabled', 'ai_tag'],
   ];
   for (const [id, key] of CATEGORY_FIELDS) {
     document.getElementById(id).value = String(current[key] !== false);
   }
+  const resyncPurgeButtons = bindPurgeButtons(CATEGORY_FIELDS, current);
 
   categorySection.style.display = '';
   section.style.display = '';
@@ -340,6 +354,8 @@ async function initAiScanSection() {
         body[key] = document.getElementById(id).value === 'true';
       }
       await api.patch('/api/admin/ai/settings', body);
+      Object.assign(current, body);
+      resyncPurgeButtons();
       showOk('ai-category-ok');
     } catch (e) {
       alert(e.message);
@@ -376,6 +392,54 @@ async function initAiScanSection() {
       btn.disabled = false;
     }
   });
+}
+
+const PURGE_LABELS = {
+  face: '얼굴 인식',
+  location: '장소(위치) 인식',
+  path: '폴더명 태깅',
+  ai_tag: '사물 인식(AI 태그)',
+};
+
+// 얼굴은 위치/사물/폴더명과 달리 재활성화 후 자동 소급 인식이 없어(ai-category-section
+// 안내문구 참고) 별도 경고를 덧붙인다.
+const PURGE_EXTRA_WARNING = {
+  face: '\n\n⚠ 삭제 후 얼굴 인식을 다시 켜도 기존 사진은 자동으로 재인식되지 않습니다(해당 사진이 재스캔 대상이 될 때만 인식됩니다).',
+};
+
+// 활성화 조건은 select의 즉석 값이 아니라 "저장된" current[key] 기준 —
+// 저장 전에 드롭다운만 '끔'으로 바꿔도 버튼이 눌리지 않게 해 저장 안 한 상태에서
+// 클릭했을 때 서버 409("먼저 꺼주세요")가 나는 혼란을 막는다. 저장 성공 시
+// current를 갱신한 뒤 이 함수를 다시 불러 동기화한다(호출자가 resync 함수를 보관).
+function bindPurgeButtons(categoryFields, current) {
+  const resync = () => {
+    for (const [, key, category] of categoryFields) {
+      document.getElementById(`btn-purge-${category}`).disabled = current[key] !== false;
+    }
+  };
+  resync();
+
+  for (const [, , category] of categoryFields) {
+    const btn = document.getElementById(`btn-purge-${category}`);
+    btn.addEventListener('click', async () => {
+      const label = PURGE_LABELS[category];
+      const warning = PURGE_EXTRA_WARNING[category] || '';
+      const ok = confirm(
+        `"${label}" 카테고리의 DB 데이터를 전부 삭제하시겠습니까?${warning}\n\n되돌릴 수 없습니다.`
+      );
+      if (!ok) return;
+      btn.disabled = true;
+      try {
+        await api.post(`/api/admin/ai/categories/${category}/purge`);
+        alert(`"${label}" 데이터를 삭제했습니다.`);
+      } catch (e) {
+        alert(e.message);
+      } finally {
+        resync();
+      }
+    });
+  }
+  return resync;
 }
 
 /* ── Theme Picker ───────────────────────────────────────── */
