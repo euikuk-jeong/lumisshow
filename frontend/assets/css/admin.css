@@ -534,22 +534,6 @@
 .lightbox-action-danger { border-color: rgba(248,113,113,0.4); color: #f87171; }
 .lightbox-action-danger:hover:not(:disabled) { background: rgba(248,113,113,0.15); }
 
-.lightbox-info-btn {
-  position: absolute;
-  top: 16px;
-  left: 20px;
-  background: none;
-  border: none;
-  color: rgba(255,255,255,0.5);
-  font-size: 18px;
-  font-style: italic;
-  font-weight: bold;
-  cursor: pointer;
-  padding: 4px 12px;
-  line-height: 1;
-}
-.lightbox-info-btn:hover { color: #fff; }
-.lightbox-info-btn.lb-info-active { color: #fff; background: rgba(255,255,255,0.15); border-radius: var(--radius); }
 .lightbox-info {
   position: absolute;
   top: 8px;
