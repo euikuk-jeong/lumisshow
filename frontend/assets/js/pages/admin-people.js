@@ -6,6 +6,10 @@ import { esc } from '../utils.js';
 
 const _FACE_DISABLED_MSG = '기능을 사용하려면 설정에서 AI 인식 카테고리에서 얼굴 인식을 켜 주세요';
 
+// 인물 목록의 "추정 있는 인물만 보기" 체크박스 상태 — 인물 상세로 갔다 돌아왔을 때
+// 복원하기 위해 모듈 스코프에 보존한다(아래 _mode/_offset과 동일한 패턴).
+let _peopleMatchedOnly = false;
+
 async function _faceEnabled() {
   // ai.db 미구성 등으로 조회 실패 시 얼굴 탭 자체를 막으면 안 됨 — 켜진 것으로
   // 취급(admin-settings.js의 동일한 try/catch 원칙, fail-open).
@@ -217,7 +221,7 @@ async function loadPeople() {
         <input type="search" id="people-search" class="form-input" placeholder="🔍 인물 이름 검색"
                style="max-width:260px">
         <label style="display:flex;align-items:center;gap:6px;font-size:14px;white-space:nowrap">
-          <input type="checkbox" id="people-filter-matched">
+          <input type="checkbox" id="people-filter-matched" ${_peopleMatchedOnly ? 'checked' : ''}>
           추정 있는 인물만 보기
         </label>
       </div>
@@ -236,13 +240,13 @@ async function loadPeople() {
     }
     function applyFilters() {
       const q = document.getElementById('people-search').value.trim().toLowerCase();
-      const matchedOnly = document.getElementById('people-filter-matched').checked;
+      const matchedOnly = _peopleMatchedOnly = document.getElementById('people-filter-matched').checked;
       let list = people;
       if (q) list = list.filter(p => p.name.toLowerCase().includes(q));
       if (matchedOnly) list = list.filter(p => p.matched_count > 0);
       renderGrid(list);
     }
-    renderGrid(people);
+    applyFilters();
 
     document.getElementById('people-search').addEventListener('input', applyFilters);
     document.getElementById('people-filter-matched').addEventListener('change', applyFilters);

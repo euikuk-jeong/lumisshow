@@ -7,6 +7,11 @@ import { openAddTagModal, deleteTagFromPhotos } from '../tag-modal.js';
 const SOURCE_LABELS = { ai: 'AI', manual: '직접추가', path: '폴더명', location: '위치' };
 const EDITABLE_SOURCES = new Set(['ai', 'manual', 'path']);
 
+// 태그 목록 검색어·소스 필터 — 태그별 사진 화면에서 돌아왔을 때 복원하기 위해
+// 모듈 스코프에 보존한다(admin-people.js의 _mode/_offset과 동일한 패턴).
+let _tagsSearch = '';
+let _tagsSourceFilter = 'all';
+
 // ── 태그 목록 (/admin/tags) ────────────────────────────────────────────
 
 export async function renderAdminTags() {
@@ -23,13 +28,13 @@ export async function renderAdminTags() {
       </div>
     </div>
     <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-bottom:14px">
-      <input type="search" id="tags-search" class="form-input" placeholder="🔍 태그 검색" style="max-width:260px">
+      <input type="search" id="tags-search" class="form-input" placeholder="🔍 태그 검색" style="max-width:260px" value="${esc(_tagsSearch)}">
       <div class="view-toggle" id="tags-source-filter">
-        <button type="button" class="btn btn-ghost btn-sm active" data-source="all">전체</button>
-        <button type="button" class="btn btn-ghost btn-sm" data-source="ai">AI</button>
-        <button type="button" class="btn btn-ghost btn-sm" data-source="manual">직접추가</button>
-        <button type="button" class="btn btn-ghost btn-sm" data-source="path">폴더명</button>
-        <button type="button" class="btn btn-ghost btn-sm" data-source="location">위치</button>
+        <button type="button" class="btn btn-ghost btn-sm${_tagsSourceFilter === 'all' ? ' active' : ''}" data-source="all">전체</button>
+        <button type="button" class="btn btn-ghost btn-sm${_tagsSourceFilter === 'ai' ? ' active' : ''}" data-source="ai">AI</button>
+        <button type="button" class="btn btn-ghost btn-sm${_tagsSourceFilter === 'manual' ? ' active' : ''}" data-source="manual">직접추가</button>
+        <button type="button" class="btn btn-ghost btn-sm${_tagsSourceFilter === 'path' ? ' active' : ''}" data-source="path">폴더명</button>
+        <button type="button" class="btn btn-ghost btn-sm${_tagsSourceFilter === 'location' ? ' active' : ''}" data-source="location">위치</button>
       </div>
     </div>
     <div id="tags-content"><div class="loading"></div></div>
@@ -64,7 +69,7 @@ export async function renderAdminTags() {
     if (disabledSources.has(btn.dataset.source)) btn.disabled = true;
   });
 
-  let sourceFilter = 'all';
+  let sourceFilter = _tagsSourceFilter;
 
   function renderGrid(list) {
     if (!list.length) {
@@ -86,6 +91,7 @@ export async function renderAdminTags() {
 
   function applyFilters() {
     const q = document.getElementById('tags-search').value.trim().toLowerCase();
+    _tagsSearch = document.getElementById('tags-search').value;
     let list = tags;
     if (sourceFilter !== 'all') list = list.filter(t => t.source === sourceFilter);
     if (q) list = list.filter(t => t.tag.toLowerCase().includes(q));
@@ -97,7 +103,7 @@ export async function renderAdminTags() {
     const btn = e.target.closest('[data-source]');
     if (!btn) return;
     document.querySelectorAll('#tags-source-filter [data-source]').forEach(b => b.classList.toggle('active', b === btn));
-    sourceFilter = btn.dataset.source;
+    sourceFilter = _tagsSourceFilter = btn.dataset.source;
     applyFilters();
   });
 
