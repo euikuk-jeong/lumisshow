@@ -1,6 +1,6 @@
 import { api } from '../api.js';
 import { renderAdminShell } from '../layout.js';
-import { esc } from '../utils.js';
+import { esc, invalidateSiteInfo } from '../utils.js';
 import { THEMES, getTheme, setTheme } from '../theme.js';
 import { EFFECTS } from '../slideshow-config.js';
 
@@ -91,6 +91,29 @@ function renderSettingsForm(settings) {
   const el = document.getElementById('settings-content');
   el.innerHTML = `
     <div class="settings-page">
+
+      <!-- 타이틀 -->
+      <div class="settings-section card">
+        <div class="settings-section-header">
+          <p class="section-title">타이틀</p>
+          <p class="text-muted text-sm">로그인 화면·상단바·공유 앨범 등에 표시되는 서비스 이름</p>
+        </div>
+        <div class="settings-group">
+          <div class="settings-item">
+            <label class="settings-label">타이틀</label>
+            <div class="settings-input-row" id="site-title-view">
+              <span id="site-title-text">${esc(settings.site_title)}</span>
+              <button type="button" class="btn btn-ghost btn-sm" id="btn-edit-title">편집</button>
+              <span id="site-title-ok" class="text-success text-sm" style="display:none">저장됨 ✓</span>
+            </div>
+            <div class="settings-input-row" id="site-title-edit" style="display:none">
+              <input id="s-site-title" type="text" class="form-input settings-select" maxlength="60" value="${esc(settings.site_title)}">
+              <button type="button" class="btn btn-primary btn-sm" id="btn-save-title">저장</button>
+              <button type="button" class="btn btn-ghost btn-sm" id="btn-cancel-title">취소</button>
+            </div>
+          </div>
+        </div>
+      </div>
 
       <!-- 테마 -->
       <div class="settings-section card">
@@ -307,8 +330,52 @@ function renderSettingsForm(settings) {
   if (settings.ui_theme) setTheme(settings.ui_theme);
   initThemePicker();
   initTimezoneSelect(settings.timezone_label);
+  initSiteTitle(settings);
   bindSaveHandlers();
   initAiScanSection();
+}
+
+/* ── 타이틀 (편집 토글) ─────────────────────────────────── */
+function initSiteTitle(settings) {
+  const viewRow  = document.getElementById('site-title-view');
+  const editRow  = document.getElementById('site-title-edit');
+  const textEl   = document.getElementById('site-title-text');
+  const input    = document.getElementById('s-site-title');
+
+  document.getElementById('btn-edit-title').addEventListener('click', () => {
+    input.value = settings.site_title;
+    viewRow.style.display = 'none';
+    editRow.style.display = '';
+    input.focus();
+  });
+
+  document.getElementById('btn-cancel-title').addEventListener('click', () => {
+    editRow.style.display = 'none';
+    viewRow.style.display = '';
+  });
+
+  document.getElementById('btn-save-title').addEventListener('click', async () => {
+    const value = input.value.trim();
+    if (!value) { alert('타이틀을 입력하세요'); return; }
+    const btn = document.getElementById('btn-save-title');
+    btn.disabled = true;
+    try {
+      await api.patch('/api/admin/settings', { site_title: value });
+      settings.site_title = value;
+      textEl.textContent = value;
+      invalidateSiteInfo();
+      const navTitleEl = document.getElementById('nav-title');
+      if (navTitleEl) navTitleEl.textContent = value;
+      document.title = value;
+      editRow.style.display = 'none';
+      viewRow.style.display = '';
+      showOk('site-title-ok');
+    } catch (e) {
+      alert(e.message);
+    } finally {
+      btn.disabled = false;
+    }
+  });
 }
 
 /* ── AI 야간 스캔 시각 (+ AI 인식 카테고리·AI 태그 인식·XMP 내보내기 섹션도

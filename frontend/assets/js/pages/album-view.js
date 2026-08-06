@@ -1,5 +1,5 @@
 import { shareApi, ShareAuthError } from '../api.js';
-import { esc, getVersion } from '../utils.js';
+import { esc, getVersion, getSiteTitle } from '../utils.js';
 import { EFFECTS, EFFECT_LABELS, loadSlideshowSettings } from '../slideshow-config.js';
 import { createPhotoZoomViewer } from '../photo-zoom-viewer.js';
 
@@ -133,9 +133,9 @@ export async function renderAlbumView(token) {
     </div>`;
 
   _initSettingsPanel(token, album);
-  getVersion().then(v => {
+  Promise.all([getSiteTitle(), getVersion()]).then(([title, v]) => {
     const el = document.getElementById('viewer-version');
-    if (el) el.textContent = `LumisShow ${v} · Made by Ekjeong`;
+    if (el) el.textContent = `${title} ${v} · Made by Ekjeong`;
   });
 
   document.getElementById('btn-slideshow').addEventListener('click', () => {

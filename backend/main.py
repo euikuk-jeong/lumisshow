@@ -21,6 +21,7 @@ from backend.routers import (
     media,
     share,
 )
+from backend.services.settings import get_settings
 
 _FRONTEND_DIR = Path(__file__).parent.parent / "frontend"
 _logger = logging.getLogger(__name__)
@@ -79,8 +80,9 @@ def health():
 
 
 @app.get("/version")
-def version():
-    return {"version": APP_VERSION}
+async def version(db=Depends(get_db)):
+    settings = await get_settings(db)
+    return {"version": APP_VERSION, "site_title": settings["site_title"]}
 
 
 # 정적 파일 서빙 (frontend assets)

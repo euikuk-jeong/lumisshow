@@ -1,5 +1,5 @@
 import { shareApi } from '../api.js';
-import { esc } from '../utils.js';
+import { esc, getSiteTitle } from '../utils.js';
 
 export async function renderShareAuth(token) {
   const app = document.getElementById('app');
@@ -27,7 +27,8 @@ export async function renderShareAuth(token) {
     <div class="viewer-center">
       <div class="viewer-auth-card">
         <div class="viewer-icon">🔒</div>
-        <h1 class="viewer-auth-title">패스워드를 입력하세요</h1>
+        <h1 class="viewer-auth-title" id="auth-site-title">LumisShow</h1>
+        <p class="viewer-auth-desc text-muted">패스워드를 입력하세요</p>
         <div id="auth-error" class="alert alert-error" style="display:none"></div>
         <form id="auth-form" style="margin-top:16px">
           <input type="password" id="auth-pw" class="form-input" placeholder="패스워드"
@@ -36,6 +37,11 @@ export async function renderShareAuth(token) {
         </form>
       </div>
     </div>`;
+
+  getSiteTitle().then(t => {
+    const el = document.getElementById('auth-site-title');
+    if (el) el.textContent = t;
+  });
 
   document.getElementById('auth-form').addEventListener('submit', async (e) => {
     e.preventDefault();
