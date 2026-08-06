@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.10.0] - 2026-08-06
+
+### Added
+- **태그/인물 목록 필터 상태 유지**: 태그 탭에서 특정 태그의 사진을 보고 목록으로
+  돌아오면 검색어·소스 필터(전체/AI/직접추가/폴더명/위치)가 초기화되던 문제,
+  인물 탭에서 인물 상세를 보고 돌아오면 "추정 있는 인물만 보기" 체크박스가
+  풀리던 문제를 각각 모듈 스코프 상태로 보존해 해결
+  (`frontend/assets/js/pages/admin-tags.js`, `frontend/assets/js/pages/admin-people.js`)
+
 ## [2.9.0] - 2026-08-06
 
 ### Added
@@ -1196,7 +1205,8 @@ Phase 2 — AI 얼굴 인식 스마트 앨범. NAS 로컬 AI(InsightFace)로 사
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v2.9.0...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v2.10.0...HEAD
+[2.10.0]: https://github.com/euikuk-jeong/lumisshow/compare/v2.9.0...v2.10.0
 [2.9.0]: https://github.com/euikuk-jeong/lumisshow/compare/v2.8.0...v2.9.0
 [2.8.0]: https://github.com/euikuk-jeong/lumisshow/compare/v2.7.3...v2.8.0
 [2.7.3]: https://github.com/euikuk-jeong/lumisshow/compare/v2.7.2...v2.7.3
