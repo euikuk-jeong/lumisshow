@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.9.0] - 2026-08-06
+
+### Added
+- **서비스 타이틀 커스터마이징**: 설정 화면 최상단에 "타이틀" 카드 신설(기본값
+  "LumisShow", 편집 버튼으로 인라인 수정). 저장한 값이 Admin 로그인 화면, 상단바
+  좌측, 공유 앨범 패스워드 입력 화면(신규 노출), 공유 앨범 최하단 푸터, 브라우저
+  탭 제목까지 전부 일괄 반영된다(`backend/services/settings.py`의 `site_title`
+  키, 공개 엔드포인트 `GET /version`이 함께 반환해 로그인 전 화면에서도 사용,
+  `frontend/assets/js/router.js`에서 탭 제목 갱신 1곳 처리)
+
 ## [2.8.0] - 2026-08-06
 
 ### Added
@@ -1186,7 +1196,8 @@ Phase 2 — AI 얼굴 인식 스마트 앨범. NAS 로컬 AI(InsightFace)로 사
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v2.8.0...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v2.9.0...HEAD
+[2.9.0]: https://github.com/euikuk-jeong/lumisshow/compare/v2.8.0...v2.9.0
 [2.8.0]: https://github.com/euikuk-jeong/lumisshow/compare/v2.7.3...v2.8.0
 [2.7.3]: https://github.com/euikuk-jeong/lumisshow/compare/v2.7.2...v2.7.3
 [2.7.2]: https://github.com/euikuk-jeong/lumisshow/compare/v2.7.1...v2.7.2
