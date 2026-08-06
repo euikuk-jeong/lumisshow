@@ -68,7 +68,7 @@ services/
   photo_tags.py      # Phase 6: photo_tags 일괄 조회 (load_photo_tags) — 정보 패널(i 버튼) 태그 노출용, 뷰어별 source 노출 범위(ADMIN_INFO_PANEL_SOURCES/SHARE_INFO_PANEL_SOURCES) 정의. Phase 8: search_tag_matched_paths — 검색어를 태그에 포함하는 photo_path 조회(사진 탐색 검색용, sources 인자로 한정). enabled_sources — AI 인식 카테고리 on/off 플래그를 photo_tags.source 튜플로 변환(꺼진 카테고리 제외, manual은 항상 포함)
   xmp_export.py      # Phase 7: XMP 사이드카 생성 (build_xmp_content, load_locations, load_confirmed_regions) — dc:subject/mwg-rs:RegionList/Iptc4xmpExt:LocationCreated 매핑
   paths.py           # PHOTO_ROOT 하위 경로 resolve·containment 검증 (resolve_abs, assert_within_photo_root) — media/share 공용
-  settings.py        # settings 테이블 조회 (get_settings, DEFAULTS) — admin_settings/admin_browse/admin_albums/share 공용
+  settings.py        # settings 테이블 조회 (get_settings, DEFAULTS) — admin_settings/admin_browse/admin_albums/share/main(/version) 공용. site_title 키로 서비스 이름 커스터마이징(기본값 "LumisShow")
   auth.py            # JWT 생성/검증, bcrypt 해시 (ADMIN_PASSWORD_HASH 지원), admin_image_auth (이미지 서빙 인증)
   zip_stream.py      # 스트리밍 ZIP 생성 (zip_generator: 디스크 파일, zip_generator_from_content: 메모리 텍스트 — XMP export 전용)
   tag_vocab.py       # Phase 5: 수동 태그 추가용 어휘 목록 — ai_worker/tag_vocab.py의 label만 복제(컨테이너 분리로 코드 공유 불가, 어휘 바뀌면 양쪽 동기화 필요)

@@ -155,6 +155,7 @@ class SlideshowDefaults(BaseModel):
     loop: bool
 
 class SettingsResponse(BaseModel):
+    site_title: str = "LumisShow"
     timezone_offset: int
     timezone_label: str
     slideshow_interval: int
@@ -167,6 +168,7 @@ class SettingsResponse(BaseModel):
     ui_theme: str = "dark"
 
 class SettingsUpdate(BaseModel):
+    site_title: Optional[str] = Field(default=None, min_length=1, max_length=60)
     timezone_offset: Optional[int] = None
     timezone_label: Optional[str] = None
     slideshow_interval: Optional[int] = None

@@ -1,12 +1,13 @@
 import { api } from '../api.js';
 import { setToken } from '../auth.js';
+import { getSiteTitle } from '../utils.js';
 
 export async function renderAdminLogin() {
   const app = document.getElementById('app');
   app.innerHTML = `
     <div class="login-page">
       <div class="login-card card">
-        <h1>LumisShow</h1>
+        <h1 id="login-title">LumisShow</h1>
         <p>관리자 비밀번호를 입력하세요</p>
         <div id="login-error" class="alert alert-error" style="display:none"></div>
         <form id="login-form" class="flex-col gap-3">
@@ -35,6 +36,10 @@ export async function renderAdminLogin() {
   const pwdEl  = document.getElementById('password');
 
   pwdEl.focus();
+  getSiteTitle().then(t => {
+    const el = document.getElementById('login-title');
+    if (el) el.textContent = t;
+  });
 
   form.addEventListener('submit', async e => {
     e.preventDefault();

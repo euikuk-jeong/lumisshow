@@ -2,12 +2,23 @@ export function esc(s) {
   return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-let _versionCache = null;
-export async function getVersion() {
-  if (_versionCache) return _versionCache;
+let _infoCache = null;
+async function _fetchInfo() {
+  if (_infoCache) return _infoCache;
   try {
     const res = await fetch('/version');
-    if (res.ok) _versionCache = (await res.json()).version;
+    if (res.ok) _infoCache = await res.json();
   } catch {}
-  return _versionCache ?? 'dev';
+  return _infoCache ?? {};
+}
+export async function getVersion() {
+  const info = await _fetchInfo();
+  return info.version ?? 'dev';
+}
+export async function getSiteTitle() {
+  const info = await _fetchInfo();
+  return info.site_title ?? 'LumisShow';
+}
+export function invalidateSiteInfo() {
+  _infoCache = null;
 }

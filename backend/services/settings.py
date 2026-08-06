@@ -3,6 +3,7 @@
 import json
 
 DEFAULTS: dict = {
+    "site_title": "LumisShow",
     "timezone_offset": 0,
     "timezone_label": "UTC+0 (UTC)",
     "slideshow_interval": 5,

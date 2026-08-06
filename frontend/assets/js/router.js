@@ -1,5 +1,5 @@
 import { getToken } from './auth.js';
-import { esc } from './utils.js';
+import { esc, getSiteTitle } from './utils.js';
 import { renderAdminLogin } from './pages/admin-login.js';
 import { renderAdminAlbums } from './pages/admin-albums.js';
 import { renderAdminAlbumEdit } from './pages/admin-album-edit.js';
@@ -103,3 +103,4 @@ document.addEventListener('click', e => {
 
 window.addEventListener('popstate', renderRoute);
 renderRoute();
+getSiteTitle().then(t => { document.title = t; });

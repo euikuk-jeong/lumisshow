@@ -5,6 +5,7 @@ async def test_get_settings_returns_defaults(admin_client):
     r = await admin_client.get("/api/admin/settings")
     assert r.status_code == 200
     data = r.json()
+    assert data["site_title"] == "LumisShow"
     assert data["timezone_offset"] == 0
     assert data["timezone_label"] == "UTC+0 (UTC)"
     assert data["slideshow_interval"] == 5
@@ -96,3 +97,19 @@ async def test_patch_settings_empty_body_is_noop(admin_client):
 async def test_patch_settings_requires_auth(client):
     r = await client.patch("/api/admin/settings", json={"slideshow_interval": 3})
     assert r.status_code == 401
+
+
+async def test_patch_settings_site_title(admin_client):
+    r = await admin_client.patch("/api/admin/settings", json={"site_title": "My Photos"})
+    assert r.status_code == 200
+    assert r.json()["site_title"] == "My Photos"
+
+
+async def test_patch_settings_site_title_rejects_empty(admin_client):
+    r = await admin_client.patch("/api/admin/settings", json={"site_title": ""})
+    assert r.status_code == 422
+
+
+async def test_patch_settings_site_title_rejects_too_long(admin_client):
+    r = await admin_client.patch("/api/admin/settings", json={"site_title": "x" * 61})
+    assert r.status_code == 422
