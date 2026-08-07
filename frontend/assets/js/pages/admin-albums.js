@@ -65,6 +65,7 @@ function albumCard(album) {
           <span>📷 ${album.photo_count.toLocaleString()}장</span>
           <span>👁 ${(album.view_count ?? 0).toLocaleString()}회</span>
           <span>${date}</span>
+          <span>🔗 ${(album.active_link_count ?? 0).toLocaleString()}개</span>
         </div>
       </div>
     </div>`;

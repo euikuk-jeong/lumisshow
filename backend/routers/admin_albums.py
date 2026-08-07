@@ -124,7 +124,9 @@ async def _fetch_album(album_id: int, db) -> dict:
     async with db.execute(
         """
         SELECT a.*, COUNT(p.id) AS photo_count,
-          (SELECT file_path FROM album_photos WHERE album_id = a.id ORDER BY sort_order, id LIMIT 1) AS first_photo_path
+          (SELECT file_path FROM album_photos WHERE album_id = a.id ORDER BY sort_order, id LIMIT 1) AS first_photo_path,
+          (SELECT COUNT(*) FROM share_links sl WHERE sl.album_id = a.id AND sl.is_active = 1
+             AND (sl.expires_at IS NULL OR sl.expires_at > datetime('now'))) AS active_link_count
         FROM albums a LEFT JOIN album_photos p ON p.album_id = a.id
         WHERE a.id = ?
         GROUP BY a.id
@@ -144,7 +146,9 @@ async def list_albums(_: str = Depends(get_current_admin), db=Depends(get_db)):
     async with db.execute(
         """
         SELECT a.*, COUNT(p.id) AS photo_count,
-          (SELECT file_path FROM album_photos WHERE album_id = a.id ORDER BY sort_order, id LIMIT 1) AS first_photo_path
+          (SELECT file_path FROM album_photos WHERE album_id = a.id ORDER BY sort_order, id LIMIT 1) AS first_photo_path,
+          (SELECT COUNT(*) FROM share_links sl WHERE sl.album_id = a.id AND sl.is_active = 1
+             AND (sl.expires_at IS NULL OR sl.expires_at > datetime('now'))) AS active_link_count
         FROM albums a LEFT JOIN album_photos p ON p.album_id = a.id
         GROUP BY a.id ORDER BY a.created_at DESC
         """
