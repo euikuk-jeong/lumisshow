@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.11.0] - 2026-08-07
+
+### Added
+- **앨범 목록에 활성 공유 링크 수 표시**: Admin 앨범 카드 하단 메타 정보에
+  활성화된(is_active + 미만료) 공유 링크 개수를 🔗 아이콘과 함께 노출
+  (`backend/routers/admin_albums.py`의 `active_link_count` 서브쿼리,
+  `frontend/assets/js/pages/admin-albums.js`)
+
 ## [2.10.0] - 2026-08-06
 
 ### Added
@@ -1205,7 +1213,8 @@ Phase 2 — AI 얼굴 인식 스마트 앨범. NAS 로컬 AI(InsightFace)로 사
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v2.10.0...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v2.11.0...HEAD
+[2.11.0]: https://github.com/euikuk-jeong/lumisshow/compare/v2.10.0...v2.11.0
 [2.10.0]: https://github.com/euikuk-jeong/lumisshow/compare/v2.9.0...v2.10.0
 [2.9.0]: https://github.com/euikuk-jeong/lumisshow/compare/v2.8.0...v2.9.0
 [2.8.0]: https://github.com/euikuk-jeong/lumisshow/compare/v2.7.3...v2.8.0
