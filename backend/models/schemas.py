@@ -94,6 +94,7 @@ class AlbumResponse(BaseModel):
     music_paths: list[str]
     photo_count: int
     view_count: int = 0
+    active_link_count: int = 0
     created_at: datetime
     updated_at: datetime
     slideshow_interval: int = 5

@@ -42,6 +42,35 @@ async def test_create_album_with_photos(admin_client):
     assert r.json()["photo_count"] == 2
 
 
+async def test_album_active_link_count(admin_client):
+    album_id = (await admin_client.post("/api/admin/albums", json={"name": "Links"})).json()["id"]
+    r = await admin_client.get("/api/admin/albums")
+    assert r.json()[0]["active_link_count"] == 0
+
+    await admin_client.post(f"/api/admin/albums/{album_id}/links", json={})
+    link2 = (
+        await admin_client.post(f"/api/admin/albums/{album_id}/links", json={})
+    ).json()
+    r = await admin_client.get("/api/admin/albums")
+    assert r.json()[0]["active_link_count"] == 2
+
+    # 비활성 링크는 카운트에서 제외
+    await admin_client.patch(
+        f"/api/admin/albums/{album_id}/links/{link2['id']}",
+        json={"is_active": False},
+    )
+    r = await admin_client.get(f"/api/admin/albums/{album_id}")
+    assert r.json()["active_link_count"] == 1
+
+    # 만료된 링크도 카운트에서 제외
+    await admin_client.patch(
+        f"/api/admin/albums/{album_id}/links/{link2['id']}",
+        json={"is_active": True, "expires_at": "2000-01-01T00:00:00"},
+    )
+    r = await admin_client.get(f"/api/admin/albums/{album_id}")
+    assert r.json()["active_link_count"] == 1
+
+
 async def test_list_albums_returns_all(admin_client):
     await admin_client.post("/api/admin/albums", json={"name": "A1"})
     await admin_client.post("/api/admin/albums", json={"name": "A2"})
