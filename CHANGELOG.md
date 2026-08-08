@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.14.1] - 2026-08-09
+
+### Changed
+- **슬라이드쇼 정보패널 음악 커버 레이아웃 변경**: 커버 이미지가 텍스트 위에
+  왼쪽 정렬로 쌓여 트랙마다 박스 너비가 바뀔 때 이미지 위치가 흔들리던 문제를
+  개선. 커버(고정 56px)를 왼쪽 열, 제목/아티스트/앨범/트랙 텍스트를 오른쪽
+  열로 분리해 박스 너비 변화와 무관하게 이미지 위치 고정
+  (`frontend/assets/js/pages/slideshow.js`, `frontend/assets/css/slideshow.css`)
+- 기본 커버 이미지(`default-music-cover.png`) 교체
+
 ## [2.14.0] - 2026-08-09
 
 ### Added
@@ -1260,7 +1270,8 @@ Phase 2 — AI 얼굴 인식 스마트 앨범. NAS 로컬 AI(InsightFace)로 사
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v2.14.0...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v2.14.1...HEAD
+[2.14.1]: https://github.com/euikuk-jeong/lumisshow/compare/v2.14.0...v2.14.1
 [2.14.0]: https://github.com/euikuk-jeong/lumisshow/compare/v2.13.0...v2.14.0
 [2.13.0]: https://github.com/euikuk-jeong/lumisshow/compare/v2.12.2...v2.13.0
 [2.12.2]: https://github.com/euikuk-jeong/lumisshow/compare/v2.12.1...v2.12.2
