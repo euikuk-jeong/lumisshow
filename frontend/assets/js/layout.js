@@ -7,6 +7,7 @@ export function renderAdminShell(mainHTML, activePath = '') {
     <div class="admin-shell">
       <nav class="admin-nav">
         <a href="/admin" class="nav-brand" data-link>
+          <img src="/assets/images/default-music-cover.png" alt="" class="brand-icon">
           <span id="nav-title">LumisShow</span> <span class="nav-version" id="nav-version"></span>
         </a>
         <div class="nav-links">

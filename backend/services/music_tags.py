@@ -29,6 +29,14 @@ def _id3_text(tags, frame_id: str) -> Optional[str]:
     return value or None
 
 
+def _vorbis_text(tags, key: str) -> Optional[str]:
+    values = tags.get(key)
+    if not values:
+        return None
+    value = str(values[0]).strip()
+    return value or None
+
+
 def _extract_cover(audio, tags) -> Optional[tuple[bytes, str]]:
     pictures = getattr(audio, "pictures", None)  # FLAC
     if pictures:
@@ -55,7 +63,7 @@ def _extract_cover(audio, tags) -> Optional[tuple[bytes, str]]:
 
 def read_music_tags(abs_path: str) -> MusicTagInfo:
     """제목/아티스트/앨범/커버 유무를 파일 1회 열람으로 함께 읽는다 — 텍스트
-    태그는 ID3(MP3/WAV)만 지원(사용자 요청 범위가 mp3 태그로 한정됨), 커버는
+    태그는 ID3(MP3/WAV)와 Vorbis Comment(FLAC/OGG/Opus)를 지원, 커버는
     FLAC/MP4까지 폭넓게 인식(추출 비용이 같아 굳이 좁힐 이유가 없음)."""
     try:
         audio = MutagenFile(abs_path)
@@ -72,6 +80,10 @@ def read_music_tags(abs_path: str) -> MusicTagInfo:
         title = _id3_text(tags, "TIT2")
         artist = _id3_text(tags, "TPE1")
         album = _id3_text(tags, "TALB")
+    elif tags is not None and hasattr(tags, "get"):  # Vorbis Comment (FLAC, OGG, Opus)
+        title = _vorbis_text(tags, "title")
+        artist = _vorbis_text(tags, "artist")
+        album = _vorbis_text(tags, "album")
 
     return MusicTagInfo(
         title=title,
