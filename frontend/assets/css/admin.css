@@ -641,6 +641,19 @@
   color: var(--text-muted);
   text-decoration: underline;
 }
+.bundled-music-info {
+  margin-top: 6px;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+.bundled-music-info summary {
+  cursor: pointer;
+}
+.bundled-music-info ul {
+  margin: 6px 0;
+  padding-left: 18px;
+}
 .music-item {
   display: flex;
   align-items: center;
