@@ -533,7 +533,7 @@ async function openMusicModal(currentPaths, onConfirm) {
       const renderItem = f => {
         const credit = bundledOrder.includes(f.name) && BUNDLED_MUSIC_CREDITS.find(c => c.file === f.name);
         const label = credit ? `${credit.mood} — ${credit.title}` : f.name;
-        const sub = credit ? credit.artist : (f.rel !== f.name ? f.rel : '');
+        const sub = credit ? `${credit.artist} · Pixabay Music` : (f.rel !== f.name ? f.rel : '');
         return `
         <div class="music-file-item${selected.has(f.path) ? ' selected' : ''}" data-path="${esc(f.path)}">
           <input type="checkbox" ${selected.has(f.path) ? 'checked' : ''}>
@@ -551,7 +551,7 @@ async function openMusicModal(currentPaths, onConfirm) {
         ${bundledFiles.length ? '<p class="music-file-group-label">내가 추가한 음악</p>' : ''}
         <div class="music-file-list">${otherFiles.map(renderItem).join('')}</div>` : '';
 
-      body.innerHTML = bundledSection + otherSection;
+      body.innerHTML = `<div class="music-file-scroll">${bundledSection}${otherSection}</div>`;
 
       body.querySelectorAll('.music-file-item').forEach(item => {
         const cb = item.querySelector('input[type=checkbox]');
