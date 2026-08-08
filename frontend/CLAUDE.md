@@ -57,12 +57,15 @@ CSS animation 우선(GPU 가속). `EFFECTS` 배열에서 랜덤 선택. 수동 �
 현재 index N 표시 중 N+1, N+2 미리 로드. N-3 이전 `img.src = ''`으로 메모리 해제.
 
 ### 배경음악 플레이어 (다중 트랙)
-- `album.music_count`, `album.music_names` — ShareAlbumResponse에서 수신
+- `album.music_count`, `album.music_names`, `album.music_tags` — ShareAlbumResponse에서 수신
 - `GET /music/{token}?index=N` — 곡 인덱스로 스트리밍 요청
 - 단일 트랙: `audio.loop = true`
 - 복수 트랙: `ended` 이벤트로 자동 다음 곡, 이전/다음 버튼 표시
 - 브라우저 정책: 첫 사용자 제스처(슬라이드쇼 시작) 이후 `audio.play()` 호출
 - 음악 On/Off 상태는 `localStorage`의 `slideshow_settings`에 저장
+
+### 트랙 표시 정보 (ID3 태그)
+`trackDisplay(idx)` — `album.music_tags[idx]`(백엔드가 mutagen으로 읽은 title/artist/album/has_cover, `backend/services/music_tags.py`)를 우선 사용하고, 태그가 없거나 값이 비어 있으면 `music_names[idx]`(파일명, 확장자 제거)로 폴백한다. 커버 이미지는 `has_cover`가 true일 때만 `GET /music/{token}/cover?index=N`(`media.py`)를 가리키는 URL을 만들어 넘긴다 — Admin 인물 슬라이드쇼는 음악 자체가 없어 `src.musicCoverUrl`이 정의되지 않으므로 optional chaining으로 가드. 음악 토스트(`showMusicToast()`)와 정보 패널(`renderInfoContent()`) 양쪽이 이 헬퍼 하나를 공유해 표시 로직이 갈라지지 않는다.
 
 ### 슬라이드쇼 툴바 레이아웃
 ```
@@ -71,10 +74,10 @@ CSS animation 우선(GPU 가속). `EFFECTS` 배열에서 랜덤 선택. 수동 �
 `.ss-music-group` 왼쪽 고정, `.ss-toolbar-spacer`(flex:1)로 재생 컨트롤 오른쪽 정렬.
 
 ### 음악 토스트
-트랙 변경/재생 시작 시 `.ss-music-toast`에 파일명(확장자 제거) 표시 → 3초 후 `visible` 클래스 제거로 페이드 아웃. `clearTimeout`으로 중복 호출 시 타이머 리셋.
+트랙 변경/재생 시작 시 `.ss-music-toast`에 `trackDisplay()` 결과(제목, 있으면 "제목 · 아티스트") 표시. 커버 이미지가 있으면 `#ss-music-toast-cover`(`<img>`, 태그 없을 땐 `display:none`)를 보이고 음표 아이콘(`#ss-music-toast-icon`)을 숨기는 식으로 서로 토글 — 두 엘리먼트 모두 정적 마크업에 미리 넣어두고 `style.display`만 바꾼다(런타임 DOM 생성 없음). 3초 후 `visible` 클래스 제거로 페이드 아웃. `clearTimeout`으로 중복 호출 시 타이머 리셋.
 
 ### 정보 패널 (i 버튼)
-`renderInfoContent()` — 사진 EXIF 정보 + 태그(Phase 6) + (음악 재생 중이면) 구분선 + 음악 섹션. 트랙 변경·음악 토글 시 `refreshInfoPanel()`로 실시간 갱신.
+`renderInfoContent()` — 사진 EXIF 정보 + 태그(Phase 6) + (음악 재생 중이면) 구분선 + 음악 섹션(`trackDisplay()` 기반 제목/아티스트/앨범/트랙 번호 행 + 커버 이미지 `.ss-info-music-cover`). 트랙 변경·음악 토글 시 `refreshInfoPanel()`로 실시간 갱신.
 
 태그 5개 행(인물/위치/태그/폴더명/직접 추가)은 `SharePhotoItem`의 `person_tags`/`location_tags`/`ai_tags`/`path_tags`/`manual_tags`를 그대로 표시 — 뷰어별 노출 범위(공유 링크는 person/location 비노출)는 백엔드(`services/photo_tags.py`)가 이미 걸러 보내므로 프론트에서 재분기하지 않는다.
 

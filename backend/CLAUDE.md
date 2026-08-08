@@ -57,7 +57,7 @@ routers/
   admin_people.py    # Phase 2: 인물 CRUD, 얼굴 라벨/교정, 인물 사진 상세(슬라이드쇼용), 크롭 서빙, AI 잡 트리거, 경로 복구 승인
   admin_ai_tags.py   # Phase 5: 태그 목록/사진 그리드/삭제/일괄이름변경/수동태그추가 (photo_tags 기반, person·location은 조회만 또는 미노출). Phase 7: GET /tags/xmp-export — DB 메타데이터를 XMP 사이드카 ZIP으로 스트리밍 다운로드
   share.py           # GET|POST /api/share/{token}/*
-  media.py           # /thumb/, /media/, /music/{token}?index=N 서빙
+  media.py           # /thumb/, /media/, /music/{token}?index=N, /music/{token}/cover?index=N 서빙
 models/
   database.py        # SQLite 연결, 테이블 생성
   ai_database.py     # ai.db 연결 (Phase 2) — 스키마는 ai_worker/db.py와 동기 유지 필수
@@ -72,6 +72,7 @@ services/
   auth.py            # JWT 생성/검증, bcrypt 해시 (ADMIN_PASSWORD_HASH 지원), admin_image_auth (이미지 서빙 인증)
   zip_stream.py      # 스트리밍 ZIP 생성 (zip_generator: 디스크 파일, zip_generator_from_content: 메모리 텍스트 — XMP export 전용)
   tag_vocab.py       # Phase 5: 수동 태그 추가용 어휘 목록 — ai_worker/tag_vocab.py의 label만 복제(컨테이너 분리로 코드 공유 불가, 어휘 바뀌면 양쪽 동기화 필요)
+  music_tags.py      # mutagen으로 음악 파일 임베디드 태그(제목/아티스트/앨범/커버 이미지) 읽기 — read_music_tags/read_cover_image, 태그 없거나 파싱 실패 시 예외 없이 빈 값 폴백
 ```
 
 ---
@@ -102,6 +103,9 @@ services/
 
 ### 배경음악 저장 구조
 `albums.music_path` TEXT 컬럼에 JSON 배열 문자열 저장 (`["path1", "path2"]`). `parse_music_paths()` (schemas.py)로 읽기 시 파싱. 기존 단일 경로 문자열은 자동으로 1-element 리스트로 처리 (하위 호환). 음악 파일은 `DATA_DIR/music/` 하위에만 허용.
+
+### 배경음악 ID3 태그 표시
+`GET /api/share/{token}/album`이 `music_paths`와 나란한 순서로 `music_tags`(`ShareAlbumResponse.music_tags`, `MusicTrackTag`: title/artist/album/has_cover)를 함께 내려준다 — `music_tags.py`의 `read_music_tags()`가 각 파일을 열어 mutagen(`easy=True`)으로 읽는다. 태그가 없는 파일(사용자 업로드 등)은 전 필드 `None`/`has_cover=False`로 채워지며, 프론트가 `music_names`(파일명)로 폴백해 표시한다 — 백엔드가 강제로 태그를 만들어 채우지 않는다(번들 음원 5곡만 별도로 ID3 태그를 심어둔 상태, v2.12.2). 커버 이미지는 `GET /music/{token}/cover?index=N`로 별도 서빙(`read_cover_image()`가 ID3 APIC/FLAC pictures/MP4 covr에서 추출) — `has_cover=false`인 트랙은 프론트가 이 URL을 아예 요청하지 않는다.
 
 ### 썸네일 및 EXIF
 두 가지 크기 — small(300×200, 그리드/탐색기), medium(800×600, 슬라이드쇼 프리로드). 최초 요청 시 on-demand 생성. EXIF 전체 메타 추출: 촬영일·해상도·제조사·카메라·소프트웨어·셔터·조리개·ISO·초점거리·촬영모드·플래시·측광·노출모드. 탐색기/검색 EXIF는 `photo_meta_cache` 테이블에 캐싱(기준키: PHOTO_ROOT 상대 경로).

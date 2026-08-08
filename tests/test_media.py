@@ -1,7 +1,15 @@
 import os
+import shutil
+from pathlib import Path
 
 import pytest_asyncio
+from mutagen.id3 import ID3, APIC
 from PIL import Image
+
+_BUNDLED_SAMPLE = (
+    Path(__file__).resolve().parent.parent
+    / "frontend" / "assets" / "music" / "bundled" / "paulyudin-emotional-emotional-music-573976.mp3"
+)
 
 
 # ── 픽스처 ──────────────────────────────────────────────────────────────────────
@@ -257,3 +265,54 @@ async def test_music_file_missing_on_disk(admin_client, music_env):
     os.remove(music_env["music_path"])
     r = await admin_client.get(f"/music/{music_env['token']}")
     assert r.status_code == 404
+
+
+# ── /music/{token}/cover ───────────────────────────────────────────────────────
+
+@pytest_asyncio.fixture
+async def music_cover_env(admin_client, tmp_path):
+    """ID3 APIC(커버 이미지) 프레임이 있는 실제 mp3 + 앨범 + 공유 링크 + 세션 쿠키 세팅."""
+    music_dir = tmp_path / "data" / "music"
+    music_dir.mkdir(parents=True, exist_ok=True)
+    music_path = music_dir / "cover.mp3"
+    shutil.copy(_BUNDLED_SAMPLE, music_path)
+    tags = ID3(music_path)
+    tags.delall("APIC")  # 번들 mp3에 이미 심어둔 실제 커버를 지우고 테스트용 고정 바이트로 교체
+    tags.add(APIC(encoding=3, mime="image/jpeg", type=3, desc="Cover", data=b"\xff\xd8\xff\xd9fakejpeg"))
+    tags.save(music_path)
+
+    r = await admin_client.post("/api/admin/albums", json={"name": "Music Cover Test", "photo_paths": []})
+    album_id = r.json()["id"]
+    await admin_client.put(f"/api/admin/albums/{album_id}", json={"music_paths": [str(music_path)]})
+
+    r = await admin_client.post(f"/api/admin/albums/{album_id}/links", json={})
+    token = r.json()["token"]
+    await admin_client.post(f"/api/share/{token}/auth", json={})
+
+    return {"token": token, "music_path": str(music_path)}
+
+
+async def test_music_cover_returns_image_bytes(admin_client, music_cover_env):
+    token = music_cover_env["token"]
+    r = await admin_client.get(f"/music/{token}/cover")
+    assert r.status_code == 200
+    assert r.headers["content-type"] == "image/jpeg"
+    assert r.content == b"\xff\xd8\xff\xd9fakejpeg"
+
+
+async def test_music_cover_no_cover_returns_404(admin_client, music_env):
+    """실제 mp3지만 임베디드 커버가 없으면 → 404."""
+    token = music_env["token"]
+    r = await admin_client.get(f"/music/{token}/cover")
+    assert r.status_code == 404
+
+
+async def test_music_cover_no_cookie(admin_client):
+    """세션 쿠키 없이 요청 → 401."""
+    r = await admin_client.post("/api/admin/albums", json={"name": "MCNC", "photo_paths": []})
+    album_id = r.json()["id"]
+    r = await admin_client.post(f"/api/admin/albums/{album_id}/links", json={})
+    token = r.json()["token"]
+    # auth 미호출 → 401
+    r = await admin_client.get(f"/music/{token}/cover")
+    assert r.status_code == 401
