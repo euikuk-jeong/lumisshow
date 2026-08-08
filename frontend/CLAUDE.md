@@ -65,7 +65,7 @@ CSS animation 우선(GPU 가속). `EFFECTS` 배열에서 랜덤 선택. 수동 �
 - 음악 On/Off 상태는 `localStorage`의 `slideshow_settings`에 저장
 
 ### 트랙 표시 정보 (ID3 태그)
-`trackDisplay(idx)` — `album.music_tags[idx]`(백엔드가 mutagen으로 읽은 title/artist/album/has_cover, `backend/services/music_tags.py`)를 우선 사용하고, 태그가 없거나 값이 비어 있으면 `music_names[idx]`(파일명, 확장자 제거)로 폴백한다. 커버 이미지는 `has_cover`가 true일 때만 `GET /music/{token}/cover?index=N`(`media.py`)를 가리키는 URL을 만들어 넘긴다 — Admin 인물 슬라이드쇼는 음악 자체가 없어 `src.musicCoverUrl`이 정의되지 않으므로 optional chaining으로 가드. 음악 토스트(`showMusicToast()`)와 정보 패널(`renderInfoContent()`) 양쪽이 이 헬퍼 하나를 공유해 표시 로직이 갈라지지 않는다.
+`trackDisplay(idx)` — `album.music_tags[idx]`(백엔드가 mutagen으로 읽은 title/artist/album/has_cover, `backend/services/music_tags.py`)를 우선 사용하고, 태그가 없거나 값이 비어 있으면 `music_names[idx]`(파일명, 확장자 제거)로 폴백한다. 커버 이미지는 `has_cover`가 true면 `GET /music/{token}/cover?index=N`(`media.py`), false면 정적 기본 이미지(`DEFAULT_MUSIC_COVER_URL = /assets/images/default-music-cover.png`)를 가리키는 URL을 만들어 넘긴다 — Admin 인물 슬라이드쇼는 음악 자체가 없어 `src.musicCoverUrl`이 정의되지 않으므로 이 경우만 `coverUrl`이 `null`(옵셔널 체이닝 가드). 음악 토스트(`showMusicToast()`)와 정보 패널(`renderInfoContent()`) 양쪽이 이 헬퍼 하나를 공유해 표시 로직이 갈라지지 않는다.
 
 ### 슬라이드쇼 툴바 레이아웃
 ```
