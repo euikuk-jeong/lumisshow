@@ -5,6 +5,7 @@ import { startedInEdgeZone, resolveSwipeDirection, isTap } from '../touch-gestur
 
 const TRANS_MS = 700;
 const KB_CLASSES = ['kb-tl','kb-tr','kb-bl','kb-br','kb-t','kb-b','kb-l','kb-r'];
+const DEFAULT_MUSIC_COVER_URL = '/assets/images/default-music-cover.png';
 
 function buildOrder(total, order, startIdx) {
   const seq = Array.from({ length: total }, (_, i) => i);
@@ -181,7 +182,7 @@ async function runSlideshow(src) {
       title: (tag && tag.title) || fallbackTitle,
       artist: tag && tag.artist,
       album: tag && tag.album,
-      coverUrl: tag && tag.has_cover && src.musicCoverUrl ? src.musicCoverUrl(idx) : null,
+      coverUrl: src.musicCoverUrl ? (tag && tag.has_cover ? src.musicCoverUrl(idx) : DEFAULT_MUSIC_COVER_URL) : null,
     };
   }
 
