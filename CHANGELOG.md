@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.12.0] - 2026-08-09
+
+### Added
+- **무드별 기본 배경음악 5곡 번들**: 잔잔한/감성적/경쾌한/따뜻한·노스탤직/웅장한
+  5개 무드의 저작권 무료 음원(Pixabay Music)을 저장소에 번들
+  (`frontend/assets/music/bundled/`). 서버 시작 시 `DATA_DIR/music/bundled/`로
+  자동 동기화(`backend/services/bundled_music.py`의 `sync_bundled_music`)해,
+  기존 음악 선택 UI·재생 경로(`/api/admin/music`, `/music/{token}`) 변경 없이
+  Admin 앨범 편집 화면에서 바로 선택 가능. README·Admin 화면에 곡 크레딧
+  (곡명·아티스트) 표시
+
 ## [2.11.0] - 2026-08-07
 
 ### Added
@@ -1213,7 +1224,8 @@ Phase 2 — AI 얼굴 인식 스마트 앨범. NAS 로컬 AI(InsightFace)로 사
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v2.11.0...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v2.12.0...HEAD
+[2.12.0]: https://github.com/euikuk-jeong/lumisshow/compare/v2.11.0...v2.12.0
 [2.11.0]: https://github.com/euikuk-jeong/lumisshow/compare/v2.10.0...v2.11.0
 [2.10.0]: https://github.com/euikuk-jeong/lumisshow/compare/v2.9.0...v2.10.0
 [2.9.0]: https://github.com/euikuk-jeong/lumisshow/compare/v2.8.0...v2.9.0
