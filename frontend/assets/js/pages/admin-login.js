@@ -7,7 +7,7 @@ export async function renderAdminLogin() {
   app.innerHTML = `
     <div class="login-page">
       <div class="login-card card">
-        <h1 id="login-title">LumisShow</h1>
+        <h1 id="login-title"><img src="/assets/images/default-music-cover.png" alt="" class="brand-icon"><span id="login-title-text">LumisShow</span></h1>
         <p>관리자 비밀번호를 입력하세요</p>
         <div id="login-error" class="alert alert-error" style="display:none"></div>
         <form id="login-form" class="flex-col gap-3">
@@ -37,7 +37,7 @@ export async function renderAdminLogin() {
 
   pwdEl.focus();
   getSiteTitle().then(t => {
-    const el = document.getElementById('login-title');
+    const el = document.getElementById('login-title-text');
     if (el) el.textContent = t;
   });
 

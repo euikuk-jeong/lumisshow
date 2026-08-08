@@ -30,6 +30,14 @@
   letter-spacing: -0.3px;
 }
 .nav-brand:hover { text-decoration: none; opacity: 0.85; }
+.brand-icon {
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  object-fit: cover;
+  vertical-align: middle;
+  margin-right: 6px;
+}
 .nav-version {
   font-size: 10px;
   font-weight: 400;
@@ -98,6 +106,11 @@
   font-weight: 700;
   color: var(--primary);
   margin-bottom: 6px;
+}
+.login-card h1 .brand-icon {
+  width: 28px;
+  height: 28px;
+  margin-right: 8px;
 }
 .login-card p {
   color: var(--muted);

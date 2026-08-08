@@ -67,6 +67,9 @@ CSS animation 우선(GPU 가속). `EFFECTS` 배열에서 랜덤 선택. 수동 �
 ### 트랙 표시 정보 (ID3 태그)
 `trackDisplay(idx)` — `album.music_tags[idx]`(백엔드가 mutagen으로 읽은 title/artist/album/has_cover, `backend/services/music_tags.py`)를 우선 사용하고, 태그가 없거나 값이 비어 있으면 `music_names[idx]`(파일명, 확장자 제거)로 폴백한다. 커버 이미지는 `has_cover`가 true면 `GET /music/{token}/cover?index=N`(`media.py`), false면 정적 기본 이미지(`DEFAULT_MUSIC_COVER_URL = /assets/images/default-music-cover.png`)를 가리키는 URL을 만들어 넘긴다 — Admin 인물 슬라이드쇼는 음악 자체가 없어 `src.musicCoverUrl`이 정의되지 않으므로 이 경우만 `coverUrl`이 `null`(옵셔널 체이닝 가드). 음악 토스트(`showMusicToast()`)와 정보 패널(`renderInfoContent()`) 양쪽이 이 헬퍼 하나를 공유해 표시 로직이 갈라지지 않는다.
 
+### 브랜드 아이콘
+같은 `default-music-cover.png`를 Admin 로그인 화면 타이틀(`admin-login.js` `#login-title`)과 Admin 좌상단 타이틀(`layout.js` `.nav-brand`) 앞에도 로고처럼 재사용한다(`.brand-icon` 클래스, `admin.css`). 별도 로고 파일을 새로 만들지 않고 기존 자산을 공유.
+
 ### 슬라이드쇼 툴바 레이아웃
 ```
 [음악그룹: On/Off | 이전곡 | 다음곡 | 볼륨] [spacer:flex-1] [일시정지 | ◀ | 1/N | ▶ | ↓ | i | ✕]

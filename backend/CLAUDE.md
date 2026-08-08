@@ -105,7 +105,7 @@ services/
 `albums.music_path` TEXT 컬럼에 JSON 배열 문자열 저장 (`["path1", "path2"]`). `parse_music_paths()` (schemas.py)로 읽기 시 파싱. 기존 단일 경로 문자열은 자동으로 1-element 리스트로 처리 (하위 호환). 음악 파일은 `DATA_DIR/music/` 하위에만 허용.
 
 ### 배경음악 ID3 태그 표시
-`GET /api/share/{token}/album`이 `music_paths`와 나란한 순서로 `music_tags`(`ShareAlbumResponse.music_tags`, `MusicTrackTag`: title/artist/album/has_cover)를 함께 내려준다 — `music_tags.py`의 `read_music_tags()`가 각 파일을 열어 mutagen(`easy=True`)으로 읽는다. 태그가 없는 파일(사용자 업로드 등)은 전 필드 `None`/`has_cover=False`로 채워지며, 프론트가 `music_names`(파일명)로 폴백해 표시한다 — 백엔드가 강제로 태그를 만들어 채우지 않는다(번들 음원 5곡만 별도로 ID3 태그를 심어둔 상태, v2.12.2). 커버 이미지는 `GET /music/{token}/cover?index=N`로 별도 서빙(`read_cover_image()`가 ID3 APIC/FLAC pictures/MP4 covr에서 추출) — `has_cover=false`인 트랙은 프론트가 이 URL을 아예 요청하지 않는다.
+`GET /api/share/{token}/album`이 `music_paths`와 나란한 순서로 `music_tags`(`ShareAlbumResponse.music_tags`, `MusicTrackTag`: title/artist/album/has_cover)를 함께 내려준다 — `music_tags.py`의 `read_music_tags()`가 각 파일을 열어 mutagen으로 읽는다. 텍스트 태그는 스킴별로 분기: ID3(MP3/WAV)는 프레임 ID(`TIT2`/`TPE1`/`TALB`) 직접 접근, Vorbis Comment(FLAC/OGG/Opus)는 소문자 키(`title`/`artist`/`album`) 접근. MP4/M4A는 텍스트 태그 미지원(커버만 지원). 태그가 없는 파일(사용자 업로드 등)은 전 필드 `None`/`has_cover=False`로 채워지며, 프론트가 `music_names`(파일명)로 폴백해 표시한다 — 백엔드가 강제로 태그를 만들어 채우지 않는다(번들 음원 5곡만 별도로 ID3 태그를 심어둔 상태, v2.12.2). 커버 이미지는 `GET /music/{token}/cover?index=N`로 별도 서빙(`read_cover_image()`가 ID3 APIC/FLAC pictures/MP4 covr에서 추출) — `has_cover=false`인 트랙은 프론트가 이 URL을 아예 요청하지 않는다.
 
 ### 썸네일 및 EXIF
 두 가지 크기 — small(300×200, 그리드/탐색기), medium(800×600, 슬라이드쇼 프리로드). 최초 요청 시 on-demand 생성. EXIF 전체 메타 추출: 촬영일·해상도·제조사·카메라·소프트웨어·셔터·조리개·ISO·초점거리·촬영모드·플래시·측광·노출모드. 탐색기/검색 EXIF는 `photo_meta_cache` 테이블에 캐싱(기준키: PHOTO_ROOT 상대 경로).
