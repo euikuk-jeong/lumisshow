@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.14.0] - 2026-08-09
+
+### Added
+- **음악 커버 이미지 기본값 지원**: ID3 태그에 임베디드 커버가 없는 트랙도 음악
+  토스트·정보 패널에 정적 기본 이미지(`frontend/assets/images/default-music-cover.png`)를
+  표시. `has_cover`가 true일 때만 실제 커버 URL을 쓰고, 그 외에는 이 기본 이미지로
+  대체(`frontend/assets/js/pages/slideshow.js`의 `trackDisplay()`)
+
 ## [2.13.0] - 2026-08-09
 
 ### Added
@@ -1252,7 +1260,8 @@ Phase 2 — AI 얼굴 인식 스마트 앨범. NAS 로컬 AI(InsightFace)로 사
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v2.13.0...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v2.14.0...HEAD
+[2.14.0]: https://github.com/euikuk-jeong/lumisshow/compare/v2.13.0...v2.14.0
 [2.13.0]: https://github.com/euikuk-jeong/lumisshow/compare/v2.12.2...v2.13.0
 [2.12.2]: https://github.com/euikuk-jeong/lumisshow/compare/v2.12.1...v2.12.2
 [2.12.1]: https://github.com/euikuk-jeong/lumisshow/compare/v2.12.0...v2.12.1
