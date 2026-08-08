@@ -158,6 +158,18 @@ docker compose -f docker/docker-compose.yml up -d
 
 슬라이드쇼 재생 중 툴바 왼쪽의 음악 컨트롤로 On/Off, 이전/다음 곡 조작 가능.
 
+### 기본 제공 배경음악 (무드별 5곡)
+
+저작권 걱정 없이 바로 쓸 수 있도록 무드별 음원 5곡을 저장소에 번들해뒀습니다 (`frontend/assets/music/bundled/`, 전부 [Pixabay Music](https://pixabay.com/music/) — 상업적 사용 가능·크레딧 불필요). 서버 시작 시 `DATA_DIR/music/bundled/`로 자동 동기화되어, 별도 복사 없이 위 "음악 파일 선택" 목록에서 바로 고를 수 있습니다.
+
+| 무드 | 곡명 | 아티스트 | 파일 |
+|------|------|----------|------|
+| 잔잔한 | Calm Piano | alex-morgan | `alex-morgan-calm-piano-541028.mp3` |
+| 감성적 | Emotional | PaulYudin | `paulyudin-emotional-emotional-music-573976.mp3` |
+| 경쾌한 | Summer Pop | JonasBlakewood | `jonasblakewood-summer-pop-546980.mp3` |
+| 따뜻한·노스탤직 | Warm Nostalgic Sentimental Music | andriig | `andriig-warm-nostalgic-sentimental-music-471262.mp3` |
+| 웅장한 | Epic Piano | PaulYudin | `paulyudin-epic-piano-154655.mp3` |
+
 ---
 
 ## 데이터 구조 (DATA_DIR)

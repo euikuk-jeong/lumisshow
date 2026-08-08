@@ -21,6 +21,7 @@ from backend.routers import (
     media,
     share,
 )
+from backend.services.bundled_music import sync_bundled_music
 from backend.services.settings import get_settings
 
 _FRONTEND_DIR = Path(__file__).parent.parent / "frontend"
@@ -47,6 +48,7 @@ async def lifespan(app: FastAPI):
     _validate_env()
     await init_db()
     await init_ai_db()
+    sync_bundled_music()
     yield
     await close_db_pool()
 

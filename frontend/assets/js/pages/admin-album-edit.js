@@ -6,6 +6,14 @@ import { THEMES } from '../theme.js';
 import { EFFECTS, EFFECT_LABELS } from '../slideshow-config.js';
 import { initDateScrollIndicator } from '../date-scroll-indicator.js';
 
+const BUNDLED_MUSIC_CREDITS = [
+  { mood: '잔잔한', title: 'Calm Piano', artist: 'alex-morgan' },
+  { mood: '감성적', title: 'Emotional', artist: 'PaulYudin' },
+  { mood: '경쾌한', title: 'Summer Pop', artist: 'JonasBlakewood' },
+  { mood: '따뜻한·노스탤직', title: 'Warm Nostalgic Sentimental Music', artist: 'andriig' },
+  { mood: '웅장한', title: 'Epic Piano', artist: 'PaulYudin' },
+];
+
 export async function renderAdminAlbumEdit(albumId) {
   const isNew = !albumId;
   const title = isNew ? '새 앨범' : '앨범 편집';
@@ -117,6 +125,13 @@ function renderEditForm(album, links, tzOffset, serverTheme = 'dark') {
               <div id="music-list" class="music-list"></div>
               <button type="button" class="btn btn-ghost btn-sm" id="btn-browse-music">+ 음악 파일 선택</button>
               <p class="music-copyright-notice">저작권을 확인한 음원만 사용하세요. 저작권 문제는 사용자 책임입니다. 저작권 무료 음악은 <a href="https://pixabay.com/music/" target="_blank" rel="noopener noreferrer">Pixabay Music</a> 등에서 구할 수 있습니다.</p>
+              <details class="bundled-music-info">
+                <summary>기본 제공 음원 5곡 (무료, 저장소에 번들됨)</summary>
+                <ul>
+                  ${BUNDLED_MUSIC_CREDITS.map(t => `<li>${esc(t.mood)} — ${esc(t.title)} <span class="text-muted">(${esc(t.artist)})</span></li>`).join('')}
+                </ul>
+                <p class="text-muted">위 "+ 음악 파일 선택" 목록의 <code>bundled/</code> 폴더 안에서 바로 선택할 수 있습니다.</p>
+              </details>
             </div>
             <div>
               <button type="submit" class="btn btn-primary btn-sm" id="btn-save">저장</button>
