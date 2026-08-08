@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.12.1] - 2026-08-09
+
+### Changed
+- **음악 선택 모달 — 번들 음원 상단 고정 + 출처 표시**: 기본 제공 음원 5곡이
+  `DATA_DIR/music/` 스캔 순서(폴더명 알파벳순)에 좌우되지 않고 항상 "기본 제공
+  음원" 섹션으로 최상단에 표시되며, 파일명 대신 "무드 — 곡명" 라벨과
+  "아티스트 · Pixabay Music" 출처를 보여줌. 사용자 추가 음악은 그 아래 "내가
+  추가한 음악" 섹션에 기존 방식대로 노출. 두 섹션은 하나의 스크롤 영역으로 통합
+  (`frontend/assets/js/pages/admin-album-edit.js`, `frontend/assets/css/admin.css`)
+
 ## [2.12.0] - 2026-08-09
 
 ### Added
@@ -1224,7 +1234,8 @@ Phase 2 — AI 얼굴 인식 스마트 앨범. NAS 로컬 AI(InsightFace)로 사
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v2.12.0...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v2.12.1...HEAD
+[2.12.1]: https://github.com/euikuk-jeong/lumisshow/compare/v2.12.0...v2.12.1
 [2.12.0]: https://github.com/euikuk-jeong/lumisshow/compare/v2.11.0...v2.12.0
 [2.11.0]: https://github.com/euikuk-jeong/lumisshow/compare/v2.10.0...v2.11.0
 [2.10.0]: https://github.com/euikuk-jeong/lumisshow/compare/v2.9.0...v2.10.0
