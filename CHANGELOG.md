@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.12.2] - 2026-08-09
+
+### Changed
+- **번들 배경음악 5곡에 ID3 태그 추가**: `frontend/assets/music/bundled/`의 곡들에
+  제목·아티스트·앨범(`Pixabay Music`) ID3v2.3 태그를 심음. 오디오 데이터·재생
+  시간은 변경 없음. ID3 태그 기반 슬라이드쇼 음악 정보 표시는 별도 세션에서 진행 예정
+
 ## [2.12.1] - 2026-08-09
 
 ### Changed
@@ -1234,7 +1241,8 @@ Phase 2 — AI 얼굴 인식 스마트 앨범. NAS 로컬 AI(InsightFace)로 사
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v2.12.1...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v2.12.2...HEAD
+[2.12.2]: https://github.com/euikuk-jeong/lumisshow/compare/v2.12.1...v2.12.2
 [2.12.1]: https://github.com/euikuk-jeong/lumisshow/compare/v2.12.0...v2.12.1
 [2.12.0]: https://github.com/euikuk-jeong/lumisshow/compare/v2.11.0...v2.12.0
 [2.11.0]: https://github.com/euikuk-jeong/lumisshow/compare/v2.10.0...v2.11.0
