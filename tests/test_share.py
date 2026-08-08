@@ -1,6 +1,14 @@
+import shutil
+from pathlib import Path
+
 import pytest
 from httpx import ASGITransport, AsyncClient
 from PIL import Image
+
+_BUNDLED_SAMPLE = (
+    Path(__file__).resolve().parent.parent
+    / "frontend" / "assets" / "music" / "bundled" / "paulyudin-emotional-emotional-music-573976.mp3"
+)
 
 
 # ── 헬퍼 ──────────────────────────────────────────────────────────────────────
@@ -163,6 +171,51 @@ async def test_get_album_after_auth(admin_client):
     assert data["album_name"] == "Test Album"
     assert data["photo_count"] == 2
     assert data["has_music"] is False
+
+
+async def test_get_album_music_tags_from_id3(admin_client, tmp_path):
+    music_dir = tmp_path / "data" / "music"
+    music_dir.mkdir(parents=True, exist_ok=True)
+    music_path = music_dir / "track.mp3"
+    shutil.copy(_BUNDLED_SAMPLE, music_path)
+
+    r = await admin_client.post("/api/admin/albums", json={"name": "Music Tags Test", "photo_paths": []})
+    album_id = r.json()["id"]
+    await admin_client.put(f"/api/admin/albums/{album_id}", json={"music_paths": [str(music_path)]})
+    r = await admin_client.post(f"/api/admin/albums/{album_id}/links", json={})
+    token = r.json()["token"]
+    await _auth(admin_client, token)
+
+    r = await admin_client.get(f"/api/share/{token}/album")
+    assert r.status_code == 200
+    data = r.json()
+    assert data["music_count"] == 1
+    assert data["music_names"] == ["track.mp3"]
+    assert data["music_tags"] == [
+        {"title": "Emotional", "artist": "PaulYudin", "album": "Pixabay Music", "has_cover": True}
+    ]
+
+
+async def test_get_album_music_tags_empty_when_untagged(admin_client, tmp_path):
+    """ID3 태그가 없는(또는 손상된) 음악 파일 → 예외 없이 전 필드 None으로 폴백."""
+    music_dir = tmp_path / "data" / "music"
+    music_dir.mkdir(parents=True, exist_ok=True)
+    music_path = music_dir / "untagged.mp3"
+    music_path.write_bytes(b"not a real mp3 file")
+
+    r = await admin_client.post("/api/admin/albums", json={"name": "No Tags Test", "photo_paths": []})
+    album_id = r.json()["id"]
+    await admin_client.put(f"/api/admin/albums/{album_id}", json={"music_paths": [str(music_path)]})
+    r = await admin_client.post(f"/api/admin/albums/{album_id}/links", json={})
+    token = r.json()["token"]
+    await _auth(admin_client, token)
+
+    r = await admin_client.get(f"/api/share/{token}/album")
+    assert r.status_code == 200
+    data = r.json()
+    assert data["music_tags"] == [
+        {"title": None, "artist": None, "album": None, "has_cover": False}
+    ]
 
 
 async def test_get_album_without_auth(admin_client):

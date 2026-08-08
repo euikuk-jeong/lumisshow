@@ -187,6 +187,12 @@ class SettingsUpdate(BaseModel):
 class ShareAuthRequest(BaseModel):
     password: Optional[str] = None
 
+class MusicTrackTag(BaseModel):
+    title: Optional[str] = None
+    artist: Optional[str] = None
+    album: Optional[str] = None
+    has_cover: bool = False
+
 class ShareAlbumResponse(BaseModel):
     album_name: str
     description: Optional[str]
@@ -196,6 +202,7 @@ class ShareAlbumResponse(BaseModel):
     has_music: bool
     music_count: int
     music_names: list[str]
+    music_tags: list[MusicTrackTag] = []
     cover_index: Optional[int] = None
     slideshow_defaults: Optional[SlideshowDefaults] = None
     timezone_offset: int = 0

@@ -2,12 +2,13 @@ import asyncio
 import os
 import time
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from fastapi.responses import FileResponse
 
 from backend.models.database import get_db
 from backend.models.schemas import parse_music_paths
 from backend.services.auth import get_share_token_from_cookie, verify_share_session_cookie
+from backend.services.music_tags import read_cover_image
 from backend.services.paths import assert_within_photo_root, resolve_abs
 from backend.services.thumbnail import SIZES, generate_thumbnail
 
@@ -109,8 +110,7 @@ def _music_dir() -> str:
     return os.path.join(os.getenv("DATA_DIR", "./testdata/data"), "music")
 
 
-@router.get("/music/{token}")
-async def serve_music(token: str, request: Request, index: int = Query(default=0, ge=0), db=Depends(get_db)):
+async def _resolve_music_track(token: str, index: int, request: Request, db) -> str:
     verify_share_session_cookie(token, request.cookies.get(_COOKIE))
     async with db.execute(
         """
@@ -133,4 +133,20 @@ async def serve_music(token: str, request: Request, index: int = Query(default=0
         raise HTTPException(status_code=403, detail="Access denied")
     if not os.path.isfile(resolved):
         raise HTTPException(status_code=404, detail="Music file not found")
+    return resolved
+
+
+@router.get("/music/{token}")
+async def serve_music(token: str, request: Request, index: int = Query(default=0, ge=0), db=Depends(get_db)):
+    resolved = await _resolve_music_track(token, index, request, db)
     return FileResponse(resolved)
+
+
+@router.get("/music/{token}/cover")
+async def serve_music_cover(token: str, request: Request, index: int = Query(default=0, ge=0), db=Depends(get_db)):
+    resolved = await _resolve_music_track(token, index, request, db)
+    cover = read_cover_image(resolved)
+    if cover is None:
+        raise HTTPException(status_code=404, detail="Cover not found")
+    data, mime = cover
+    return Response(content=data, media_type=mime, headers={"Cache-Control": "private, max-age=86400"})

@@ -17,6 +17,7 @@ from backend.models.schemas import (
     build_slideshow_defaults,
     parse_music_paths,
 )
+from backend.services.music_tags import read_music_tags
 from backend.services.auth import (
     create_share_session_token,
     verify_password,
@@ -275,6 +276,7 @@ async def get_album(token: str, request: Request, db=Depends(get_db)):
             pass
 
     music_paths = parse_music_paths(row["music_path"])
+    music_tags = [read_music_tags(p)._asdict() for p in music_paths]
     sv = await get_settings(db)
     slideshow_defaults = build_slideshow_defaults(
         {
@@ -296,6 +298,7 @@ async def get_album(token: str, request: Request, db=Depends(get_db)):
         "has_music": len(music_paths) > 0,
         "music_count": len(music_paths),
         "music_names": [os.path.basename(p) for p in music_paths],
+        "music_tags": music_tags,
         "cover_index": cover_index,
         "slideshow_defaults": slideshow_defaults,
         "timezone_offset": sv["timezone_offset"],

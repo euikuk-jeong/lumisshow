@@ -29,6 +29,7 @@ export function renderSlideshow(token) {
     loadAlbum: () => shareApi.get(`/api/share/${token}/album`),
     loadPhotos: (page, size) => shareApi.get(`/api/share/${token}/photos?page=${page}&size=${size}`),
     musicUrl: (i) => `/music/${token}?index=${i}`,
+    musicCoverUrl: (i) => `/music/${token}/cover?index=${i}`,
     onLoadError: (e) => {
       if (e instanceof ShareAuthError || /404|not found/i.test(e.message)) {
         window.navigate(`/s/${token}`, true);
@@ -170,6 +171,20 @@ async function runSlideshow(src) {
     }
   }
 
+  // ID3 등 임베디드 태그(제목/아티스트/앨범/커버) 기반 트랙 정보 — 태그가 없으면
+  // 파일명(확장자 제거)으로 폴백해 토스트/정보패널이 항상 뭔가는 표시하도록 한다.
+  function trackDisplay(idx) {
+    const tag = (album.music_tags || [])[idx] || null;
+    const names = album.music_names || [];
+    const fallbackTitle = (names[idx] || `트랙 ${idx + 1}`).replace(/\.[^.]+$/, '');
+    return {
+      title: (tag && tag.title) || fallbackTitle,
+      artist: tag && tag.artist,
+      album: tag && tag.album,
+      coverUrl: tag && tag.has_cover && src.musicCoverUrl ? src.musicCoverUrl(idx) : null,
+    };
+  }
+
   function loadTrack(idx) {
     if (!audio) return;
     musicTrackIdx = ((idx % musicCount) + musicCount) % musicCount;
@@ -222,7 +237,8 @@ async function runSlideshow(src) {
         <button class="ss-tb-btn" id="ss-close-btn" title="닫기">&#215;</button>
       </div>
       <div class="ss-music-toast" id="ss-music-toast">
-        <span class="ss-music-toast-icon">&#9835;</span>
+        <img class="ss-music-toast-cover" id="ss-music-toast-cover" alt="">
+        <span class="ss-music-toast-icon" id="ss-music-toast-icon">&#9835;</span>
         <span id="ss-music-toast-name"></span>
       </div>
       <div class="ss-loop-toast" id="ss-loop-toast"></div>
@@ -327,14 +343,18 @@ async function runSlideshow(src) {
     const photoHtml = photo ? formatInfo(photo) : '';
     if (!audio || !musicOn) return photoHtml;
 
-    const names = album.music_names || [];
-    const raw = names[musicTrackIdx] || `트랙 ${musicTrackIdx + 1}`;
+    const info = trackDisplay(musicTrackIdx);
     const rows = [];
-    rows.push(['파일', raw.replace(/\.[^.]+$/, '')]);
+    rows.push(['제목', info.title]);
+    if (info.artist) rows.push(['아티스트', info.artist]);
+    if (info.album) rows.push(['앨범', info.album]);
     if (musicCount > 1) rows.push(['트랙', `${musicTrackIdx + 1} / ${musicCount}`]);
-    const musicHtml = rowsToHtml(rows);
+    const musicRowsHtml = rowsToHtml(rows);
+    const coverHtml = info.coverUrl
+      ? `<img class="ss-info-music-cover" src="${esc(info.coverUrl)}" alt="">`
+      : '';
 
-    return `${photoHtml}<div class="ss-info-divider"></div><div class="ss-info-section">&#9835; 재생 중</div>${musicHtml}`;
+    return `${photoHtml}<div class="ss-info-divider"></div><div class="ss-info-section">&#9835; 재생 중</div>${coverHtml}${musicRowsHtml}`;
   }
 
   function refreshInfoPanel() {
@@ -462,9 +482,19 @@ async function runSlideshow(src) {
   function showMusicToast() {
     const toast = document.getElementById('ss-music-toast');
     if (!toast) return;
-    const names = album.music_names || [];
-    const raw = names[musicTrackIdx] || `트랙 ${musicTrackIdx + 1}`;
-    document.getElementById('ss-music-toast-name').textContent = raw.replace(/\.[^.]+$/, '');
+    const info = trackDisplay(musicTrackIdx);
+    const coverEl = document.getElementById('ss-music-toast-cover');
+    const iconEl = document.getElementById('ss-music-toast-icon');
+    if (info.coverUrl) {
+      coverEl.src = info.coverUrl;
+      coverEl.style.display = 'block';
+      iconEl.style.display = 'none';
+    } else {
+      coverEl.style.display = 'none';
+      iconEl.style.display = '';
+    }
+    document.getElementById('ss-music-toast-name').textContent =
+      info.artist ? `${info.title} · ${info.artist}` : info.title;
     toast.classList.add('visible');
     clearTimeout(musicToastTimer);
     musicToastTimer = setTimeout(() => toast.classList.remove('visible'), 3000);
