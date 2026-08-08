@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.13.0] - 2026-08-09
+
+### Added
+- **공유 앨범 슬라이드쇼 음악 정보 ID3 태그 기반 표시**: 재생 중 음악 토스트·정보
+  패널이 파일명 대신 ID3 태그(제목/아티스트/앨범)와 임베디드 커버 이미지를 표시.
+  `backend/services/music_tags.py`(mutagen)가 음악 파일을 1회 열람해 태그+커버
+  유무를 함께 읽고, 태그가 없으면 예외 없이 파일명으로 폴백. `GET
+  /music/{token}/cover?index=N` 신규 엔드포인트로 커버 이미지 서빙
+- 번들 배경음악 5곡에 Pixabay 트랙 페이지의 커버 이미지를 ID3 APIC로 추가 삽입
+  (오디오 데이터·재생시간 불변)
+
 ## [2.12.2] - 2026-08-09
 
 ### Changed
@@ -1241,7 +1252,8 @@ Phase 2 — AI 얼굴 인식 스마트 앨범. NAS 로컬 AI(InsightFace)로 사
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v2.12.2...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v2.13.0...HEAD
+[2.13.0]: https://github.com/euikuk-jeong/lumisshow/compare/v2.12.2...v2.13.0
 [2.12.2]: https://github.com/euikuk-jeong/lumisshow/compare/v2.12.1...v2.12.2
 [2.12.1]: https://github.com/euikuk-jeong/lumisshow/compare/v2.12.0...v2.12.1
 [2.12.0]: https://github.com/euikuk-jeong/lumisshow/compare/v2.11.0...v2.12.0
