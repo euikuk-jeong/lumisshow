@@ -6,12 +6,13 @@ import { THEMES } from '../theme.js';
 import { EFFECTS, EFFECT_LABELS } from '../slideshow-config.js';
 import { initDateScrollIndicator } from '../date-scroll-indicator.js';
 
+const BUNDLED_MUSIC_DIR_PREFIX = 'bundled/';
 const BUNDLED_MUSIC_CREDITS = [
-  { mood: '잔잔한', title: 'Calm Piano', artist: 'alex-morgan' },
-  { mood: '감성적', title: 'Emotional', artist: 'PaulYudin' },
-  { mood: '경쾌한', title: 'Summer Pop', artist: 'JonasBlakewood' },
-  { mood: '따뜻한·노스탤직', title: 'Warm Nostalgic Sentimental Music', artist: 'andriig' },
-  { mood: '웅장한', title: 'Epic Piano', artist: 'PaulYudin' },
+  { mood: '잔잔한', title: 'Calm Piano', artist: 'alex-morgan', file: 'alex-morgan-calm-piano-541028.mp3' },
+  { mood: '감성적', title: 'Emotional', artist: 'PaulYudin', file: 'paulyudin-emotional-emotional-music-573976.mp3' },
+  { mood: '경쾌한', title: 'Summer Pop', artist: 'JonasBlakewood', file: 'jonasblakewood-summer-pop-546980.mp3' },
+  { mood: '따뜻한·노스탤직', title: 'Warm Nostalgic Sentimental Music', artist: 'andriig', file: 'andriig-warm-nostalgic-sentimental-music-471262.mp3' },
+  { mood: '웅장한', title: 'Epic Piano', artist: 'PaulYudin', file: 'paulyudin-epic-piano-154655.mp3' },
 ];
 
 export async function renderAdminAlbumEdit(albumId) {
@@ -522,14 +523,35 @@ async function openMusicModal(currentPaths, onConfirm) {
       body.innerHTML = `<p class="text-muted text-sm" style="padding:12px 0">
         음악 파일이 없습니다.<br>서버의 <code>data/music/</code> 폴더에 mp3 등을 추가하세요.</p>`;
     } else {
-      body.innerHTML = `<div class="music-file-list">${files.map(f => `
+      // 번들 기본 음원은 항상 최상단에, 큐레이션 순서(BUNDLED_MUSIC_CREDITS)대로 표시
+      const bundledOrder = BUNDLED_MUSIC_CREDITS.map(c => c.file);
+      const bundledFiles = files
+        .filter(f => f.rel.startsWith(BUNDLED_MUSIC_DIR_PREFIX))
+        .sort((a, b) => bundledOrder.indexOf(a.name) - bundledOrder.indexOf(b.name));
+      const otherFiles = files.filter(f => !f.rel.startsWith(BUNDLED_MUSIC_DIR_PREFIX));
+
+      const renderItem = f => {
+        const credit = bundledOrder.includes(f.name) && BUNDLED_MUSIC_CREDITS.find(c => c.file === f.name);
+        const label = credit ? `${credit.mood} — ${credit.title}` : f.name;
+        const sub = credit ? `${credit.artist} · Pixabay Music` : (f.rel !== f.name ? f.rel : '');
+        return `
         <div class="music-file-item${selected.has(f.path) ? ' selected' : ''}" data-path="${esc(f.path)}">
           <input type="checkbox" ${selected.has(f.path) ? 'checked' : ''}>
           <div style="overflow:hidden;min-width:0">
-            <div class="music-file-name">${esc(f.name)}</div>
-            ${f.rel !== f.name ? `<div class="music-file-rel">${esc(f.rel)}</div>` : ''}
+            <div class="music-file-name">${esc(label)}</div>
+            ${sub ? `<div class="music-file-rel">${esc(sub)}</div>` : ''}
           </div>
-        </div>`).join('')}</div>`;
+        </div>`;
+      };
+
+      const bundledSection = bundledFiles.length ? `
+        <p class="music-file-group-label">기본 제공 음원</p>
+        <div class="music-file-list">${bundledFiles.map(renderItem).join('')}</div>` : '';
+      const otherSection = otherFiles.length ? `
+        ${bundledFiles.length ? '<p class="music-file-group-label">내가 추가한 음악</p>' : ''}
+        <div class="music-file-list">${otherFiles.map(renderItem).join('')}</div>` : '';
+
+      body.innerHTML = `<div class="music-file-scroll">${bundledSection}${otherSection}</div>`;
 
       body.querySelectorAll('.music-file-item').forEach(item => {
         const cb = item.querySelector('input[type=checkbox]');

@@ -703,12 +703,21 @@
 .music-item-remove:hover { color: var(--error); }
 
 /* ── Music File Picker (modal) ───────────────────────────── */
+.music-file-scroll {
+  max-height: 340px;
+  overflow-y: auto;
+}
+.music-file-group-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin: 10px 0 2px;
+}
+.music-file-group-label:first-child { margin-top: 0; }
 .music-file-list {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  max-height: 340px;
-  overflow-y: auto;
   margin: 4px 0;
 }
 .music-file-item {
