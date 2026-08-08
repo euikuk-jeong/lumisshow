@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.15.0] - 2026-08-09
+
+### Added
+- **FLAC/OGG/Opus 음악 파일 텍스트 태그 지원**: 배경음악 태그 표시가 기존
+  ID3(MP3/WAV)만 읽던 것에서 Vorbis Comment(FLAC/OGG/Opus, `title`/`artist`/`album`)
+  까지 확장. 커버 이미지는 이미 FLAC까지 지원하고 있었음
+  (`backend/services/music_tags.py`)
+- **Admin 브랜드 아이콘 추가**: 로그인 화면 타이틀과 Admin 좌상단 타이틀 앞에
+  `default-music-cover.png`를 아이콘으로 표시(`.brand-icon`, `admin.css`)
+
 ## [2.14.1] - 2026-08-09
 
 ### Changed
@@ -1270,7 +1280,8 @@ Phase 2 — AI 얼굴 인식 스마트 앨범. NAS 로컬 AI(InsightFace)로 사
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v2.14.1...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v2.15.0...HEAD
+[2.15.0]: https://github.com/euikuk-jeong/lumisshow/compare/v2.14.1...v2.15.0
 [2.14.1]: https://github.com/euikuk-jeong/lumisshow/compare/v2.14.0...v2.14.1
 [2.14.0]: https://github.com/euikuk-jeong/lumisshow/compare/v2.13.0...v2.14.0
 [2.13.0]: https://github.com/euikuk-jeong/lumisshow/compare/v2.12.2...v2.13.0
