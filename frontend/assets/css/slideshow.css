@@ -330,13 +330,25 @@
   margin-bottom: 5px;
 }
 
+.ss-info-music-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
 .ss-info-music-cover {
   width: 56px;
   height: 56px;
   object-fit: cover;
   border-radius: 6px;
-  margin-bottom: 6px;
-  display: block;
+  flex-shrink: 0;
+}
+
+.ss-info-music-text {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
 }
 
 /* ── 좁은 화면 (≤ 640px): 핵심 4개 버튼만 표시 ────────────── */

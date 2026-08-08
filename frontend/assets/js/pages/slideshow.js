@@ -351,11 +351,11 @@ async function runSlideshow(src) {
     if (info.album) rows.push(['앨범', info.album]);
     if (musicCount > 1) rows.push(['트랙', `${musicTrackIdx + 1} / ${musicCount}`]);
     const musicRowsHtml = rowsToHtml(rows);
-    const coverHtml = info.coverUrl
-      ? `<img class="ss-info-music-cover" src="${esc(info.coverUrl)}" alt="">`
-      : '';
+    const musicBodyHtml = info.coverUrl
+      ? `<div class="ss-info-music-row"><img class="ss-info-music-cover" src="${esc(info.coverUrl)}" alt=""><div class="ss-info-music-text">${musicRowsHtml}</div></div>`
+      : musicRowsHtml;
 
-    return `${photoHtml}<div class="ss-info-divider"></div><div class="ss-info-section">&#9835; 재생 중</div>${coverHtml}${musicRowsHtml}`;
+    return `${photoHtml}<div class="ss-info-divider"></div><div class="ss-info-section">&#9835; 재생 중</div>${musicBodyHtml}`;
   }
 
   function refreshInfoPanel() {
