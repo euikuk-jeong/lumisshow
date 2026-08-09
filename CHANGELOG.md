@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.15.2] - 2026-08-09
+
+### Changed
+- **음악 커버 이미지 크기 체계화**: 슬라이드쇼 음악 토스트 커버 26px → 32px,
+  정보패널 커버 56px → 64px, Admin 브랜드 아이콘(상단바/로그인) 28px → 32px로
+  조정해 표시 크기를 32/64px 2단계로 구분(`slideshow.css`, `admin.css`)
+- **`default-music-cover.png` 축소**: 1254×1254 원본을 실제 표시 크기(최대 64px)에
+  맞춰 128×128로 축소(레티나 2배 여유). 원본은 `default-music-cover-original.png`로
+  별도 보존
+
 ## [2.15.1] - 2026-08-09
 
 ### Fixed
@@ -1287,7 +1297,8 @@ Phase 2 — AI 얼굴 인식 스마트 앨범. NAS 로컬 AI(InsightFace)로 사
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v2.15.1...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v2.15.2...HEAD
+[2.15.2]: https://github.com/euikuk-jeong/lumisshow/compare/v2.15.1...v2.15.2
 [2.15.1]: https://github.com/euikuk-jeong/lumisshow/compare/v2.15.0...v2.15.1
 [2.15.0]: https://github.com/euikuk-jeong/lumisshow/compare/v2.14.1...v2.15.0
 [2.14.1]: https://github.com/euikuk-jeong/lumisshow/compare/v2.14.0...v2.14.1
