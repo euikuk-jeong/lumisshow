@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.15.1] - 2026-08-09
+
+### Fixed
+- **Admin 브랜드 아이콘 정렬**: 전역 `img{display:block}` 리셋으로 `.brand-icon`이
+  블록화되어 타이틀이 아래줄로 밀리던 문제 수정. 아이콘 크기도 20px → 28px로
+  확대(`frontend/assets/css/admin.css`)
+
 ## [2.15.0] - 2026-08-09
 
 ### Added
@@ -1280,7 +1287,8 @@ Phase 2 — AI 얼굴 인식 스마트 앨범. NAS 로컬 AI(InsightFace)로 사
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v2.15.0...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v2.15.1...HEAD
+[2.15.1]: https://github.com/euikuk-jeong/lumisshow/compare/v2.15.0...v2.15.1
 [2.15.0]: https://github.com/euikuk-jeong/lumisshow/compare/v2.14.1...v2.15.0
 [2.14.1]: https://github.com/euikuk-jeong/lumisshow/compare/v2.14.0...v2.14.1
 [2.14.0]: https://github.com/euikuk-jeong/lumisshow/compare/v2.13.0...v2.14.0
