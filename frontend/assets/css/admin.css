@@ -24,6 +24,8 @@
   .admin-nav { background: var(--surface); border-bottom-color: var(--border); }
 }
 .nav-brand {
+  display: inline-flex;
+  align-items: center;
   font-size: 16px;
   font-weight: 700;
   color: var(--primary);
@@ -31,12 +33,13 @@
 }
 .nav-brand:hover { text-decoration: none; opacity: 0.85; }
 .brand-icon {
-  width: 20px;
-  height: 20px;
-  border-radius: 4px;
+  display: inline-block;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
   object-fit: cover;
   vertical-align: middle;
-  margin-right: 6px;
+  margin-right: 8px;
 }
 .nav-version {
   font-size: 10px;
