@@ -34,8 +34,8 @@
 .nav-brand:hover { text-decoration: none; opacity: 0.85; }
 .brand-icon {
   display: inline-block;
-  width: 28px;
-  height: 28px;
+  width: 32px;
+  height: 32px;
   border-radius: 6px;
   object-fit: cover;
   vertical-align: middle;
@@ -111,8 +111,8 @@
   margin-bottom: 6px;
 }
 .login-card h1 .brand-icon {
-  width: 28px;
-  height: 28px;
+  width: 32px;
+  height: 32px;
   margin-right: 8px;
 }
 .login-card p {

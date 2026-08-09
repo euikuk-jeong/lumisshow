@@ -337,8 +337,8 @@
 }
 
 .ss-info-music-cover {
-  width: 56px;
-  height: 56px;
+  width: 64px;
+  height: 64px;
   object-fit: cover;
   border-radius: 6px;
   flex-shrink: 0;
