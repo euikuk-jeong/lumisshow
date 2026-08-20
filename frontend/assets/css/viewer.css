@@ -79,10 +79,22 @@
 .viewer-meta {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 12px;
   font-size: 13px;
   color: var(--muted);
   margin-bottom: 28px;
+}
+
+.viewer-meta-video-link {
+  background: var(--primary-glow-soft);
+  color: var(--primary);
+  border: 1px solid var(--primary-glow);
+  border-radius: 999px;
+  padding: 2px 10px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
 }
 
 .viewer-actions {
