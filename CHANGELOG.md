@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.16.0] - 2026-08-21
+
+### Added
+- **앨범 내 동영상 공유 갤러리**: 앨범에 동영상(`.mp4`/`.mov`/`.webm`/`.m4v`)을 사진과
+  함께 추가할 수 있으며, 공유 뷰어에서는 사진 그리드와 분리된 "동영상" 섹션으로 노출.
+  ffmpeg `thumbnail` 필터로 대표 프레임 썸네일을 생성하고(시킹 폴백 포함), ffprobe로
+  재생시간·해상도를 추출(`backend/services/thumbnail.py`). 클릭 시 라이트박스형
+  오버레이에서 네이티브 `<video controls>`로 인라인 재생(줌/팬 제스처는 미적용) —
+  Admin 라이트박스(`lightbox.js`)와 공유뷰어(`album-view.js`) 양쪽 모두 지원
+- **동영상 전체 다운로드**: 기존 사진 ZIP과는 별도로 동영상만 모은 ZIP 다운로드
+  엔드포인트 추가(`GET /api/share/{token}/download-videos`)
+- **Admin 탐색기·앨범편집 그리드 재생 아이콘**: 동영상 항목에 재생 아이콘 오버레이
+  표시, "커버로 설정" 버튼은 숨김(동영상은 정적 커버 이미지로 지정 불가)
+- **앨범 카드 표시 개선**: 동영상 개수(🎬)와 다가오는 공유 링크 만료일을 앨범 카드에
+  추가, 메타 정보를 2줄 고정 레이아웃으로 정리(`admin-albums.js`)
+
+### Fixed
+- **동영상을 커버로 지정 시 첫 사진으로 조용히 폴백되던 문제**: 공유뷰어의
+  `cover_index` 계산이 사진만 대상으로 하다 보니 동영상 경로가 매칭되지 않아 발생.
+  `PUT /api/admin/albums/{id}`에서 동영상 `cover_path` 지정을 400으로 거부하도록
+  API 레벨 가드 추가(`backend/routers/admin_albums.py`)
+
+### Changed
+- **Dockerfile에 ffmpeg 설치**: 동영상 썸네일·메타 추출용 의존성 추가(Debian 공식
+  패키지, GPL 2+ — 별도 프로세스 호출 방식이라 백엔드 코드에 라이센스 전파 없음,
+  `docker/CLAUDE.md`에 근거 기록)
+
 ## [2.15.4] - 2026-08-20
 
 ### Changed
@@ -1315,7 +1342,8 @@ Phase 2 — AI 얼굴 인식 스마트 앨범. NAS 로컬 AI(InsightFace)로 사
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v2.15.4...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v2.16.0...HEAD
+[2.16.0]: https://github.com/euikuk-jeong/lumisshow/compare/v2.15.4...v2.16.0
 [2.15.4]: https://github.com/euikuk-jeong/lumisshow/compare/v2.15.3...v2.15.4
 [2.15.3]: https://github.com/euikuk-jeong/lumisshow/compare/v2.15.2...v2.15.3
 [2.15.2]: https://github.com/euikuk-jeong/lumisshow/compare/v2.15.1...v2.15.2
