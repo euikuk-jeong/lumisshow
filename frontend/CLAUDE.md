@@ -95,6 +95,9 @@ CSS animation 우선(GPU 가속). `EFFECTS` 배열에서 랜덤 선택. 수동 �
 ### 음악 목록 드래그앤드롭
 HTML5 DnD (`draggable="true"` + `dragstart/dragover/dragleave/drop/dragend`). `dragstart`에서 `setTimeout` 지연으로 ghost 이미지 캡처 후 `.dragging` 스타일 적용. 인덱스 보정: 앞→뒤 이동 시 `splice` 후 `idx - 1`에 삽입.
 
+### 앨범 편집 설정 자동저장 (`admin-album-edit.js`, `createAutosave()`)
+"기본 정보"(이름·설명·음악)/"슬라이드쇼 기본 설정" 두 폼 모두 저장 버튼 없이 필드 변경 시 자동 저장(`PUT /api/admin/albums/{id}`, 두 폼 동일 endpoint). 필드 변경마다 600ms debounce 후 저장, 진행 중 다시 필드가 바뀌면(`pending` 플래그) 현재 요청 끝난 뒤 최신 값으로 한 번 더 저장 — 재귀 호출 대신 `do…while(pending)` 루프로 처리(재귀 시 `finally`가 중첩 호출보다 먼저 실행돼 `isSaving` 상태가 꼬이는 문제 있었음). 폼 하나당 자동저장 트리거 함수 하나(`scheduleInfoSave`/`scheduleSsSave`)를 상위 스코프에서 만들어 음악 리스트 추가·삭제·재정렬, 테마 스와치 클릭 등 폼 외부 이벤트에서도 재사용한다.
+
 ### 전체화면 사진 뷰어 제스처 (`photo-zoom-viewer.js`)
 Admin 라이트박스(`lightbox.js`)와 공유뷰어(`album-view.js`의 `_openSharePhotoViewer`)가 휠 줌·더블클릭 줌·핀치 줌·드래그 팬·스와이프 넘기기·마우스 가운데 버튼 리셋을 공용 모듈로 공유한다(슬라이드쇼는 대상 아님 — Ken Burns 자동 효과만 있고 사용자 줌이 없음).
 
