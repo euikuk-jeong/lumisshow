@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.16.2] - 2026-08-21
+
+### Changed
+- **공유 앨범 사진/동영상 구역 명확히 분리**: 요약 영역의 사진/동영상 카운트는
+  순수 정보 텍스트로 정리하고, 각 구역 헤딩(사진/동영상)에 상대 구역이 있을
+  때만 노출되는 점프 버튼을 배치. 사진 구역도 동영상과 동일하게 헤딩+장수를
+  표시하고, "전체 다운로드 (ZIP)"는 "사진 전체 다운로드 (ZIP)"로 명확화.
+  슬라이드쇼는 사진 전용이라 슬라이드쇼/설정/간단히 보기 버튼을 사진 구역의
+  다운로드 버튼 바로 아래로 이동. 사진 또는 동영상이 0건이면 해당 구역
+  전체(헤딩·다운로드·그리드)를 표시하지 않음
+  (`frontend/assets/js/pages/album-view.js`, `viewer.css`)
+
 ## [2.16.1] - 2026-08-21
 
 ### Changed
@@ -1350,7 +1362,8 @@ Phase 2 — AI 얼굴 인식 스마트 앨범. NAS 로컬 AI(InsightFace)로 사
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v2.16.1...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v2.16.2...HEAD
+[2.16.2]: https://github.com/euikuk-jeong/lumisshow/compare/v2.16.1...v2.16.2
 [2.16.1]: https://github.com/euikuk-jeong/lumisshow/compare/v2.16.0...v2.16.1
 [2.16.0]: https://github.com/euikuk-jeong/lumisshow/compare/v2.15.4...v2.16.0
 [2.15.4]: https://github.com/euikuk-jeong/lumisshow/compare/v2.15.3...v2.15.4

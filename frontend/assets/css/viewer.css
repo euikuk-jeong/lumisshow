@@ -86,7 +86,7 @@
   margin-bottom: 28px;
 }
 
-.viewer-meta-video-link {
+.viewer-section-jump {
   background: var(--primary-glow-soft);
   color: var(--primary);
   border: 1px solid var(--primary-glow);
@@ -95,6 +95,7 @@
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
+  white-space: nowrap;
 }
 
 .viewer-actions {
@@ -157,10 +158,18 @@
 
 /* ── 동영상 섹션 (슬라이드쇼 밖 별도 갤러리) ────────────────── */
 
+.viewer-section-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 32px 0 12px;
+}
+
 .viewer-section-title {
   font-size: 18px;
   font-weight: 700;
-  margin: 32px 0 12px;
+  margin: 0;
 }
 
 .media-video-badge {
