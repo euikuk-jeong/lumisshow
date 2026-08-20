@@ -22,7 +22,7 @@ export async function renderAdminBrowse() {
       <div class="browse-toolbar-right">
         <select id="sort-select" class="form-input" style="width:auto">
           <option value="name-asc">파일명 ↑</option>
-          <option value="name-desc">파일명 ↓</option>
+          <option value="name-desc" selected>파일명 ↓</option>
           <option value="date-asc">날짜 ↑</option>
           <option value="date-desc">날짜 ↓</option>
         </select>
@@ -50,7 +50,7 @@ export async function renderAdminBrowse() {
     path: '',
     selected: new Set(),
     viewMode: 'grid',
-    sortBy: 'name-asc',
+    sortBy: 'name-desc',
     lastFolders: [],
     lastPhotos: [],
     lastPath: null,
