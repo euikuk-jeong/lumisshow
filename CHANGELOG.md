@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.15.4] - 2026-08-20
+
+### Changed
+- **앨범 편집 설정 자동저장으로 전환**: 앨범 편집 화면의 "기본 정보"(이름·설명·음악)/
+  "슬라이드쇼 기본 설정" 저장 버튼을 없애고, 필드 변경 시 600ms debounce 후 자동
+  저장하도록 변경. 저장 중 추가 변경이 들어오면 완료 후 최신 값으로 한 번 더 저장해
+  유실 방지(`frontend/assets/js/pages/admin-album-edit.js`)
+
 ## [2.15.3] - 2026-08-20
 
 ### Changed
@@ -1307,7 +1315,8 @@ Phase 2 — AI 얼굴 인식 스마트 앨범. NAS 로컬 AI(InsightFace)로 사
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v2.15.3...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v2.15.4...HEAD
+[2.15.4]: https://github.com/euikuk-jeong/lumisshow/compare/v2.15.3...v2.15.4
 [2.15.3]: https://github.com/euikuk-jeong/lumisshow/compare/v2.15.2...v2.15.3
 [2.15.2]: https://github.com/euikuk-jeong/lumisshow/compare/v2.15.1...v2.15.2
 [2.15.1]: https://github.com/euikuk-jeong/lumisshow/compare/v2.15.0...v2.15.1
