@@ -42,6 +42,31 @@ async def test_create_album_with_photos(admin_client):
     assert r.json()["photo_count"] == 2
 
 
+async def test_album_next_expires_at(admin_client):
+    album_id = (await admin_client.post("/api/admin/albums", json={"name": "Expiry"})).json()["id"]
+    r = await admin_client.get("/api/admin/albums")
+    assert r.json()[0]["next_expires_at"] is None
+
+    # 만료일 없는 링크만 있으면 여전히 None
+    await admin_client.post(f"/api/admin/albums/{album_id}/links", json={})
+    r = await admin_client.get(f"/api/admin/albums/{album_id}")
+    assert r.json()["next_expires_at"] is None
+
+    # 만료일 있는 링크가 생기면 그 값을 반환
+    await admin_client.post(
+        f"/api/admin/albums/{album_id}/links", json={"expires_at": "2099-12-31T00:00:00"},
+    )
+    r = await admin_client.get("/api/admin/albums")
+    assert r.json()[0]["next_expires_at"] is not None
+
+    # 이미 지난 만료일은 후보에서 제외 (활성 링크 취급 안 함)
+    await admin_client.post(
+        f"/api/admin/albums/{album_id}/links", json={"expires_at": "2000-01-01T00:00:00"},
+    )
+    r = await admin_client.get(f"/api/admin/albums/{album_id}")
+    assert r.json()["next_expires_at"].startswith("2099")
+
+
 async def test_album_active_link_count(admin_client):
     album_id = (await admin_client.post("/api/admin/albums", json={"name": "Links"})).json()["id"]
     r = await admin_client.get("/api/admin/albums")

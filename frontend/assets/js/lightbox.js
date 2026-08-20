@@ -17,9 +17,20 @@ import { api } from './api.js';
 import { createPhotoZoomViewer } from './photo-zoom-viewer.js';
 import { esc } from './utils.js';
 
+// backend/services/thumbnail.py의 VIDEO_EXTENSIONS와 동기 유지 필요(컨테이너 분리로
+// 코드 공유 불가 — admin_browse.py의 _AUDIO_EXTENSIONS와 동일한 이유).
+const VIDEO_EXTENSIONS = new Set(['.mp4', '.mov', '.webm', '.m4v']);
+
+function isVideoPath(path) {
+  const dot = path.lastIndexOf('.');
+  if (dot === -1) return false;
+  return VIDEO_EXTENSIONS.has(path.slice(dot).toLowerCase());
+}
+
 export function openLightbox(paths, startIdx, options = {}) {
   const localPaths = [...paths];
   let idx = startIdx;
+  let currentIsVideo = false;
 
   const hasSelection = !!options.getSelectionState;
 
@@ -31,6 +42,7 @@ export function openLightbox(paths, startIdx, options = {}) {
       <button class="lightbox-nav lightbox-prev">‹</button>
       <img class="lightbox-peek-img lightbox-peek-prev" alt="">
       <img class="lightbox-img" src="" alt="">
+      <video class="lightbox-video" controls style="display:none"></video>
       <img class="lightbox-peek-img lightbox-peek-next" alt="">
       <div class="lightbox-info" id="lb-info" style="display:none"></div>
       <button class="lightbox-nav lightbox-next">›</button>
@@ -52,6 +64,7 @@ export function openLightbox(paths, startIdx, options = {}) {
 
   const bodyEl     = overlay.querySelector('.lightbox-body');
   const imgEl      = overlay.querySelector('.lightbox-img');
+  const videoEl    = overlay.querySelector('.lightbox-video');
   const peekPrevEl = overlay.querySelector('.lightbox-peek-prev');
   const peekNextEl = overlay.querySelector('.lightbox-peek-next');
   const captionEl  = overlay.querySelector('.lightbox-caption');
@@ -137,6 +150,9 @@ export function openLightbox(paths, startIdx, options = {}) {
     getIndex: () => idx,
     onIndexChanged: afterShow,
     scrollableSelector: '.lightbox-info',
+    // 동영상 표시 중엔 줌/팬/스와이프 제스처 엔진을 끈다(동영상은 대상 아님 —
+    // photo-zoom-viewer.js 헤더 주석 참고).
+    isEnabled: () => !currentIsVideo,
   });
 
   const prevBtn   = overlay.querySelector('.lightbox-prev');
@@ -162,20 +178,51 @@ export function openLightbox(paths, startIdx, options = {}) {
     prevBtn.style.visibility = i > 0 ? 'visible' : 'hidden';
     nextBtn.style.visibility = i < localPaths.length - 1 ? 'visible' : 'hidden';
     if (coverBtn && options.isCover) {
-      const isCurrent = options.isCover(localPaths[i]);
-      coverBtn.textContent = isCurrent ? '현재 커버' : '커버로 설정';
-      coverBtn.disabled = isCurrent;
+      // 동영상은 커버(정적 이미지)로 지정할 수 없다 — album_photos.media_type이
+      // 'video'인 경로가 albums.cover_path에 들어가면 공유뷰어 cover_index 계산이
+      // (사진만 대상) 매칭 실패해 첫 번째 사진으로 조용히 폴백해버리는 문제가 있었음.
+      coverBtn.style.display = currentIsVideo ? 'none' : '';
+      if (!currentIsVideo) {
+        const isCurrent = options.isCover(localPaths[i]);
+        coverBtn.textContent = isCurrent ? '현재 커버' : '커버로 설정';
+        coverBtn.disabled = isCurrent;
+      }
     }
     updateSelectionUI();
     refreshInfoPanel();
   }
 
-  const show = i => zoomViewer.goTo(i);
+  function show(i) {
+    const path = localPaths[i];
+    if (isVideoPath(path)) {
+      currentIsVideo = true;
+      imgEl.style.display = 'none';
+      if (peekPrevEl) peekPrevEl.style.display = 'none';
+      if (peekNextEl) peekNextEl.style.display = 'none';
+      videoEl.style.display = '';
+      videoEl.src = `/api/admin/photo?path=${encodeURIComponent(path)}`;
+      idx = i;
+      afterShow(i);
+      return;
+    }
+    if (currentIsVideo) {
+      currentIsVideo = false;
+      videoEl.pause();
+      videoEl.removeAttribute('src');
+      videoEl.load();
+      videoEl.style.display = 'none';
+      imgEl.style.display = '';
+      if (peekPrevEl) peekPrevEl.style.display = '';
+      if (peekNextEl) peekNextEl.style.display = '';
+    }
+    zoomViewer.goTo(i);
+  }
 
   let closed = false;
   function close() {
     if (closed) return;
     closed = true;
+    videoEl.pause();
     document.removeEventListener('keydown', onKey);
     overlay.remove();
     if (window._pageCleanup === close) window._pageCleanup = null;

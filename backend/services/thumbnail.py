@@ -1,5 +1,7 @@
 import hashlib
+import json as _json
 import os
+import subprocess
 import threading
 from datetime import datetime
 from pathlib import Path
@@ -14,6 +16,14 @@ SIZES: dict[str, tuple[int, int]] = {
 }
 
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".tiff", ".bmp"}
+VIDEO_EXTENSIONS = {".mp4", ".mov", ".webm", ".m4v"}
+MEDIA_EXTENSIONS = IMAGE_EXTENSIONS | VIDEO_EXTENSIONS
+
+_FFMPEG_TIMEOUT = int(os.getenv("FFMPEG_TIMEOUT", "30"))
+
+
+def is_video(file_path: str) -> bool:
+    return Path(file_path).suffix.lower() in VIDEO_EXTENSIONS
 
 _EXIF_DATETIME_ORIGINAL = 36867
 _EXIF_DATETIME = 306
@@ -49,6 +59,34 @@ def _get_thumb_lock(out_path: str) -> threading.Lock:
         return _thumb_locks[out_path]
 
 
+def _run_ffmpeg(args: list[str]) -> bool:
+    try:
+        result = subprocess.run(
+            ["ffmpeg", "-y", *args],
+            capture_output=True,
+            timeout=_FFMPEG_TIMEOUT,
+        )
+        return result.returncode == 0
+    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+        return False
+
+
+def _generate_video_thumbnail(file_path: str, out_path: str, size: str) -> None:
+    """대표 프레임 추출. thumbnail 필터(앞부분 프레임 스캔해 대표 프레임 자동 선택)를
+    우선 시도하고, 손상 파일 등으로 실패하면 3초 시킹 → 0초 시킹 순으로 폴백한다."""
+    max_w, max_h = SIZES[size]
+    scale = f"scale={max_w}:{max_h}:force_original_aspect_ratio=decrease"
+    attempts = [
+        ["-i", file_path, "-vf", f"thumbnail,{scale}", "-frames:v", "1", out_path],
+        ["-ss", "3", "-i", file_path, "-vf", scale, "-frames:v", "1", out_path],
+        ["-ss", "0", "-i", file_path, "-vf", scale, "-frames:v", "1", out_path],
+    ]
+    for args in attempts:
+        if _run_ffmpeg(args) and os.path.exists(out_path):
+            return
+    raise RuntimeError(f"ffmpeg thumbnail generation failed: {file_path}")
+
+
 def generate_thumbnail(file_path: str, size: str) -> str:
     """썸네일 생성 (이미 존재하면 재사용). 생성된 썸네일 절대 경로 반환."""
     out_path = thumb_path(file_path, size)
@@ -61,18 +99,22 @@ def generate_thumbnail(file_path: str, size: str) -> str:
             if os.path.exists(out_path):
                 return out_path
             os.makedirs(_thumb_dir(), exist_ok=True)
-            max_w, max_h = SIZES[size]
-            # large(1920x1080)는 원본과 크기차가 작아(보통 2~3배) *2 마진을 요구하면
-            # draft가 1/2·1/4 스케일을 찾지 못해 풀해상도 디코딩으로 떨어짐(측정: 3배 느림).
-            # small/medium은 원본 대비 훨씬 작아 *2 마진을 둬도 충분히 축소된 스케일이 걸린다.
-            draft_mult = 1 if size == "large" else 2
-            with _thumb_semaphore, Image.open(file_path) as img:
-                # JPEG draft: 목표 크기보다 큰 원본을 요청 크기에 가까운 스케일(1/2, 1/4...)로
-                # 디코딩해 풀해상도 디코딩 대비 속도·메모리를 크게 절감 (JPEG 외 포맷은 no-op)
-                img.draft("RGB", (max_w * draft_mult, max_h * draft_mult))
-                img = ImageOps.exif_transpose(img)
-                img.thumbnail((max_w, max_h), Image.LANCZOS)
-                img.convert("RGB").save(out_path, "JPEG", quality=85, optimize=True)
+            if is_video(file_path):
+                with _thumb_semaphore:
+                    _generate_video_thumbnail(file_path, out_path, size)
+            else:
+                max_w, max_h = SIZES[size]
+                # large(1920x1080)는 원본과 크기차가 작아(보통 2~3배) *2 마진을 요구하면
+                # draft가 1/2·1/4 스케일을 찾지 못해 풀해상도 디코딩으로 떨어짐(측정: 3배 느림).
+                # small/medium은 원본 대비 훨씬 작아 *2 마진을 둬도 충분히 축소된 스케일이 걸린다.
+                draft_mult = 1 if size == "large" else 2
+                with _thumb_semaphore, Image.open(file_path) as img:
+                    # JPEG draft: 목표 크기보다 큰 원본을 요청 크기에 가까운 스케일(1/2, 1/4...)로
+                    # 디코딩해 풀해상도 디코딩 대비 속도·메모리를 크게 절감 (JPEG 외 포맷은 no-op)
+                    img.draft("RGB", (max_w * draft_mult, max_h * draft_mult))
+                    img = ImageOps.exif_transpose(img)
+                    img.thumbnail((max_w, max_h), Image.LANCZOS)
+                    img.convert("RGB").save(out_path, "JPEG", quality=85, optimize=True)
     finally:
         # 생성 완료 후 dict에서 제거 — 그대로 두면 앨범 내 사진 경로 수만큼 무한 증가.
         # 같은 경로로 이미 대기 중인 스레드는 위에서 얻은 lock 참조를 그대로 쓰므로 안전.
@@ -120,6 +162,7 @@ _EMPTY_META: dict = {
     "make": None, "camera": None, "software": None,
     "shutter": None, "aperture": None, "iso": None, "focal_length": None,
     "shoot_mode": None, "flash": None, "metering": None, "exposure_mode": None,
+    "duration": None,
 }
 
 
@@ -213,6 +256,56 @@ def get_image_meta(file_path: str) -> dict:
                 "shutter": shutter, "aperture": aperture, "iso": iso,
                 "focal_length": focal_length, "shoot_mode": shoot_mode,
                 "flash": flash, "metering": metering, "exposure_mode": exposure_mode,
+                "duration": None,
             }
     except Exception:
         return dict(_EMPTY_META)
+
+
+def get_video_meta(file_path: str) -> dict:
+    """ffprobe로 동영상 duration·해상도·촬영일(creation_time) 추출. 실패 시 빈 메타 반환."""
+    meta = dict(_EMPTY_META)
+    try:
+        result = subprocess.run(
+            ["ffprobe", "-v", "error", "-print_format", "json", "-show_format", "-show_streams", file_path],
+            capture_output=True,
+            timeout=_FFMPEG_TIMEOUT,
+        )
+        if result.returncode != 0:
+            return meta
+        data = _json.loads(result.stdout)
+    except (subprocess.TimeoutExpired, FileNotFoundError, OSError, ValueError):
+        return meta
+
+    fmt = data.get("format", {})
+    duration_raw = fmt.get("duration")
+    if duration_raw is not None:
+        try:
+            meta["duration"] = round(float(duration_raw), 1)
+        except (TypeError, ValueError):
+            pass
+
+    video_stream = next((s for s in data.get("streams", []) if s.get("codec_type") == "video"), None)
+    if video_stream:
+        meta["width"] = video_stream.get("width")
+        meta["height"] = video_stream.get("height")
+
+    creation_time = fmt.get("tags", {}).get("creation_time")
+    taken_at: Optional[datetime] = None
+    if creation_time:
+        try:
+            taken_at = datetime.strptime(creation_time[:19], "%Y-%m-%dT%H:%M:%S")
+        except ValueError:
+            pass
+    if taken_at is None:
+        try:
+            taken_at = datetime.fromtimestamp(os.path.getmtime(file_path))
+        except OSError:
+            pass
+    meta["taken_at"] = taken_at
+    return meta
+
+
+def get_media_meta(file_path: str) -> dict:
+    """확장자에 따라 사진(EXIF)/동영상(ffprobe) 메타 추출 분기. photo_meta_cache 공용 진입점."""
+    return get_video_meta(file_path) if is_video(file_path) else get_image_meta(file_path)

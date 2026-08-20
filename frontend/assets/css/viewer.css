@@ -124,6 +124,7 @@
 }
 
 .viewer-thumb {
+  position: relative;
   aspect-ratio: 1;
   overflow: hidden;
   border-radius: var(--radius);
@@ -140,6 +141,48 @@
 
 .viewer-thumb:hover img {
   transform: scale(1.05);
+}
+
+/* ── 동영상 섹션 (슬라이드쇼 밖 별도 갤러리) ────────────────── */
+
+.viewer-section-title {
+  font-size: 18px;
+  font-weight: 700;
+  margin: 32px 0 12px;
+}
+
+.media-video-badge {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+.media-video-badge::before {
+  content: "▶";
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: rgba(0,0,0,0.55);
+  color: #fff;
+  font-size: 14px;
+  padding-left: 2px;
+}
+
+.video-duration-badge {
+  position: absolute;
+  bottom: 4px;
+  right: 4px;
+  background: rgba(0,0,0,0.65);
+  color: #fff;
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  pointer-events: none;
 }
 
 /* ── 설정 패널 모달 ─────────────────────────────────────── */
@@ -259,6 +302,13 @@
   pointer-events: none;
 }
 
+.spv-video {
+  max-width: calc(100% - 120px);
+  max-height: 100%;
+  border-radius: 4px;
+  background: #000;
+}
+
 /* 스와이프 취소/완료 시 화면 밖 대상 위치까지 부드럽게 이동시키는 스냅 애니메이션
    — 공용 클래스는 base.css의 .pv-snapping (photo-zoom-viewer.js가 부착) */
 
@@ -370,7 +420,7 @@
   .viewer-actions { flex-direction: column; }
   .viewer-grid { grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); }
   .spv-nav { font-size: 40px; padding: 12px 10px; }
-  .spv-img, .spv-peek-img { max-width: calc(100% - 80px); }
+  .spv-img, .spv-peek-img, .spv-video { max-width: calc(100% - 80px); }
   .spv-filename { max-width: 160px; }
   .spv-btn { padding: 6px 10px; font-size: 12px; }
 }

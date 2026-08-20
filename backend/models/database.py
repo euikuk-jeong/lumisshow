@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS album_photos (
     album_id   INTEGER  NOT NULL REFERENCES albums(id) ON DELETE CASCADE,
     file_path  TEXT     NOT NULL,
     sort_order INTEGER  NOT NULL DEFAULT 0,
+    media_type TEXT     NOT NULL DEFAULT 'photo',
     added_at   DATETIME DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(album_id, file_path)
 );
@@ -59,7 +60,8 @@ CREATE TABLE IF NOT EXISTS photo_meta_cache (
     metering      TEXT,
     exposure_mode TEXT,
     cache_version INTEGER NOT NULL DEFAULT 0,
-    mtime         REAL
+    mtime         REAL,
+    duration      REAL
 );
 
 CREATE TABLE IF NOT EXISTS share_link_failures (
@@ -89,7 +91,8 @@ CREATE TABLE IF NOT EXISTS public_rate_limit (
 # v3: EXIF 촬영일 없으면 파일 mtime으로 taken_at 대체
 # v4: mtime 컬럼 추가 — 캐시 이후 파일이 변경되면(외부 앱으로 EXIF 수정 등) 미스로
 #     취급해 다시 읽도록 함 (load_photo_meta). 기존 캐시엔 mtime이 없어 전부 재구축 필요
-_PHOTO_META_CACHE_VERSION = 4
+# v5: duration 컬럼 추가 — 동영상 재생시간(ffprobe) 캐싱용. 사진 행은 항상 NULL.
+_PHOTO_META_CACHE_VERSION = 5
 
 # 기존 DB에 컬럼이 없을 때만 추가 (SQLite는 IF NOT EXISTS 미지원)
 _META_CACHE_MIGRATIONS = [
@@ -106,6 +109,11 @@ _META_CACHE_MIGRATIONS = [
     "ALTER TABLE photo_meta_cache ADD COLUMN exposure_mode TEXT",
     "ALTER TABLE photo_meta_cache ADD COLUMN cache_version INTEGER NOT NULL DEFAULT 0",
     "ALTER TABLE photo_meta_cache ADD COLUMN mtime REAL",
+    "ALTER TABLE photo_meta_cache ADD COLUMN duration REAL",
+]
+
+_ALBUM_PHOTOS_MIGRATIONS = [
+    "ALTER TABLE album_photos ADD COLUMN media_type TEXT NOT NULL DEFAULT 'photo'",
 ]
 
 _ALBUM_MIGRATIONS = [
@@ -179,7 +187,7 @@ async def init_db() -> None:
         await db.execute("PRAGMA busy_timeout=5000")
         await db.executescript(_DDL)
 
-        for migration in _META_CACHE_MIGRATIONS + _ALBUM_MIGRATIONS:
+        for migration in _META_CACHE_MIGRATIONS + _ALBUM_MIGRATIONS + _ALBUM_PHOTOS_MIGRATIONS:
             try:
                 await db.execute(migration)
             except aiosqlite.OperationalError:

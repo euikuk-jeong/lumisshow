@@ -41,6 +41,8 @@ class PhotoItem(BaseModel):
     width: Optional[int]
     height: Optional[int]
     thumb_url: Optional[str]
+    media_type: str = "photo"
+    duration: Optional[float] = None
 
 class BrowseResponse(BaseModel):
     folders: list[FolderItem]
@@ -82,6 +84,7 @@ class AlbumPhotoResponse(BaseModel):
     album_id: int
     file_path: str
     sort_order: int
+    media_type: str = "photo"
     added_at: datetime
     taken_at: Optional[datetime] = None
 
@@ -93,8 +96,10 @@ class AlbumResponse(BaseModel):
     first_photo_path: Optional[str] = None
     music_paths: list[str]
     photo_count: int
+    video_count: int = 0
     view_count: int = 0
     active_link_count: int = 0
+    next_expires_at: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
     slideshow_interval: int = 5
@@ -197,6 +202,7 @@ class ShareAlbumResponse(BaseModel):
     album_name: str
     description: Optional[str]
     photo_count: int
+    video_count: int = 0
     created_at: datetime
     expires_at: Optional[datetime]
     has_music: bool
@@ -244,6 +250,22 @@ class SharePhotosResponse(BaseModel):
     total: int
     page: int = 1
     snapshot: Optional[str] = None  # 인물 사진 페이지네이션 스냅샷 토큰 (admin_people.py 전용)
+
+
+# ── 동영상 (앨범 내 동영상 갤러리, 슬라이드쇼 밖) ─────────────────────────────
+
+class ShareVideoItem(BaseModel):
+    id: int
+    url: str
+    thumb_url: str
+    filename: Optional[str]
+    duration: Optional[float] = None
+    taken_at: Optional[datetime] = None
+    size: Optional[int] = None
+
+class ShareVideosResponse(BaseModel):
+    videos: list[ShareVideoItem]
+    total: int
 
 
 _EXIF_META_FIELDS = (

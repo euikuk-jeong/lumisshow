@@ -55,17 +55,24 @@ function albumCard(album) {
   const cover = coverPath
     ? `<img src="/api/admin/thumb?path=${encodeURIComponent(coverPath)}&size=small" alt="" loading="lazy">`
     : '🖼';
-  const date = new Date(album.created_at).toLocaleDateString('ko-KR');
+  const createdDate = new Date(album.created_at).toLocaleDateString('ko-KR');
+  const expiresDate = album.next_expires_at ? new Date(album.next_expires_at).toLocaleDateString('ko-KR') : null;
   return `
     <div class="album-card">
       <div class="album-cover">${cover}</div>
       <div class="album-info">
         <div class="album-name" title="${esc(album.name)}">${esc(album.name)}</div>
         <div class="album-meta">
-          <span>📷 ${album.photo_count.toLocaleString()}장</span>
-          <span>👁 ${(album.view_count ?? 0).toLocaleString()}회</span>
-          <span>${date}</span>
-          <span>🔗 ${(album.active_link_count ?? 0).toLocaleString()}개</span>
+          <div class="album-meta-row">
+            <span>📷 ${album.photo_count.toLocaleString()}장</span>
+            ${album.video_count > 0 ? `<span>🎬 ${album.video_count.toLocaleString()}개</span>` : ''}
+            <span>👁 ${(album.view_count ?? 0).toLocaleString()}회</span>
+            <span>🔗 ${(album.active_link_count ?? 0).toLocaleString()}개</span>
+          </div>
+          <div class="album-meta-row">
+            <span>${createdDate} 생성</span>
+            ${expiresDate ? `<span>· ${expiresDate} 만료</span>` : ''}
+          </div>
         </div>
       </div>
     </div>`;

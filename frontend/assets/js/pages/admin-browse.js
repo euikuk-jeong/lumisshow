@@ -349,15 +349,18 @@ function buildBreadcrumb(currentPath) {
 
 function selectableThumb(photo, isSelected) {
   const thumbUrl = photo.thumb_url || '';
+  const isVideo = photo.media_type === 'video';
   return `
     <div class="photo-thumb selectable${isSelected ? ' selected' : ''}" data-path="${esc(photo.path)}">
       ${thumbUrl ? `<img src="${thumbUrl}" alt="" loading="lazy" onerror="this.style.opacity='0.2'">` : ''}
+      ${isVideo ? '<span class="media-video-badge"></span>' : ''}
       <input type="checkbox" ${isSelected ? 'checked' : ''}>
     </div>`;
 }
 
 function photoListItem(photo, isSelected) {
   const thumbUrl = photo.thumb_url || '';
+  const isVideo = photo.media_type === 'video';
   const date = photo.taken_at ? new Date(photo.taken_at).toLocaleDateString('ko-KR') : '—';
   const dims = photo.width && photo.height ? `${photo.width}×${photo.height}` : '';
   return `
@@ -365,6 +368,7 @@ function photoListItem(photo, isSelected) {
       <input type="checkbox" ${isSelected ? 'checked' : ''}>
       <div class="photo-list-thumb">
         ${thumbUrl ? `<img src="${thumbUrl}" alt="" loading="lazy" onerror="this.style.opacity='0.2'">` : ''}
+        ${isVideo ? '<span class="media-video-badge"></span>' : ''}
       </div>
       <span class="photo-list-name" title="${esc(photo.path)}">${esc(photo.name)}</span>
       <div class="photo-list-meta">

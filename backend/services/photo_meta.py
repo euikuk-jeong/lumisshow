@@ -5,14 +5,14 @@ import os
 from datetime import datetime
 
 from backend.models.database import _PHOTO_META_CACHE_VERSION
-from backend.services.thumbnail import get_image_meta
+from backend.services.thumbnail import get_media_meta
 
 _CACHE_INSERT_SQL = """
 INSERT OR REPLACE INTO photo_meta_cache
     (file_path, taken_at, width, height, make, camera, software,
      shutter, aperture, iso, focal_length, shoot_mode, flash, metering, exposure_mode,
-     cache_version, mtime)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     cache_version, mtime, duration)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 """
 
 _CACHE_CHUNK = 900  # SQLite host-param limit safety margin
@@ -41,6 +41,7 @@ def _meta_to_row(rel: str, meta: dict, mtime: float | None) -> tuple:
         meta.get("exposure_mode"),
         _PHOTO_META_CACHE_VERSION,
         mtime,
+        meta.get("duration"),
     )
 
 
@@ -61,6 +62,7 @@ def _row_to_meta(row) -> dict:
         "flash": row["flash"],
         "metering": row["metering"],
         "exposure_mode": row["exposure_mode"],
+        "duration": row["duration"],
     }
 
 
@@ -70,7 +72,7 @@ _exif_read_semaphore = asyncio.Semaphore(_EXIF_READ_CONCURRENCY)
 
 async def _read_meta_limited(abs_path: str) -> dict:
     async with _exif_read_semaphore:
-        return await asyncio.to_thread(get_image_meta, abs_path)
+        return await asyncio.to_thread(get_media_meta, abs_path)
 
 
 def _safe_getmtime(abs_path: str) -> float | None:
