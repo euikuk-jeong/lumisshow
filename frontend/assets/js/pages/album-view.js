@@ -73,7 +73,7 @@ export async function renderAlbumView(token) {
         ${album.description ? `<p class="viewer-desc text-muted">${esc(album.description)}</p>` : ''}
         <div class="viewer-meta">
           <span>📷 ${album.photo_count.toLocaleString()}장</span>
-          ${album.video_count > 0 ? `<span>🎬 ${album.video_count.toLocaleString()}개</span>` : ''}
+          ${album.video_count > 0 ? `<button type="button" class="viewer-meta-video-link" id="btn-jump-video">🎬 동영상 ${album.video_count.toLocaleString()}개 보기 ↓</button>` : ''}
           <span>📅 ${new Date(album.created_at).toLocaleDateString('ko-KR')}</span>
           ${expiryHtml}
           ${album.has_music ? '<span>🎵 음악 있음</span>' : ''}
@@ -96,7 +96,7 @@ export async function renderAlbumView(token) {
               </div>`).join('')}
           </div>` : ''}
         ${videos.length > 0 ? `
-          <h2 class="viewer-section-title">🎬 동영상 (${videos.length.toLocaleString()})</h2>
+          <h2 class="viewer-section-title" id="video-section">🎬 동영상 (${videos.length.toLocaleString()})</h2>
           <a class="btn btn-ghost w-full viewer-download" href="/api/share/${token}/download-videos">⬇ 동영상 전체 다운로드 (ZIP)</a>
           <div class="viewer-grid" id="video-grid">
             ${videos.map((v, i) => `
@@ -165,6 +165,9 @@ export async function renderAlbumView(token) {
   });
   document.getElementById('btn-settings').addEventListener('click', () => {
     document.getElementById('settings-overlay').style.display = 'flex';
+  });
+  document.getElementById('btn-jump-video')?.addEventListener('click', () => {
+    document.getElementById('video-section')?.scrollIntoView({ behavior: 'smooth' });
   });
 
   document.getElementById('thumb-grid')?.addEventListener('click', (e) => {
