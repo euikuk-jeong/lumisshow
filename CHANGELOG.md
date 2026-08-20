@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.16.1] - 2026-08-21
+
+### Changed
+- **공유 앨범 동영상 존재 알림 개선**: 사진 그리드 아래 멀리 있는 동영상 섹션을
+  처음 보는 사람은 존재를 알아차리기 어려운 문제 개선. 상단 메타 영역의 동영상
+  개수 표시를 클릭 가능한 배지로 바꾸고, 클릭 시 동영상 섹션으로 스크롤 이동
+  (`frontend/assets/js/pages/album-view.js`, `viewer.css`)
+
 ## [2.16.0] - 2026-08-21
 
 ### Added
@@ -1342,7 +1350,8 @@ Phase 2 — AI 얼굴 인식 스마트 앨범. NAS 로컬 AI(InsightFace)로 사
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v2.16.0...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v2.16.1...HEAD
+[2.16.1]: https://github.com/euikuk-jeong/lumisshow/compare/v2.16.0...v2.16.1
 [2.16.0]: https://github.com/euikuk-jeong/lumisshow/compare/v2.15.4...v2.16.0
 [2.15.4]: https://github.com/euikuk-jeong/lumisshow/compare/v2.15.3...v2.15.4
 [2.15.3]: https://github.com/euikuk-jeong/lumisshow/compare/v2.15.2...v2.15.3
