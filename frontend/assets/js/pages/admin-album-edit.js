@@ -135,8 +135,7 @@ function renderEditForm(album, links, tzOffset, serverTheme = 'dark') {
               </details>
             </div>
             <div>
-              <button type="submit" class="btn btn-primary btn-sm" id="btn-save">저장</button>
-              <span id="save-ok" class="text-success text-sm mt-1" style="display:none;margin-left:8px">저장됨 ✓</span>
+              <span id="save-ok" class="text-success text-sm" style="display:none">저장됨 ✓</span>
             </div>
           </form>
           <hr class="divider" style="margin:12px 0">
@@ -194,8 +193,7 @@ function renderEditForm(album, links, tzOffset, serverTheme = 'dark') {
               </div>
             </div>
             <div>
-              <button type="submit" class="btn btn-primary btn-sm" id="btn-ss-save">저장</button>
-              <span id="ss-save-ok" class="text-success text-sm mt-1" style="display:none;margin-left:8px">저장됨 ✓</span>
+              <span id="ss-save-ok" class="text-success text-sm" style="display:none">저장됨 ✓</span>
             </div>
           </form>
         </div>
@@ -262,9 +260,11 @@ function renderEditForm(album, links, tzOffset, serverTheme = 'dark') {
     </div>
   `;
 
-  initAlbumThemePicker(album.ui_theme, serverTheme);
-
   let musicPaths = [...(album.music_paths || [])];
+  const scheduleInfoSave = bindInfoForm(album.id, () => musicPaths);
+  const scheduleSsSave   = bindSlideshowForm(album.id);
+
+  initAlbumThemePicker(album.ui_theme, serverTheme, scheduleSsSave);
 
   function refreshMusicList() {
     const listEl = document.getElementById('music-list');
@@ -285,6 +285,7 @@ function renderEditForm(album, links, tzOffset, serverTheme = 'dark') {
       btn.addEventListener('click', () => {
         musicPaths.splice(parseInt(btn.dataset.index, 10), 1);
         refreshMusicList();
+        scheduleInfoSave();
       });
     });
 
@@ -327,18 +328,26 @@ function renderEditForm(album, links, tzOffset, serverTheme = 'dark') {
         // 원소 제거 후 인덱스 보정: 앞에서 뒤로 이동 시 target이 한 칸 당겨짐
         musicPaths.splice(dragSrcIdx < idx ? idx - 1 : idx, 0, moved);
         refreshMusicList();
+        scheduleInfoSave();
       });
     });
   }
   refreshMusicList();
 
   document.getElementById('btn-browse-music').addEventListener('click', () => {
-    openMusicModal(musicPaths, selected => { musicPaths = selected; refreshMusicList(); });
+    openMusicModal(musicPaths, selected => { musicPaths = selected; refreshMusicList(); scheduleInfoSave(); });
   });
 
   document.getElementById('ss-volume').addEventListener('input', e => {
     document.getElementById('ss-vol-label').textContent = `${e.target.value}%`;
+    scheduleSsSave();
   });
+
+  document.getElementById('ss-interval').addEventListener('input', scheduleSsSave);
+  document.getElementById('ss-effect').addEventListener('change', scheduleSsSave);
+  ['ss-order', 'ss-music', 'ss-loop'].forEach(name =>
+    document.querySelectorAll(`input[name="${name}"]`).forEach(el => el.addEventListener('change', scheduleSsSave))
+  );
 
   const photoState = { viewMode: 'grid', coverPath: album.cover_path, photos: [...album.photos], removeMode: false, removeSelected: new Set() };
   photoState.recomputeDateOffsets = initDateScrollIndicator(
@@ -412,9 +421,7 @@ function renderEditForm(album, links, tzOffset, serverTheme = 'dark') {
   document.getElementById('btn-photo-view-list').addEventListener('click', () => setPhotoViewMode('list'));
   document.getElementById('btn-photo-view-date').addEventListener('click', () => setPhotoViewMode('date'));
 
-  bindInfoForm(album.id, () => musicPaths);
   bindViewCountReset(album.id);
-  bindSlideshowForm(album.id);
   bindPhotoRemoveMode(album.id, photoState, refreshPhotoGrid);
   bindCoverSet(album.id, photoState, refreshPhotoGrid);
   bindPhotoSort(album.id, photoState, refreshPhotoGrid);
@@ -425,33 +432,59 @@ function renderEditForm(album, links, tzOffset, serverTheme = 'dark') {
 }
 
 function bindSlideshowForm(albumId) {
-  const errEl = document.getElementById('ss-error');
-  const okEl  = document.getElementById('ss-save-ok');
-  document.getElementById('ss-form').addEventListener('submit', async e => {
-    e.preventDefault();
-    errEl.style.display = 'none';
-    okEl.style.display = 'none';
-    const btn = document.getElementById('btn-ss-save');
-    btn.disabled = true;
-    try {
-      await api.put(`/api/admin/albums/${albumId}`, {
-        slideshow_interval: parseInt(document.getElementById('ss-interval').value, 10) || 5,
-        slideshow_order:    document.querySelector('input[name="ss-order"]:checked').value,
-        slideshow_effect:   document.getElementById('ss-effect').value,
-        slideshow_music:    document.querySelector('input[name="ss-music"]:checked').value === 'on',
-        slideshow_volume:   parseInt(document.getElementById('ss-volume').value, 10),
-        slideshow_loop:     document.querySelector('input[name="ss-loop"]:checked').value === 'on',
-        ui_theme:           document.getElementById('ss-ui-theme').value || null,
-      });
+  document.getElementById('ss-form').addEventListener('submit', e => e.preventDefault());
+
+  return createAutosave(() => api.put(`/api/admin/albums/${albumId}`, {
+    slideshow_interval: parseInt(document.getElementById('ss-interval').value, 10) || 5,
+    slideshow_order:    document.querySelector('input[name="ss-order"]:checked').value,
+    slideshow_effect:   document.getElementById('ss-effect').value,
+    slideshow_music:    document.querySelector('input[name="ss-music"]:checked').value === 'on',
+    slideshow_volume:   parseInt(document.getElementById('ss-volume').value, 10),
+    slideshow_loop:     document.querySelector('input[name="ss-loop"]:checked').value === 'on',
+    ui_theme:           document.getElementById('ss-ui-theme').value || null,
+  }), 'ss-error', 'ss-save-ok');
+}
+
+/* ── Autosave: debounce field changes, coalesce saves that land while a
+   request is in flight so the field's own latest value is never lost ── */
+function createAutosave(saveFn, errElId, okElId) {
+  let timer = null;
+  let isSaving = false;
+  let pending = false;
+
+  async function runSave() {
+    isSaving = true;
+    const errEl = document.getElementById(errElId);
+    const okEl  = document.getElementById(okElId);
+    do {
+      pending = false;
+      errEl.style.display = 'none';
+      okEl.textContent = '저장 중...';
       okEl.style.display = 'inline';
-      setTimeout(() => { okEl.style.display = 'none'; }, 2000);
-    } catch (err) {
-      errEl.textContent = err.message;
-      errEl.style.display = 'block';
-    } finally {
-      btn.disabled = false;
-    }
-  });
+      try {
+        await saveFn();
+      } catch (err) {
+        isSaving = false;
+        okEl.style.display = 'none';
+        errEl.textContent = err.message;
+        errEl.style.display = 'block';
+        return;
+      }
+    } while (pending);
+    isSaving = false;
+    okEl.textContent = '저장됨 ✓';
+    setTimeout(() => { if (!isSaving) okEl.style.display = 'none'; }, 2000);
+  }
+
+  return function scheduleSave() {
+    const okEl = document.getElementById(okElId);
+    if (okEl) okEl.style.display = 'none';
+    clearTimeout(timer);
+    timer = setTimeout(() => {
+      if (isSaving) pending = true;
+      else runSave();
+    }, 600);
+  };
 }
 
 function bindViewCountReset(albumId) {
@@ -467,29 +500,22 @@ function bindViewCountReset(albumId) {
 }
 
 function bindInfoForm(albumId, getMusicPaths) {
-  const errEl = document.getElementById('info-error');
-  const okEl  = document.getElementById('save-ok');
-  document.getElementById('info-form').addEventListener('submit', async e => {
-    e.preventDefault();
-    errEl.style.display = 'none';
-    okEl.style.display = 'none';
-    const btn = document.getElementById('btn-save');
-    btn.disabled = true;
-    try {
-      await api.put(`/api/admin/albums/${albumId}`, {
-        name:        document.getElementById('f-name').value.trim(),
-        description: document.getElementById('f-desc').value.trim() || null,
-        music_paths: getMusicPaths(),
-      });
-      okEl.style.display = 'inline';
-      setTimeout(() => { okEl.style.display = 'none'; }, 2000);
-    } catch (err) {
-      errEl.textContent = err.message;
-      errEl.style.display = 'block';
-    } finally {
-      btn.disabled = false;
-    }
-  });
+  document.getElementById('info-form').addEventListener('submit', e => e.preventDefault());
+
+  const scheduleSave = createAutosave(() => {
+    const name = document.getElementById('f-name').value.trim();
+    if (!name) return Promise.reject(new Error('앨범 이름을 입력하세요'));
+    return api.put(`/api/admin/albums/${albumId}`, {
+      name,
+      description: document.getElementById('f-desc').value.trim() || null,
+      music_paths: getMusicPaths(),
+    });
+  }, 'info-error', 'save-ok');
+
+  document.getElementById('f-name').addEventListener('input', scheduleSave);
+  document.getElementById('f-desc').addEventListener('input', scheduleSave);
+
+  return scheduleSave;
 }
 
 async function openMusicModal(currentPaths, onConfirm) {
@@ -969,7 +995,7 @@ function bindPhotoPreview(albumId, photoState, refresh) {
   });
 }
 
-function initAlbumThemePicker(currentTheme, serverTheme = 'dark') {
+function initAlbumThemePicker(currentTheme, serverTheme = 'dark', onChange = () => {}) {
   const container = document.getElementById('album-theme-picker');
   if (!container) return;
 
@@ -1002,6 +1028,7 @@ function initAlbumThemePicker(currentTheme, serverTheme = 'dark') {
       document.getElementById('ss-ui-theme').value = el.dataset.themeId;
       container.querySelectorAll('.theme-swatch').forEach(s => s.classList.remove('active'));
       el.classList.add('active');
+      onChange();
     });
   });
 }
