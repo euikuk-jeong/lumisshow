@@ -1051,12 +1051,14 @@ function groupPhotosByDate(photos) {
 function photoThumb(photo, coverPath, removeMode = false, isSelected = false) {
   const thumbUrl = `/api/admin/thumb?path=${encodeURIComponent(photo.file_path)}&size=small`;
   const isCover  = photo.file_path === coverPath;
+  const isVideo  = photo.media_type === 'video';
   return `
     <div class="photo-thumb${isCover ? ' is-cover' : ''}${isSelected ? ' remove-selected' : ''}" data-path="${esc(photo.file_path)}">
       <img src="${thumbUrl}" alt="" loading="lazy" onerror="this.style.opacity='0.3'">
+      ${isVideo ? '<span class="media-video-badge"></span>' : ''}
       ${isCover ? '<span class="cover-badge">커버</span>' : ''}
       <input type="checkbox" class="remove-check" ${isSelected ? 'checked' : ''}>
-      <button class="photo-set-cover" data-path="${esc(photo.file_path)}">커버로 설정</button>
+      ${isVideo ? '' : `<button class="photo-set-cover" data-path="${esc(photo.file_path)}">커버로 설정</button>`}
     </div>`;
 }
 

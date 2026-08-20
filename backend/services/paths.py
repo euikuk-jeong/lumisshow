@@ -5,7 +5,7 @@ from pathlib import Path
 
 from fastapi import HTTPException
 
-from backend.services.thumbnail import IMAGE_EXTENSIONS
+from backend.services.thumbnail import MEDIA_EXTENSIONS
 
 _PHOTO_SKIP_PREFIXES = (".", "@", "#")
 
@@ -30,7 +30,7 @@ def build_filename_index(photo_root: str) -> dict[str, list[str]]:
         for fname in filenames:
             if fname.startswith(_PHOTO_SKIP_PREFIXES):
                 continue
-            if Path(fname).suffix.lower() not in IMAGE_EXTENSIONS:
+            if Path(fname).suffix.lower() not in MEDIA_EXTENSIONS:
                 continue
             rel = os.path.relpath(os.path.join(dirpath, fname), photo_root).replace("\\", "/")
             index.setdefault(fname.lower(), []).append(rel)

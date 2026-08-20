@@ -10,7 +10,7 @@ from backend.models.schemas import parse_music_paths
 from backend.services.auth import get_share_token_from_cookie, verify_share_session_cookie
 from backend.services.music_tags import read_cover_image
 from backend.services.paths import assert_within_photo_root, resolve_abs
-from backend.services.thumbnail import SIZES, generate_thumbnail
+from backend.services.thumbnail import SIZES, generate_thumbnail, is_video
 
 router = APIRouter(tags=["media"])
 
@@ -103,6 +103,10 @@ async def serve_media(file_path: str, request: Request, db=Depends(get_db)):
     assert_within_photo_root(abs_path, root)
     if not os.path.isfile(abs_path):
         raise HTTPException(status_code=404, detail="File not found")
+    if is_video(abs_path):
+        # <video> 태그 스트리밍용 — attachment 헤더가 붙으면 일부 브라우저가
+        # 재생 대신 다운로드로 취급할 수 있어 inline으로 서빙한다.
+        return FileResponse(abs_path, filename=os.path.basename(abs_path), content_disposition_type="inline")
     return FileResponse(abs_path, filename=os.path.basename(abs_path))
 
 

@@ -20,8 +20,13 @@ from backend.services.auth import get_current_admin
 from backend.services.paths import build_filename_index
 from backend.services.photo_meta import load_photo_meta
 from backend.services.settings import get_settings
+from backend.services.thumbnail import is_video
 
 router = APIRouter(prefix="/api/admin/albums", tags=["admin-albums"])
+
+
+def _media_type(path: str) -> str:
+    return "video" if is_video(path) else "photo"
 
 
 def _resolve_paths(paths: list[str]) -> list[str]:
@@ -123,10 +128,14 @@ async def _apply_photo_sort(album_id: int, sort_by: str, sort_dir: str, db) -> N
 async def _fetch_album(album_id: int, db) -> dict:
     async with db.execute(
         """
-        SELECT a.*, COUNT(p.id) AS photo_count,
-          (SELECT file_path FROM album_photos WHERE album_id = a.id ORDER BY sort_order, id LIMIT 1) AS first_photo_path,
+        SELECT a.*,
+          COALESCE(SUM(CASE WHEN p.id IS NULL OR p.media_type = 'video' THEN 0 ELSE 1 END), 0) AS photo_count,
+          COALESCE(SUM(CASE WHEN p.media_type = 'video' THEN 1 ELSE 0 END), 0) AS video_count,
+          (SELECT file_path FROM album_photos WHERE album_id = a.id AND media_type != 'video' ORDER BY sort_order, id LIMIT 1) AS first_photo_path,
           (SELECT COUNT(*) FROM share_links sl WHERE sl.album_id = a.id AND sl.is_active = 1
-             AND (sl.expires_at IS NULL OR sl.expires_at > datetime('now'))) AS active_link_count
+             AND (sl.expires_at IS NULL OR sl.expires_at > datetime('now'))) AS active_link_count,
+          (SELECT MIN(sl.expires_at) FROM share_links sl WHERE sl.album_id = a.id AND sl.is_active = 1
+             AND sl.expires_at IS NOT NULL AND sl.expires_at > datetime('now')) AS next_expires_at
         FROM albums a LEFT JOIN album_photos p ON p.album_id = a.id
         WHERE a.id = ?
         GROUP BY a.id
@@ -145,10 +154,14 @@ async def _fetch_album(album_id: int, db) -> dict:
 async def list_albums(_: str = Depends(get_current_admin), db=Depends(get_db)):
     async with db.execute(
         """
-        SELECT a.*, COUNT(p.id) AS photo_count,
-          (SELECT file_path FROM album_photos WHERE album_id = a.id ORDER BY sort_order, id LIMIT 1) AS first_photo_path,
+        SELECT a.*,
+          COALESCE(SUM(CASE WHEN p.id IS NULL OR p.media_type = 'video' THEN 0 ELSE 1 END), 0) AS photo_count,
+          COALESCE(SUM(CASE WHEN p.media_type = 'video' THEN 1 ELSE 0 END), 0) AS video_count,
+          (SELECT file_path FROM album_photos WHERE album_id = a.id AND media_type != 'video' ORDER BY sort_order, id LIMIT 1) AS first_photo_path,
           (SELECT COUNT(*) FROM share_links sl WHERE sl.album_id = a.id AND sl.is_active = 1
-             AND (sl.expires_at IS NULL OR sl.expires_at > datetime('now'))) AS active_link_count
+             AND (sl.expires_at IS NULL OR sl.expires_at > datetime('now'))) AS active_link_count,
+          (SELECT MIN(sl.expires_at) FROM share_links sl WHERE sl.album_id = a.id AND sl.is_active = 1
+             AND sl.expires_at IS NOT NULL AND sl.expires_at > datetime('now')) AS next_expires_at
         FROM albums a LEFT JOIN album_photos p ON p.album_id = a.id
         GROUP BY a.id ORDER BY a.created_at DESC
         """
@@ -182,8 +195,8 @@ async def create_album(
     if body.photo_paths:
         resolved = _resolve_paths(body.photo_paths)
         await db.executemany(
-            "INSERT OR IGNORE INTO album_photos (album_id, file_path, sort_order) VALUES (?, ?, ?)",
-            [(album_id, path, i) for i, path in enumerate(resolved)],
+            "INSERT OR IGNORE INTO album_photos (album_id, file_path, sort_order, media_type) VALUES (?, ?, ?, ?)",
+            [(album_id, path, i, _media_type(path)) for i, path in enumerate(resolved)],
         )
         await _apply_photo_sort(album_id, _PHOTO_SORT_DEFAULTS["photo_sort_by"], _PHOTO_SORT_DEFAULTS["photo_sort_dir"], db)
 
@@ -242,8 +255,8 @@ async def duplicate_album(
         new_id = cur.lastrowid
 
     await db.execute(
-        """INSERT INTO album_photos (album_id, file_path, sort_order)
-           SELECT ?, file_path, sort_order FROM album_photos WHERE album_id = ?
+        """INSERT INTO album_photos (album_id, file_path, sort_order, media_type)
+           SELECT ?, file_path, sort_order, media_type FROM album_photos WHERE album_id = ?
            ORDER BY sort_order, id""",
         (new_id, album_id),
     )
@@ -266,6 +279,10 @@ async def update_album(
     if body_data.get('photo_sort_dir') not in (None, 'asc', 'desc'):
         body_data['photo_sort_dir'] = 'asc'
     updates = {k: v for k, v in body_data.items() if k in _ALLOWED_UPDATE_COLS}
+    # 동영상은 커버(정적 이미지)로 지정 불가 — 공유뷰어 cover_index 계산이 사진만
+    # 대상이라, 동영상 경로가 들어가면 매칭 실패해 첫 번째 사진으로 조용히 폴백한다.
+    if updates.get('cover_path') and is_video(updates['cover_path']):
+        raise HTTPException(status_code=400, detail="동영상은 커버로 지정할 수 없습니다.")
     if 'music_paths' in body_data:
         updates['music_path'] = (
             json.dumps(body_data['music_paths']) if body_data['music_paths'] else None
@@ -341,10 +358,10 @@ async def add_photos(
 
     await db.executemany(
         """
-        INSERT OR IGNORE INTO album_photos (album_id, file_path, sort_order)
-        VALUES (?, ?, (SELECT COALESCE(MAX(sort_order), -1) + 1 FROM album_photos WHERE album_id = ?))
+        INSERT OR IGNORE INTO album_photos (album_id, file_path, sort_order, media_type)
+        VALUES (?, ?, (SELECT COALESCE(MAX(sort_order), -1) + 1 FROM album_photos WHERE album_id = ?), ?)
         """,
-        [(album_id, path, album_id) for path in resolved],
+        [(album_id, path, album_id, _media_type(path)) for path in resolved],
     )
     # 사진 추가 후 앨범 sort 설정에 맞게 재정렬
     async with db.execute(

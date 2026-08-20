@@ -1,3 +1,4 @@
+import json
 import os
 import threading
 import time
@@ -6,10 +7,15 @@ from datetime import datetime
 import pytest
 from PIL import Image
 
+from unittest.mock import patch
+
 from backend.services import thumbnail as thumbnail_module
 from backend.services.thumbnail import (
     generate_thumbnail,
     get_image_meta,
+    get_media_meta,
+    get_video_meta,
+    is_video,
     thumb_path,
 )
 
@@ -140,7 +146,7 @@ def test_get_image_meta_invalid_file(tmp_path):
     assert set(meta.keys()) == {
         "width", "height", "taken_at", "make", "camera", "software",
         "shutter", "aperture", "iso", "focal_length", "shoot_mode",
-        "flash", "metering", "exposure_mode",
+        "flash", "metering", "exposure_mode", "duration",
     }
     assert all(v is None for v in meta.values())
 
@@ -231,3 +237,155 @@ def test_thumb_locks_cleaned_up_under_concurrency(data_dir, tmp_path):
         t.join()
 
     assert thumbnail_module._thumb_locks == {}
+
+
+# ── 동영상 (ffmpeg/ffprobe, subprocess mock) ──────────────────────────────────
+
+def test_is_video_extensions():
+    assert is_video("clip.mp4")
+    assert is_video("clip.MOV")
+    assert is_video("clip.webm")
+    assert is_video("clip.m4v")
+    assert not is_video("photo.jpg")
+    assert not is_video("photo.png")
+
+
+def test_generate_thumbnail_video_uses_thumbnail_filter_first(data_dir, tmp_path):
+    """1차 시도(thumbnail 필터)가 성공하면 시킹 폴백을 타지 않아야 함."""
+    video_path = str(tmp_path / "clip.mp4")
+    with open(video_path, "wb") as f:
+        f.write(b"fake mp4 bytes")
+
+    def fake_run(cmd, capture_output, timeout):
+        out_path = cmd[-1]
+        with open(out_path, "wb") as out_f:
+            out_f.write(b"jpegbytes")
+        class Result:
+            returncode = 0
+        return Result()
+
+    with patch("backend.services.thumbnail.subprocess.run", side_effect=fake_run) as mock_run:
+        out = generate_thumbnail(video_path, "small")
+
+    assert os.path.exists(out)
+    assert mock_run.call_count == 1
+    args = mock_run.call_args[0][0]
+    assert "thumbnail" in args[args.index("-vf") + 1]
+
+
+def test_generate_thumbnail_video_falls_back_to_seek(data_dir, tmp_path):
+    """thumbnail 필터 실패 시 3초 시킹으로 폴백해야 함."""
+    video_path = str(tmp_path / "clip2.mp4")
+    with open(video_path, "wb") as f:
+        f.write(b"fake")
+
+    calls = []
+
+    def fake_run(cmd, capture_output, timeout):
+        calls.append(cmd)
+        class Result:
+            returncode = 1
+        if len(calls) == 2:
+            out_path = cmd[-1]
+            with open(out_path, "wb") as out_f:
+                out_f.write(b"jpegbytes")
+            Result.returncode = 0
+        return Result()
+
+    with patch("backend.services.thumbnail.subprocess.run", side_effect=fake_run):
+        out = generate_thumbnail(video_path, "small")
+
+    assert os.path.exists(out)
+    assert len(calls) == 2
+    assert "-ss" in calls[1] and "3" in calls[1]
+
+
+def test_generate_thumbnail_video_all_attempts_fail_raises(data_dir, tmp_path):
+    video_path = str(tmp_path / "broken.mp4")
+    with open(video_path, "wb") as f:
+        f.write(b"garbage")
+
+    class Result:
+        returncode = 1
+
+    with patch("backend.services.thumbnail.subprocess.run", return_value=Result()):
+        with pytest.raises(RuntimeError):
+            generate_thumbnail(video_path, "small")
+
+
+def test_get_video_meta_parses_duration_resolution_creation_time(tmp_path):
+    video_path = str(tmp_path / "clip.mp4")
+    with open(video_path, "wb") as f:
+        f.write(b"fake")
+
+    ffprobe_json = json.dumps({
+        "format": {"duration": "12.345", "tags": {"creation_time": "2024-05-01T10:20:30.000000Z"}},
+        "streams": [{"codec_type": "video", "width": 1920, "height": 1080}],
+    }).encode()
+
+    class Result:
+        returncode = 0
+        stdout = ffprobe_json
+
+    with patch("backend.services.thumbnail.subprocess.run", return_value=Result()):
+        meta = get_video_meta(video_path)
+
+    assert meta["duration"] == 12.3
+    assert meta["width"] == 1920
+    assert meta["height"] == 1080
+    assert meta["taken_at"] == datetime(2024, 5, 1, 10, 20, 30)
+
+
+def test_get_video_meta_ffprobe_failure_returns_empty_meta(tmp_path):
+    video_path = str(tmp_path / "broken.mp4")
+    with open(video_path, "wb") as f:
+        f.write(b"garbage")
+
+    class Result:
+        returncode = 1
+        stdout = b""
+
+    with patch("backend.services.thumbnail.subprocess.run", return_value=Result()):
+        meta = get_video_meta(video_path)
+
+    assert meta["duration"] is None
+    assert meta["width"] is None
+
+
+def test_get_video_meta_no_creation_time_falls_back_to_mtime(tmp_path):
+    video_path = str(tmp_path / "clip3.mp4")
+    with open(video_path, "wb") as f:
+        f.write(b"fake")
+
+    ffprobe_json = json.dumps({"format": {"duration": "5.0"}, "streams": []}).encode()
+
+    class Result:
+        returncode = 0
+        stdout = ffprobe_json
+
+    with patch("backend.services.thumbnail.subprocess.run", return_value=Result()):
+        meta = get_video_meta(video_path)
+
+    assert meta["taken_at"] is not None  # mtime 폴백
+
+
+def test_get_media_meta_dispatches_video_to_ffprobe(tmp_path):
+    mp4_path = str(tmp_path / "v.mp4")
+    with open(mp4_path, "wb") as f:
+        f.write(b"x")
+
+    with patch("backend.services.thumbnail.get_video_meta") as mock_video_meta:
+        mock_video_meta.return_value = {"duration": 5.0}
+        result = get_media_meta(mp4_path)
+
+    mock_video_meta.assert_called_once_with(mp4_path)
+    assert result == {"duration": 5.0}
+
+
+def test_get_media_meta_dispatches_photo_to_exif(tmp_path):
+    jpg_path = str(tmp_path / "p.jpg")
+    Image.new("RGB", (50, 40)).save(jpg_path, "JPEG")
+
+    meta = get_media_meta(jpg_path)
+    assert meta["width"] == 50
+    assert meta["duration"] is None

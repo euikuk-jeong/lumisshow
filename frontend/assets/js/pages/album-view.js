@@ -24,15 +24,24 @@ function formatDateInTZ(isoString, offsetMinutes) {
   return `${y}. ${m}. ${d}.`;
 }
 
+function formatDuration(seconds) {
+  if (seconds == null) return '';
+  const total = Math.round(seconds);
+  const m = Math.floor(total / 60);
+  const s = total % 60;
+  return `${m}:${String(s).padStart(2, '0')}`;
+}
+
 export async function renderAlbumView(token) {
   const app = document.getElementById('app');
   app.innerHTML = '<div class="loading"></div>';
 
-  let album, photosData;
+  let album, photosData, videosData;
   try {
-    [album, photosData] = await Promise.all([
+    [album, photosData, videosData] = await Promise.all([
       shareApi.get(`/api/share/${token}/album`),
       shareApi.get(`/api/share/${token}/photos`),
+      shareApi.get(`/api/share/${token}/videos`),
     ]);
   } catch (e) {
     if (e instanceof ShareAuthError) {
@@ -47,6 +56,7 @@ export async function renderAlbumView(token) {
   document.documentElement.dataset.theme = album.ui_theme || 'dark';
 
   const photos = photosData.photos;
+  const videos = videosData.videos;
   const coverPhoto = album.cover_index != null ? photos[album.cover_index] : photos[0];
   const coverUrl = coverPhoto ? coverPhoto.thumb_medium_url : null;
 
@@ -63,6 +73,7 @@ export async function renderAlbumView(token) {
         ${album.description ? `<p class="viewer-desc text-muted">${esc(album.description)}</p>` : ''}
         <div class="viewer-meta">
           <span>📷 ${album.photo_count.toLocaleString()}장</span>
+          ${album.video_count > 0 ? `<span>🎬 ${album.video_count.toLocaleString()}개</span>` : ''}
           <span>📅 ${new Date(album.created_at).toLocaleDateString('ko-KR')}</span>
           ${expiryHtml}
           ${album.has_music ? '<span>🎵 음악 있음</span>' : ''}
@@ -82,6 +93,17 @@ export async function renderAlbumView(token) {
             ${photos.map((p, i) => `
               <div class="viewer-thumb" data-idx="${i}">
                 <img src="${p.thumb_small_url}" alt="" loading="lazy">
+              </div>`).join('')}
+          </div>` : ''}
+        ${videos.length > 0 ? `
+          <h2 class="viewer-section-title">🎬 동영상 (${videos.length.toLocaleString()})</h2>
+          <a class="btn btn-ghost w-full viewer-download" href="/api/share/${token}/download-videos">⬇ 동영상 전체 다운로드 (ZIP)</a>
+          <div class="viewer-grid" id="video-grid">
+            ${videos.map((v, i) => `
+              <div class="viewer-thumb" data-idx="${i}">
+                <img src="${v.thumb_url}" alt="" loading="lazy">
+                <span class="media-video-badge"></span>
+                ${v.duration != null ? `<span class="video-duration-badge">${formatDuration(v.duration)}</span>` : ''}
               </div>`).join('')}
           </div>` : ''}
         <div class="viewer-version" id="viewer-version"></div>
@@ -149,6 +171,81 @@ export async function renderAlbumView(token) {
     const thumb = e.target.closest('.viewer-thumb');
     if (thumb) _openSharePhotoViewer(token, photos, parseInt(thumb.dataset.idx, 10));
   });
+
+  document.getElementById('video-grid')?.addEventListener('click', (e) => {
+    const thumb = e.target.closest('.viewer-thumb');
+    if (thumb) _openShareVideoViewer(videos, parseInt(thumb.dataset.idx, 10));
+  });
+}
+
+// 동영상은 슬라이드쇼 밖 별도 갤러리(FR-05) — 줌/팬/스와이프 없이 네이티브
+// <video controls> 인라인 재생만 제공한다(photo-zoom-viewer.js 미적용).
+function _openShareVideoViewer(videos, startIdx) {
+  let idx = startIdx;
+
+  const overlay = document.createElement('div');
+  overlay.className = 'spv-overlay';
+  overlay.innerHTML = `
+    <button class="spv-close" title="닫기">✕</button>
+    <div class="spv-body">
+      <button class="spv-nav spv-prev">‹</button>
+      <video class="spv-video" controls autoplay></video>
+      <button class="spv-nav spv-next">›</button>
+    </div>
+    <div class="spv-footer">
+      <div class="spv-caption">
+        <span class="spv-filename"></span>
+        <span class="spv-counter"></span>
+      </div>
+      <div class="spv-actions">
+        <a class="spv-btn" download>⬇ 다운로드</a>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+
+  const videoEl    = overlay.querySelector('.spv-video');
+  const prevBtn     = overlay.querySelector('.spv-prev');
+  const nextBtn     = overlay.querySelector('.spv-next');
+  const filenameEl  = overlay.querySelector('.spv-filename');
+  const counterEl   = overlay.querySelector('.spv-counter');
+  const dlBtn       = overlay.querySelector('.spv-btn[download]');
+
+  function show(i) {
+    idx = i;
+    const video = videos[idx];
+    videoEl.src = video.url;
+    filenameEl.textContent = video.filename || '';
+    counterEl.textContent = `${(idx + 1).toLocaleString()} / ${videos.length.toLocaleString()}`;
+    dlBtn.href = video.url;
+    dlBtn.download = video.filename || 'video.mp4';
+    prevBtn.style.visibility = idx > 0 ? 'visible' : 'hidden';
+    nextBtn.style.visibility = idx < videos.length - 1 ? 'visible' : 'hidden';
+  }
+
+  function close() {
+    videoEl.pause();
+    videoEl.removeAttribute('src');
+    videoEl.load();
+    document.removeEventListener('keydown', onKey);
+    overlay.remove();
+    if (window._pageCleanup === close) window._pageCleanup = null;
+  }
+
+  function onKey(e) {
+    if (e.key === 'Escape') { close(); return; }
+    if (e.target.closest('input, textarea') || e.isComposing) return;
+    if (e.key === 'ArrowLeft'  && idx > 0) show(idx - 1);
+    if (e.key === 'ArrowRight' && idx < videos.length - 1) show(idx + 1);
+  }
+
+  overlay.querySelector('.spv-close').addEventListener('click', close);
+  prevBtn.addEventListener('click', () => show(idx - 1));
+  nextBtn.addEventListener('click', () => show(idx + 1));
+  document.addEventListener('keydown', onKey);
+  // SPA 네비게이션 시 뷰어가 닫히지 않고 잔존하는 문제 방지 (router.js renderRoute)
+  window._pageCleanup = close;
+
+  show(startIdx);
 }
 
 function _openSharePhotoViewer(token, photos, startIdx) {

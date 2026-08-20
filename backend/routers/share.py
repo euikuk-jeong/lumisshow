@@ -13,6 +13,8 @@ from backend.models.schemas import (
     ShareAlbumResponse,
     ShareAuthRequest,
     SharePhotosResponse,
+    ShareVideoItem,
+    ShareVideosResponse,
     build_share_photo_item,
     build_slideshow_defaults,
     parse_music_paths,
@@ -243,7 +245,9 @@ async def get_album(token: str, request: Request, db=Depends(get_db)):
         SELECT a.name, a.description, a.music_path, a.cover_path, a.created_at,
                a.slideshow_interval, a.slideshow_order, a.slideshow_effect,
                a.slideshow_music, a.slideshow_volume, a.slideshow_loop,
-               a.ui_theme, sl.expires_at, COUNT(ap.id) AS photo_count
+               a.ui_theme, sl.expires_at,
+               COALESCE(SUM(CASE WHEN ap.id IS NULL OR ap.media_type = 'video' THEN 0 ELSE 1 END), 0) AS photo_count,
+               COALESCE(SUM(CASE WHEN ap.media_type = 'video' THEN 1 ELSE 0 END), 0) AS video_count
         FROM share_links sl
         JOIN albums a ON a.id = sl.album_id
         LEFT JOIN album_photos ap ON ap.album_id = a.id
@@ -263,7 +267,7 @@ async def get_album(token: str, request: Request, db=Depends(get_db)):
             """
             SELECT ap.file_path FROM album_photos ap
             JOIN share_links sl ON sl.album_id = ap.album_id
-            WHERE sl.token = ?
+            WHERE sl.token = ? AND ap.media_type != 'video'
             ORDER BY ap.sort_order, ap.id
             """,
             (token,),
@@ -293,6 +297,7 @@ async def get_album(token: str, request: Request, db=Depends(get_db)):
         "album_name": row["name"],
         "description": row["description"],
         "photo_count": row["photo_count"],
+        "video_count": row["video_count"],
         "created_at": row["created_at"],
         "expires_at": row["expires_at"],
         "has_music": len(music_paths) > 0,
@@ -323,7 +328,7 @@ async def get_photos(
         SELECT COUNT(*) AS n
         FROM share_links sl
         JOIN album_photos ap ON ap.album_id = sl.album_id
-        WHERE sl.token = ? AND sl.is_active = 1
+        WHERE sl.token = ? AND sl.is_active = 1 AND ap.media_type != 'video'
         """,
         (token,),
     ) as cur:
@@ -333,7 +338,7 @@ async def get_photos(
         SELECT ap.id, ap.file_path
         FROM share_links sl
         JOIN album_photos ap ON ap.album_id = sl.album_id
-        WHERE sl.token = ? AND sl.is_active = 1
+        WHERE sl.token = ? AND sl.is_active = 1 AND ap.media_type != 'video'
         ORDER BY ap.sort_order, ap.id
     """
     params: list = [token]
@@ -373,6 +378,51 @@ async def get_photos(
     return SharePhotosResponse(photos=photos, total=total, page=page)
 
 
+@router.get("/{token}/videos", response_model=ShareVideosResponse)
+async def get_videos(token: str, request: Request, db=Depends(get_db)):
+    """앨범 내 동영상 갤러리(슬라이드쇼 밖) 목록. 사진과 분리된 응답 —
+    photos 배열은 media_type='photo'만 담도록 위 get_photos()에서 필터링했으므로,
+    이 엔드포인트를 빠뜨려도 기존 소비자(슬라이드쇼·사진 ZIP 등)가 동영상을
+    보게 되는 일은 구조적으로 없다."""
+    verify_share_session_cookie(token, request.cookies.get(_COOKIE_NAME))
+    await _get_valid_link(token, db)
+
+    async with db.execute(
+        """
+        SELECT ap.id, ap.file_path
+        FROM share_links sl
+        JOIN album_photos ap ON ap.album_id = sl.album_id
+        WHERE sl.token = ? AND sl.is_active = 1 AND ap.media_type = 'video'
+        ORDER BY ap.sort_order, ap.id
+        """,
+        (token,),
+    ) as cur:
+        rows = await cur.fetchall()
+
+    file_paths = [r["file_path"] for r in rows]
+    meta_by_rel = await load_photo_meta(file_paths, db)
+
+    photo_root = os.path.realpath(os.getenv("PHOTO_ROOT", "./testdata/photos"))
+    videos = []
+    for r in rows:
+        meta = meta_by_rel.get(r["file_path"], {})
+        size = None
+        try:
+            size = os.path.getsize(resolve_abs(r["file_path"], photo_root))
+        except OSError:
+            pass
+        videos.append(ShareVideoItem(
+            id=r["id"],
+            url=f"/media/{quote(r['file_path'])}",
+            thumb_url=f"/thumb/{quote(r['file_path'])}?size=medium",
+            filename=os.path.basename(r["file_path"]),
+            duration=meta.get("duration"),
+            taken_at=meta.get("taken_at"),
+            size=size,
+        ))
+    return ShareVideosResponse(videos=videos, total=len(videos))
+
+
 @router.get("/{token}/og-image")
 async def og_cover_image(token: str, request: Request, db=Depends(get_db)):
     """카카오톡 등 SNS 미리보기용 커버 이미지. 세션 쿠키 불필요.
@@ -401,7 +451,7 @@ async def og_cover_image(token: str, request: Request, db=Depends(get_db)):
             """
             SELECT ap.file_path FROM share_links sl
             JOIN album_photos ap ON ap.album_id = sl.album_id
-            WHERE sl.token = ? AND sl.is_active = 1
+            WHERE sl.token = ? AND sl.is_active = 1 AND ap.media_type != 'video'
             ORDER BY ap.sort_order, ap.id
             LIMIT 1
             """,
@@ -437,7 +487,7 @@ async def download_zip(token: str, request: Request, db=Depends(get_db)):
         FROM share_links sl
         JOIN albums a ON a.id = sl.album_id
         JOIN album_photos ap ON ap.album_id = sl.album_id
-        WHERE sl.token = ? AND sl.is_active = 1
+        WHERE sl.token = ? AND sl.is_active = 1 AND ap.media_type != 'video'
           AND (sl.expires_at IS NULL OR sl.expires_at > datetime('now'))
         ORDER BY ap.sort_order, ap.id
         """,
@@ -457,6 +507,47 @@ async def download_zip(token: str, request: Request, db=Depends(get_db)):
     album_name = rows[0]["album_name"]
     safe_name = "".join(c for c in album_name if c.isalnum() or c in " _-").strip() or "album"
     encoded_name = quote(safe_name + ".zip", safe="")
+
+    return StreamingResponse(
+        zip_generator(paths),
+        media_type="application/zip",
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{encoded_name}"},
+    )
+
+
+@router.get("/{token}/download-videos")
+async def download_videos_zip(token: str, request: Request, db=Depends(get_db)):
+    """앨범 내 동영상 전체 ZIP 다운로드 (스트리밍). 사진 ZIP(/download)과는 별도 —
+    원본 동영상은 대용량일 수 있어 사진 ZIP에는 섞지 않는다(doc/plan.md FR-05-5)."""
+    verify_share_session_cookie(token, request.cookies.get(_COOKIE_NAME))
+    await _get_valid_link(token, db)
+
+    async with db.execute(
+        """
+        SELECT ap.file_path, a.name AS album_name
+        FROM share_links sl
+        JOIN albums a ON a.id = sl.album_id
+        JOIN album_photos ap ON ap.album_id = sl.album_id
+        WHERE sl.token = ? AND sl.is_active = 1 AND ap.media_type = 'video'
+          AND (sl.expires_at IS NULL OR sl.expires_at > datetime('now'))
+        ORDER BY ap.sort_order, ap.id
+        """,
+        (token,),
+    ) as cur:
+        rows = await cur.fetchall()
+
+    if not rows:
+        raise HTTPException(status_code=404, detail="No videos in album")
+
+    zip_root = os.path.realpath(os.getenv("PHOTO_ROOT", "./testdata/photos"))
+    paths = []
+    for r in rows:
+        abs_path = resolve_abs(r["file_path"], zip_root)
+        assert_within_photo_root(abs_path, zip_root)
+        paths.append(abs_path)
+    album_name = rows[0]["album_name"]
+    safe_name = "".join(c for c in album_name if c.isalnum() or c in " _-").strip() or "album"
+    encoded_name = quote(safe_name + "_videos.zip", safe="")
 
     return StreamingResponse(
         zip_generator(paths),

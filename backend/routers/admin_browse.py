@@ -31,7 +31,7 @@ from backend.services.photo_tags import (
     search_tag_matched_paths,
 )
 from backend.services.settings import get_settings
-from backend.services.thumbnail import IMAGE_EXTENSIONS, generate_thumbnail
+from backend.services.thumbnail import MEDIA_EXTENSIONS, generate_thumbnail, is_video
 
 router = APIRouter(prefix="/api/admin", tags=["admin-browse"])
 
@@ -85,7 +85,7 @@ def _scan_dir_basic(real_path: str, root: str, hidden_paths: list[str]) -> tuple
                     child_count = 0
                 folders.append(FolderItem(path=rel, name=entry.name, child_count=child_count))
             elif entry.is_file():
-                if Path(entry.name).suffix.lower() not in IMAGE_EXTENSIONS:
+                if Path(entry.name).suffix.lower() not in MEDIA_EXTENSIONS:
                     continue
                 stat = os.stat(entry.path)
                 basics.append((entry.path, entry.name, stat.st_size))
@@ -109,7 +109,7 @@ def _walk_photos_basic(
         for fname in sorted(filenames):
             if _is_hidden(fname):
                 continue
-            if Path(fname).suffix.lower() not in IMAGE_EXTENSIONS:
+            if Path(fname).suffix.lower() not in MEDIA_EXTENSIONS:
                 continue
             if q and q.lower() not in fname.lower():
                 continue
@@ -174,6 +174,8 @@ async def _enrich_photos(
             width=meta.get("width"),
             height=meta.get("height"),
             thumb_url=f"/api/admin/thumb?path={quote(rel)}&size=small",
+            media_type="video" if is_video(name) else "photo",
+            duration=meta.get("duration"),
         ))
     return items
 

@@ -19,6 +19,9 @@
  *   onIndexChanged(idx)         새 이미지 로드 완료 후 호출 — 캡션/카운터/정보패널 등 갱신
  *   scrollableSelector          이 셀렉터 안에서 시작한 wheel은 확대/축소하지 않고 무시
  *                               (예: 라이트박스 정보 패널의 자체 스크롤을 보존)
+ *   isEnabled()                 기본 true. false를 반환하는 동안 줌/팬/스와이프 제스처를
+ *                               전부 무시한다 — 동영상(혼합 그리드의 라이트박스 등)처럼
+ *                               이 엔진의 대상이 아닌 슬라이드를 보여주는 중일 때 사용.
  *
  * 반환: { goTo(idx, opts), resetZoom(), changeZoom(factor) }
  */
@@ -39,6 +42,7 @@ export function createPhotoZoomViewer({
   onIndexChanged,
   onZoomChange = null,
   scrollableSelector = null,
+  isEnabled = () => true,
 }) {
   let zoom = MIN_ZOOM;
   let panX = 0, panY = 0;
@@ -91,12 +95,14 @@ export function createPhotoZoomViewer({
 
   // ── 마우스 가운데 버튼: 줌 리셋 ──────────────────────────
   bodyEl.addEventListener('mousedown', e => {
+    if (!isEnabled()) return;
     if (scrollableSelector && e.target.closest(scrollableSelector)) return;
     if (e.button === 1) { e.preventDefault(); resetZoom(); }
   });
 
   // ── 휠 줌 (정보 패널 등 자체 스크롤 영역은 제외) ──────────
   bodyEl.addEventListener('wheel', e => {
+    if (!isEnabled()) return;
     if (scrollableSelector && e.target.closest(scrollableSelector)) return;
     e.preventDefault();
     const rect = bodyEl.getBoundingClientRect();
@@ -110,6 +116,7 @@ export function createPhotoZoomViewer({
   // 드래그 팬이 bodyEl에서 포인터를 capture하는데, dblclick을 imgEl에 두면
   // 캡처가 이벤트 타깃을 bodyEl로 바꿔버려 리셋 더블클릭이 씹힐 수 있다.
   bodyEl.addEventListener('dblclick', e => {
+    if (!isEnabled()) return;
     if (scrollableSelector && e.target.closest(scrollableSelector)) return;
     if (zoom > 1) {
       resetZoom();
@@ -131,6 +138,7 @@ export function createPhotoZoomViewer({
   const pointMid  = (a, b) => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
 
   bodyEl.addEventListener('pointerdown', e => {
+    if (!isEnabled()) return;
     if (scrollableSelector && e.target.closest(scrollableSelector)) return;
     // 마우스 가운데/오른쪽 버튼은 팬 대상이 아니다 — 이 핸들러가 관여하면
     // preventDefault·setPointerCapture가 걸려 가운데버튼 줌 리셋(mousedown)이 씹힌다

@@ -123,3 +123,16 @@ BASE_URL=http://192.168.1.100:8080
 동일 IP에서 5회 연속 로그인 실패 시 15분간 해당 IP의 로그인이 차단된다 (`share_link_failures` 테이블 재사용, `admin:{ip}` 키).
 
 **주의**: DSM Reverse Proxy 뒤에서는 모든 클라이언트 IP가 프록시 IP(예: `127.0.0.1`)로 단일화될 수 있어, 속도 제한이 사실상 전역으로 동작한다. 이 경우 DSM 방화벽 또는 Reverse Proxy의 요청 속도 제한 기능을 함께 사용할 것을 권장한다.
+
+---
+
+## 서드파티 의존성 라이센스
+
+### ffmpeg (동영상 썸네일·메타 추출)
+
+`docker/Dockerfile`이 `apt-get install ffmpeg`로 Debian 공식 패키지를 설치한다(수정 없이 그대로 사용).
+
+- Debian의 `ffmpeg` 패키지는 `--enable-gpl` 빌드(libx264 등 포함)라 **GPL 2+** 라이센스.
+- LumisShow 백엔드는 `subprocess.run(["ffmpeg", ...])`로 별도 프로세스만 호출한다 — libavcodec을 Python 프로세스에 링크하지 않고 파일/stdio로만 통신하므로, 백엔드 자체 코드에 GPL이 전파되지 않는다(arm's-length 프로세스 호출 패턴).
+- ffmpeg 바이너리를 수정하지 않고 그대로 재배포하며, 소스는 Debian 아카이브에서 이미 공개 제공 중이라 별도 소스 동봉 의무는 실무상 없음.
+- 법률 자문 아님 — 상업적 재배포·판매 목적이면 변호사 검토 권장.

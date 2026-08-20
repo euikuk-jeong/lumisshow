@@ -127,6 +127,17 @@ async def test_media_returns_image_bytes(admin_client, media_env):
     assert len(r.content) > 0
 
 
+async def test_media_range_request_returns_206(admin_client, media_env):
+    """동영상 시킹 스트리밍이 의존하는 Range 지원 회귀 방지 — FileResponse가
+    Range 헤더에 206 + Accept-Ranges + Content-Range로 응답해야 한다."""
+    path = media_env["stored_path"]
+    r = await admin_client.get(f"/media/{path}", headers={"Range": "bytes=0-9"})
+    assert r.status_code == 206
+    assert r.headers["accept-ranges"] == "bytes"
+    assert "content-range" in r.headers
+    assert len(r.content) == 10
+
+
 async def test_media_no_cookie(admin_client, tmp_path):
     """세션 쿠키 없이 요청 → 401."""
     photo_path = str(tmp_path / "photos" / "nc2.jpg")
