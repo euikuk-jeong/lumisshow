@@ -219,8 +219,8 @@ function renderEditForm(album, links, tzOffset, serverTheme = 'dark') {
                   <div>
                     <p class="sort-group-label">방향</p>
                     <div class="settings-radios" style="gap:12px;font-size:13px">
-                      <label><input type="radio" name="ps-dir" value="asc" ${(album.photo_sort_dir || 'asc') !== 'desc' ? 'checked' : ''}> 오름차순</label>
-                      <label><input type="radio" name="ps-dir" value="desc" ${album.photo_sort_dir === 'desc' ? 'checked' : ''}> 내림차순</label>
+                      <label><input type="radio" name="ps-dir" value="asc" ${album.photo_sort_dir === 'asc' ? 'checked' : ''}> 오름차순</label>
+                      <label><input type="radio" name="ps-dir" value="desc" ${(album.photo_sort_dir || 'desc') !== 'asc' ? 'checked' : ''}> 내림차순</label>
                     </div>
                   </div>
                   <button type="button" class="btn btn-primary btn-sm" id="btn-sort-apply">적용</button>

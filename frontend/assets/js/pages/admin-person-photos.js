@@ -29,20 +29,20 @@ export async function renderAdminPersonPhotos(personId) {
     </div>
     <div class="flex gap-2 items-center" style="justify-content:flex-end;margin-bottom:12px">
       <div class="photo-sort-wrap">
-        <button type="button" class="btn btn-ghost btn-sm" id="btn-photo-sort">정렬: 파일명 ↑</button>
+        <button type="button" class="btn btn-ghost btn-sm" id="btn-photo-sort">정렬: 촬영일 ↓</button>
         <div class="photo-sort-popover" id="photo-sort-popover" style="display:none">
           <div>
             <p class="sort-group-label">정렬 기준</p>
             <div class="settings-radios" style="gap:12px;font-size:13px">
-              <label><input type="radio" name="pp-by" value="filename" checked> 파일명</label>
-              <label><input type="radio" name="pp-by" value="taken_at"> 촬영일</label>
+              <label><input type="radio" name="pp-by" value="filename"> 파일명</label>
+              <label><input type="radio" name="pp-by" value="taken_at" checked> 촬영일</label>
             </div>
           </div>
           <div>
             <p class="sort-group-label">방향</p>
             <div class="settings-radios" style="gap:12px;font-size:13px">
-              <label><input type="radio" name="pp-dir" value="asc" checked> 오름차순</label>
-              <label><input type="radio" name="pp-dir" value="desc"> 내림차순</label>
+              <label><input type="radio" name="pp-dir" value="asc"> 오름차순</label>
+              <label><input type="radio" name="pp-dir" value="desc" checked> 내림차순</label>
             </div>
           </div>
         </div>
@@ -61,7 +61,7 @@ export async function renderAdminPersonPhotos(personId) {
     window.navigate(`/admin/people/${personId}/slideshow`);
   });
 
-  const state = { viewMode: 'grid', sortBy: 'filename', sortDir: 'asc', photos: [] };
+  const state = { viewMode: 'grid', sortBy: 'taken_at', sortDir: 'desc', photos: [] };
   let displayed = [];
   const recomputeDateOffsets = initDateScrollIndicator(
     'date-scroll-indicator', '#photos-content', () => state.viewMode === 'date'
