@@ -72,23 +72,26 @@ export async function renderAlbumView(token) {
         <h1 class="viewer-title">${esc(album.album_name)}</h1>
         ${album.description ? `<p class="viewer-desc text-muted">${esc(album.description)}</p>` : ''}
         <div class="viewer-meta">
-          <span>📷 ${album.photo_count.toLocaleString()}장</span>
-          ${album.video_count > 0 ? `<button type="button" class="viewer-meta-video-link" id="btn-jump-video">🎬 동영상 ${album.video_count.toLocaleString()}개 보기 ↓</button>` : ''}
+          ${photos.length > 0 ? `<span>📷 ${album.photo_count.toLocaleString()}장</span>` : ''}
+          ${videos.length > 0 ? `<span>🎬 ${album.video_count.toLocaleString()}개</span>` : ''}
           <span>📅 ${new Date(album.created_at).toLocaleDateString('ko-KR')}</span>
           ${expiryHtml}
           ${album.has_music ? '<span>🎵 음악 있음</span>' : ''}
         </div>
-        <div class="viewer-actions">
-          <button class="btn btn-primary btn-lg" id="btn-slideshow">▶ 슬라이드쇼</button>
-          <button class="btn btn-ghost btn-lg" id="btn-settings">⚙ 설정</button>
-          <label class="viewer-lowpower-check" title="느리거나 오래된 TV 등에서 재생이 버벅일 때 체크하세요.">
-            <input type="checkbox" id="chk-lowpower">
-            간단히 보기
-          </label>
-        </div>
-        <a class="btn btn-ghost w-full viewer-download"
-           ${photos.length > 0 ? `href="/api/share/${token}/download"` : 'aria-disabled="true" tabindex="-1" style="opacity:0.4;pointer-events:none;cursor:not-allowed"'}>⬇ 전체 다운로드 (ZIP)</a>
         ${photos.length > 0 ? `
+          <div class="viewer-section-header" id="photo-section">
+            <h2 class="viewer-section-title">📷 사진 (${photos.length.toLocaleString()})</h2>
+            ${videos.length > 0 ? `<button type="button" class="viewer-section-jump" id="btn-jump-video">🎬 동영상 보기 ↓</button>` : ''}
+          </div>
+          <a class="btn btn-ghost w-full viewer-download" href="/api/share/${token}/download">⬇ 사진 전체 다운로드 (ZIP)</a>
+          <div class="viewer-actions">
+            <button class="btn btn-primary btn-lg" id="btn-slideshow">▶ 슬라이드쇼</button>
+            <button class="btn btn-ghost btn-lg" id="btn-settings">⚙ 설정</button>
+            <label class="viewer-lowpower-check" title="느리거나 오래된 TV 등에서 재생이 버벅일 때 체크하세요.">
+              <input type="checkbox" id="chk-lowpower">
+              간단히 보기
+            </label>
+          </div>
           <div class="viewer-grid" id="thumb-grid">
             ${photos.map((p, i) => `
               <div class="viewer-thumb" data-idx="${i}">
@@ -96,7 +99,10 @@ export async function renderAlbumView(token) {
               </div>`).join('')}
           </div>` : ''}
         ${videos.length > 0 ? `
-          <h2 class="viewer-section-title" id="video-section">🎬 동영상 (${videos.length.toLocaleString()})</h2>
+          <div class="viewer-section-header" id="video-section">
+            <h2 class="viewer-section-title">🎬 동영상 (${videos.length.toLocaleString()})</h2>
+            ${photos.length > 0 ? `<button type="button" class="viewer-section-jump" id="btn-jump-photo">📷 사진 보기 ↑</button>` : ''}
+          </div>
           <a class="btn btn-ghost w-full viewer-download" href="/api/share/${token}/download-videos">⬇ 동영상 전체 다운로드 (ZIP)</a>
           <div class="viewer-grid" id="video-grid">
             ${videos.map((v, i) => `
@@ -160,14 +166,17 @@ export async function renderAlbumView(token) {
     if (el) el.textContent = `${title} ${v} · Made by Ekjeong`;
   });
 
-  document.getElementById('btn-slideshow').addEventListener('click', () => {
+  document.getElementById('btn-slideshow')?.addEventListener('click', () => {
     window.navigate(withLowPower(`/s/${token}/slideshow`));
   });
-  document.getElementById('btn-settings').addEventListener('click', () => {
+  document.getElementById('btn-settings')?.addEventListener('click', () => {
     document.getElementById('settings-overlay').style.display = 'flex';
   });
   document.getElementById('btn-jump-video')?.addEventListener('click', () => {
     document.getElementById('video-section')?.scrollIntoView({ behavior: 'smooth' });
+  });
+  document.getElementById('btn-jump-photo')?.addEventListener('click', () => {
+    document.getElementById('photo-section')?.scrollIntoView({ behavior: 'smooth' });
   });
 
   document.getElementById('thumb-grid')?.addEventListener('click', (e) => {
