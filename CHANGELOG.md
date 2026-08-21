@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.16.4] - 2026-08-21
+
+### Fixed
+- **AI 워커 폴더명 태깅이 신규 사진 분석 다음날에야 반영되던 문제**: `run_scan()`에서
+  폴더명(Kiwi) 태깅 호출이 얼굴/위치/AI태그 분석 루프보다 먼저 실행되어, 이번 스캔에서
+  처음 분석되는 사진은 아직 `photos_analyzed`에 행이 없어 폴더 태깅 대상에서 빠지고
+  다음날 스캔에야 반영되었음. 호출 순서를 분석 루프 뒤로 옮겨 같은 스캔 안에서
+  바로 처리되도록 수정 (`ai_worker/main.py`)
+
 ## [2.16.3] - 2026-08-21
 
 ### Changed
@@ -1371,7 +1380,8 @@ Phase 2 — AI 얼굴 인식 스마트 앨범. NAS 로컬 AI(InsightFace)로 사
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v2.16.3...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v2.16.4...HEAD
+[2.16.4]: https://github.com/euikuk-jeong/lumisshow/compare/v2.16.3...v2.16.4
 [2.16.3]: https://github.com/euikuk-jeong/lumisshow/compare/v2.16.2...v2.16.3
 [2.16.2]: https://github.com/euikuk-jeong/lumisshow/compare/v2.16.1...v2.16.2
 [2.16.1]: https://github.com/euikuk-jeong/lumisshow/compare/v2.16.0...v2.16.1
