@@ -973,6 +973,38 @@ def test_run_scan_respects_disabled_categories(conn, monkeypatch):
     assert loc["city"] == "Seoul"
 
 
+def test_run_scan_path_tags_photos_newly_analyzed_in_same_scan(conn, monkeypatch):
+    """폴더명 태깅 호출이 얼굴/위치/AI태그 분석 루프보다 앞서 있으면, 이번 스캔에서
+    처음 photos_analyzed에 INSERT되는 신규 사진은 아직 그 시점에 행이 없어 대상에서
+    빠지고 다음날 스캔에야 폴더 태깅이 반영되는 버그가 있었다(2026-08-21). 이번 스캔
+    안에서 새로 분석된 사진도 같은 스캔에서 바로 path_tagged에 잡혀야 한다."""
+    from ai_worker import main
+
+    conn.execute("INSERT INTO ai_settings (key, value) VALUES ('face_enabled', '0')")
+    conn.execute("INSERT INTO ai_settings (key, value) VALUES ('location_enabled', '0')")
+    conn.execute("INSERT INTO ai_settings (key, value) VALUES ('ai_tag_enabled', '0')")
+    conn.commit()
+
+    fake = _CountingKiwi({"캠핑장": [_FakeToken("캠핑", "NNG")]})
+    monkeypatch.setattr(scanner, "_get_kiwi", lambda: fake)
+
+    _make_jpeg(os.getenv("PHOTO_ROOT"), "2024/캠핑장/a.jpg")
+
+    summary = main.run_scan()
+
+    assert summary["photos"] == 1
+    assert summary["path_tagged"] == 1
+    assert conn.execute(
+        "SELECT path_tag_done FROM photos_analyzed WHERE path = '2024/캠핑장/a.jpg'"
+    ).fetchone()["path_tag_done"] == 1
+    tags = {
+        r["tag"] for r in conn.execute(
+            "SELECT tag FROM photo_tags WHERE photo_path = '2024/캠핑장/a.jpg' AND source = 'path'"
+        )
+    }
+    assert tags == {"캠핑"}
+
+
 def test_run_tag_backfill_respects_ai_tag_disabled(conn, monkeypatch):
     """ai_tag_enabled=0이면 CLIP 모델을 로딩하지 않고, 이미 있는 photo_embeddings도
     재채점하지 않아야 한다(끄면 새로 생성 안 함 원칙은 소급 처리에도 동일 적용)."""
