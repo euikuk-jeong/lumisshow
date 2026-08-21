@@ -22,8 +22,8 @@ export async function renderAdminBrowse() {
       <div class="browse-toolbar-right">
         <select id="sort-select" class="form-input" style="width:auto">
           <option value="name-asc">파일명 ↑</option>
-          <option value="name-desc" selected>파일명 ↓</option>
-          <option value="date-asc">날짜 ↑</option>
+          <option value="name-desc">파일명 ↓</option>
+          <option value="date-asc" selected>날짜 ↑</option>
           <option value="date-desc">날짜 ↓</option>
         </select>
         <div class="view-toggle">
@@ -50,7 +50,7 @@ export async function renderAdminBrowse() {
     path: '',
     selected: new Set(),
     viewMode: 'grid',
-    sortBy: 'name-desc',
+    sortBy: 'date-asc',
     lastFolders: [],
     lastPhotos: [],
     lastPath: null,
@@ -197,8 +197,8 @@ function setViewMode(state, mode) {
   const sortSelect = document.getElementById('sort-select');
   sortSelect.querySelectorAll('option[value^="name-"]').forEach(o => { o.disabled = mode === 'date'; });
   if (mode === 'date' && state.sortBy.startsWith('name')) {
-    state.sortBy = 'date-desc';
-    sortSelect.value = 'date-desc';
+    state.sortBy = 'date-asc';
+    sortSelect.value = 'date-asc';
   }
 
   renderBrowseResult(state);

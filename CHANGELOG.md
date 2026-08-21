@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.16.3] - 2026-08-21
+
+### Changed
+- **사진 정렬 기본값 재조정**: 촬영일 오래된 순(오름차순)으로 재변경.
+  앨범 사진 DB 디폴트/앨범 편집/사진 탐색/공유 앨범 뷰어는 `taken_at asc`로,
+  인물 전체 사진은 기존 `taken_at desc` 유지
+  (`backend/models/schemas.py`, `backend/routers/admin_albums.py`,
+  `frontend/assets/js/pages/admin-browse.js`)
+
 ## [2.16.2] - 2026-08-21
 
 ### Changed
@@ -1362,7 +1371,8 @@ Phase 2 — AI 얼굴 인식 스마트 앨범. NAS 로컬 AI(InsightFace)로 사
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v2.16.2...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v2.16.3...HEAD
+[2.16.3]: https://github.com/euikuk-jeong/lumisshow/compare/v2.16.2...v2.16.3
 [2.16.2]: https://github.com/euikuk-jeong/lumisshow/compare/v2.16.1...v2.16.2
 [2.16.1]: https://github.com/euikuk-jeong/lumisshow/compare/v2.16.0...v2.16.1
 [2.16.0]: https://github.com/euikuk-jeong/lumisshow/compare/v2.15.4...v2.16.0
