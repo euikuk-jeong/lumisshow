@@ -127,8 +127,8 @@ async def test_get_album_photos_sorted_by_sort_order(admin_client):
     )
     album_id = r.json()["id"]
     data = (await admin_client.get(f"/api/admin/albums/{album_id}")).json()
-    assert os.path.basename(data["photos"][0]["file_path"]) == "second.jpg"
-    assert os.path.basename(data["photos"][1]["file_path"]) == "first.jpg"
+    assert os.path.basename(data["photos"][0]["file_path"]) == "first.jpg"
+    assert os.path.basename(data["photos"][1]["file_path"]) == "second.jpg"
 
 
 async def test_get_album_not_found(admin_client):
@@ -251,8 +251,8 @@ async def test_add_photos_appends_sort_order(admin_client):
         json={"photo_paths": ["second.jpg"]},
     )
     photos = (await admin_client.get(f"/api/admin/albums/{album_id}")).json()["photos"]
-    assert os.path.basename(photos[0]["file_path"]) == "second.jpg"
-    assert os.path.basename(photos[1]["file_path"]) == "first.jpg"
+    assert os.path.basename(photos[0]["file_path"]) == "first.jpg"
+    assert os.path.basename(photos[1]["file_path"]) == "second.jpg"
 
 
 async def test_add_photos_to_nonexistent_album(admin_client):
@@ -314,17 +314,17 @@ async def test_reorder_photos(admin_client):
     assert r.status_code == 204
 
     photos_after = (await admin_client.get(f"/api/admin/albums/{album_id}")).json()["photos"]
-    assert os.path.basename(photos_after[0]["file_path"]) == "h.jpg"
-    assert os.path.basename(photos_after[1]["file_path"]) == "i.jpg"
+    assert os.path.basename(photos_after[0]["file_path"]) == "i.jpg"
+    assert os.path.basename(photos_after[1]["file_path"]) == "h.jpg"
 
 
 # ── 사진 정렬 ─────────────────────────────────────────────────────────────────
 
-async def test_photo_sort_defaults_taken_at_desc(admin_client):
+async def test_photo_sort_defaults_taken_at_asc(admin_client):
     r = await admin_client.post("/api/admin/albums", json={"name": "Sort"})
     data = r.json()
     assert data["photo_sort_by"] == "taken_at"
-    assert data["photo_sort_dir"] == "desc"
+    assert data["photo_sort_dir"] == "asc"
 
 
 async def test_photo_sort_filename_asc(admin_client):
@@ -385,7 +385,7 @@ async def test_add_photos_respects_sort(admin_client):
     )
     photos = (await admin_client.get(f"/api/admin/albums/{album_id}")).json()["photos"]
     names = [os.path.basename(p["file_path"]) for p in photos]
-    assert names == ["z.jpg", "m.jpg", "a.jpg"]
+    assert names == ["a.jpg", "m.jpg", "z.jpg"]
 
 
 async def test_photo_sort_invalid_values_sanitized(admin_client):

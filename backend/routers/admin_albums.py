@@ -52,7 +52,7 @@ _SLIDESHOW_DEFAULTS = {
 
 _PHOTO_SORT_DEFAULTS = {
     "photo_sort_by": "taken_at",
-    "photo_sort_dir": "desc",
+    "photo_sort_dir": "asc",
 }
 
 _ALLOWED_UPDATE_COLS = {

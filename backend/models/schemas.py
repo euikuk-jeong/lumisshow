@@ -109,7 +109,7 @@ class AlbumResponse(BaseModel):
     slideshow_volume: int = 25
     slideshow_loop: bool = True
     photo_sort_by: str = "taken_at"
-    photo_sort_dir: str = "desc"
+    photo_sort_dir: str = "asc"
     ui_theme: Optional[str] = None
 
 class AlbumDetail(AlbumResponse):
