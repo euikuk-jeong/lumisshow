@@ -73,79 +73,82 @@ def run_scan(limit: int | None = None) -> dict:
         "renamed": renamed, "orphaned": orphaned, "elapsed": 0.0,
     }
 
+    if pending:
+        pipeline = None
+        enrollment = {}
+        threshold = config.match_threshold()
+        if flags["face_enabled"]:
+            log.info("모델 로딩 중 (buffalo_l, det_size=%d)...", config.det_size())
+            pipeline = FacePipeline()
+            enrollment = matcher.load_enrollment(conn)
+            log.info("등록 인물 %d명, threshold=%.2f", len(enrollment), threshold)
+        else:
+            log.info("얼굴 인식 비활성화(Admin 설정) — 이번 스캔은 얼굴 검출을 건너뜁니다")
+
+        # CLIP 태깅은 얼굴 인식과 별개 기능이라, 모델 다운로드/로딩이 실패해도(네트워크
+        # 불안정 등) 얼굴 분석 자체는 계속 진행한다 — best-effort.
+        clip_ctx = None
+        if flags["ai_tag_enabled"]:
+            try:
+                log.info("CLIP 태깅 모델 로딩 중...")
+                clip_tagger = ClipTagger()
+                tag_threshold = tag_threshold_setting(conn)
+                text_embeds = clip_tagger.embed_texts([e["prompt"] for e in TAG_VOCAB])
+                clip_ctx = ClipTaggingContext(
+                    tagger=clip_tagger, text_embeds=text_embeds, threshold=tag_threshold
+                )
+                log.info("CLIP 태깅 준비 완료 (어휘 %d개, threshold=%.2f)", len(TAG_VOCAB), tag_threshold)
+            except Exception:
+                log.exception("CLIP 태깅 모델 로딩 실패 — 이번 스캔은 사물(AI 태그) 태깅을 건너뜁니다")
+        else:
+            log.info("사물(AI 태그) 인식 비활성화(Admin 설정) — 이번 스캔은 CLIP 태깅을 건너뜁니다")
+
+        start = time.monotonic()
+        total_faces = 0
+        errors = 0
+        located = 0
+        tagged = 0
+        for i, (rel_path, mtime) in enumerate(pending, 1):
+            face_count, ok, was_located, was_tagged = analyze_and_store(
+                pipeline, conn, rel_path, mtime, enrollment, threshold,
+                clip_ctx=clip_ctx, location_enabled=flags["location_enabled"],
+            )
+            total_faces += face_count
+            if not ok:
+                errors += 1
+            if was_located:
+                located += 1
+            if was_tagged:
+                tagged += 1
+            if i % 100 == 0:
+                elapsed = time.monotonic() - start
+                log.info(
+                    "%d/%d장 처리 (%.1f초/장, 얼굴 %d개)",
+                    i, len(pending), elapsed / i, total_faces,
+                )
+        elapsed = time.monotonic() - start
+        log.info("완료: %d장, 얼굴 %d개, 에러 %d건, %.0f초", len(pending), total_faces,
+                 errors, elapsed)
+
+        summary["faces"] = total_faces
+        summary["errors"] = errors
+        summary["located"] = located
+        summary["tagged"] = tagged
+        summary["elapsed"] = elapsed
+
     # 폴더명 태깅(Kiwi)은 mtime 기반 pending과 무관한 커버리지 방식이라, 얼굴 재분석
     # 대상이 없어도(pending 비어도) 실행해야 한다 — 이 기능 도입 이전 사진이나
     # 경로복구로 새로 생긴 path 태그 공백을 여기서 채운다. 카테고리가 꺼져 있으면
-    # 새로 생성하지 않는다(기존 태그는 그대로 둠).
+    # 새로 생성하지 않는다(기존 태그는 그대로 둠). 위 얼굴/위치/AI태그 분석 루프
+    # 뒤에 실행해야 이번 스캔에서 photos_analyzed에 새로 INSERT된 사진도 같은
+    # 스캔에서 바로 폴더 태깅까지 끝난다 — 루프보다 앞서 실행하면 신규 사진은 아직
+    # photos_analyzed에 없어 path_tag_done=0 행 자체가 없고, 다음날 스캔이 되어야
+    # 잡혔다(2026-08-21 버그 수정).
     path_tagged = scanner.tag_paths_from_folder_names(conn) if flags["path_enabled"] else 0
     if path_tagged:
         log.info("폴더명 태깅(Kiwi): %d장에 path 태그 반영", path_tagged)
     summary["path_tagged"] = path_tagged
 
-    if not pending:
-        return summary
-
-    pipeline = None
-    enrollment = {}
-    threshold = config.match_threshold()
-    if flags["face_enabled"]:
-        log.info("모델 로딩 중 (buffalo_l, det_size=%d)...", config.det_size())
-        pipeline = FacePipeline()
-        enrollment = matcher.load_enrollment(conn)
-        log.info("등록 인물 %d명, threshold=%.2f", len(enrollment), threshold)
-    else:
-        log.info("얼굴 인식 비활성화(Admin 설정) — 이번 스캔은 얼굴 검출을 건너뜁니다")
-
-    # CLIP 태깅은 얼굴 인식과 별개 기능이라, 모델 다운로드/로딩이 실패해도(네트워크
-    # 불안정 등) 얼굴 분석 자체는 계속 진행한다 — best-effort.
-    clip_ctx = None
-    if flags["ai_tag_enabled"]:
-        try:
-            log.info("CLIP 태깅 모델 로딩 중...")
-            clip_tagger = ClipTagger()
-            tag_threshold = tag_threshold_setting(conn)
-            text_embeds = clip_tagger.embed_texts([e["prompt"] for e in TAG_VOCAB])
-            clip_ctx = ClipTaggingContext(
-                tagger=clip_tagger, text_embeds=text_embeds, threshold=tag_threshold
-            )
-            log.info("CLIP 태깅 준비 완료 (어휘 %d개, threshold=%.2f)", len(TAG_VOCAB), tag_threshold)
-        except Exception:
-            log.exception("CLIP 태깅 모델 로딩 실패 — 이번 스캔은 사물(AI 태그) 태깅을 건너뜁니다")
-    else:
-        log.info("사물(AI 태그) 인식 비활성화(Admin 설정) — 이번 스캔은 CLIP 태깅을 건너뜁니다")
-
-    start = time.monotonic()
-    total_faces = 0
-    errors = 0
-    located = 0
-    tagged = 0
-    for i, (rel_path, mtime) in enumerate(pending, 1):
-        face_count, ok, was_located, was_tagged = analyze_and_store(
-            pipeline, conn, rel_path, mtime, enrollment, threshold,
-            clip_ctx=clip_ctx, location_enabled=flags["location_enabled"],
-        )
-        total_faces += face_count
-        if not ok:
-            errors += 1
-        if was_located:
-            located += 1
-        if was_tagged:
-            tagged += 1
-        if i % 100 == 0:
-            elapsed = time.monotonic() - start
-            log.info(
-                "%d/%d장 처리 (%.1f초/장, 얼굴 %d개)",
-                i, len(pending), elapsed / i, total_faces,
-            )
-    elapsed = time.monotonic() - start
-    log.info("완료: %d장, 얼굴 %d개, 에러 %d건, %.0f초", len(pending), total_faces,
-             errors, elapsed)
-
-    summary["faces"] = total_faces
-    summary["errors"] = errors
-    summary["located"] = located
-    summary["tagged"] = tagged
-    summary["elapsed"] = elapsed
     return summary
 
 
