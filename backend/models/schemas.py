@@ -1,8 +1,10 @@
 import json
 import os
 from datetime import datetime
-from typing import Optional
+from typing import Literal, Optional
 from pydantic import BaseModel, Field
+
+TitleFont = Literal["gowun-batang", "nanum-pen", "jua"]
 
 
 def parse_music_paths(raw: str | None) -> list[str]:
@@ -78,6 +80,7 @@ class AlbumUpdate(BaseModel):
     photo_sort_by: Optional[str] = None
     photo_sort_dir: Optional[str] = None
     ui_theme: Optional[str] = None
+    title_font: Optional[TitleFont] = None
 
 class AlbumPhotoResponse(BaseModel):
     id: int
@@ -111,6 +114,7 @@ class AlbumResponse(BaseModel):
     photo_sort_by: str = "taken_at"
     photo_sort_dir: str = "asc"
     ui_theme: Optional[str] = None
+    title_font: Optional[TitleFont] = None
 
 class AlbumDetail(AlbumResponse):
     photos: list[AlbumPhotoResponse]
@@ -213,6 +217,7 @@ class ShareAlbumResponse(BaseModel):
     slideshow_defaults: Optional[SlideshowDefaults] = None
     timezone_offset: int = 0
     ui_theme: str = "dark"
+    title_font: Optional[TitleFont] = None
 
 class SharePhotoItem(BaseModel):
     id: int

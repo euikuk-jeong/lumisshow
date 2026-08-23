@@ -2,6 +2,7 @@ import { shareApi, ShareAuthError } from '../api.js';
 import { esc, getVersion, getSiteTitle } from '../utils.js';
 import { EFFECTS, EFFECT_LABELS, loadSlideshowSettings } from '../slideshow-config.js';
 import { createPhotoZoomViewer } from '../photo-zoom-viewer.js';
+import { ensureTitleFontsLoaded, applyTitleFont } from '../title-fonts.js';
 
 function saveSettings(token, s) {
   localStorage.setItem(`slideshow_settings_${token}`, JSON.stringify(s));
@@ -69,7 +70,7 @@ export async function renderAlbumView(token) {
     <div class="viewer-page">
       ${coverUrl ? `<div class="viewer-cover"><img src="${coverUrl}" alt="커버"></div>` : ''}
       <div class="viewer-body">
-        <h1 class="viewer-title">${esc(album.album_name)}</h1>
+        <h1 class="viewer-title" id="viewer-title">${esc(album.album_name)}</h1>
         ${album.description ? `<p class="viewer-desc text-muted">${esc(album.description)}</p>` : ''}
         <div class="viewer-meta">
           ${photos.length > 0 ? `<span>📷 ${album.photo_count.toLocaleString()}장</span>` : ''}
@@ -159,6 +160,11 @@ export async function renderAlbumView(token) {
         </div>
       </div>
     </div>`;
+
+  if (album.title_font) {
+    ensureTitleFontsLoaded();
+    applyTitleFont(document.getElementById('viewer-title'), album.title_font);
+  }
 
   _initSettingsPanel(token, album);
   Promise.all([getSiteTitle(), getVersion()]).then(([title, v]) => {
