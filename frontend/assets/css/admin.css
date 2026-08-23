@@ -156,7 +156,7 @@
 .aei-cover-preview {
   position: relative;
   width: 100%;
-  height: 180px;
+  aspect-ratio: 900 / 400;
   border-radius: var(--radius);
   overflow: hidden;
   margin: 8px 0;
@@ -168,7 +168,7 @@
   left: 0;
   right: 0;
   bottom: 0;
-  height: 54px;
+  height: 30%;
   background: linear-gradient(to bottom, transparent, var(--bg));
   pointer-events: none;
 }

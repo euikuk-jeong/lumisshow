@@ -55,6 +55,7 @@ export async function renderAlbumView(token) {
 
   // 앨범에 설정된 테마를 뷰어에 적용 (localStorage 개인 설정과 별개)
   document.documentElement.dataset.theme = album.ui_theme || 'dark';
+  document.title = album.album_name;
 
   const photos = photosData.photos;
   const videos = videosData.videos;
