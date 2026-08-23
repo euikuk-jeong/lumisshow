@@ -1,6 +1,6 @@
 import { api } from '../api.js';
 import { renderAdminShell } from '../layout.js';
-import { esc } from '../utils.js';
+import { esc, thumbImg } from '../utils.js';
 import { openLightbox } from '../lightbox.js';
 import { initDateScrollIndicator } from '../date-scroll-indicator.js';
 import { openAddTagModal } from '../tag-modal.js';
@@ -351,8 +351,8 @@ function selectableThumb(photo, isSelected) {
   const thumbUrl = photo.thumb_url || '';
   const isVideo = photo.media_type === 'video';
   return `
-    <div class="photo-thumb selectable${isSelected ? ' selected' : ''}" data-path="${esc(photo.path)}">
-      ${thumbUrl ? `<img src="${thumbUrl}" alt="" loading="lazy" onerror="this.style.opacity='0.2'">` : ''}
+    <div class="photo-thumb selectable${isSelected ? ' selected' : ''}${thumbUrl ? ' thumb-loading' : ''}" data-path="${esc(photo.path)}">
+      ${thumbUrl ? thumbImg(thumbUrl) : ''}
       ${isVideo ? '<span class="media-video-badge"></span>' : ''}
       <input type="checkbox" ${isSelected ? 'checked' : ''}>
     </div>`;
@@ -366,8 +366,8 @@ function photoListItem(photo, isSelected) {
   return `
     <div class="photo-list-item selectable${isSelected ? ' selected' : ''}" data-path="${esc(photo.path)}">
       <input type="checkbox" ${isSelected ? 'checked' : ''}>
-      <div class="photo-list-thumb">
-        ${thumbUrl ? `<img src="${thumbUrl}" alt="" loading="lazy" onerror="this.style.opacity='0.2'">` : ''}
+      <div class="photo-list-thumb${thumbUrl ? ' thumb-loading' : ''}">
+        ${thumbUrl ? thumbImg(thumbUrl) : ''}
         ${isVideo ? '<span class="media-video-badge"></span>' : ''}
       </div>
       <span class="photo-list-name" title="${esc(photo.path)}">${esc(photo.name)}</span>

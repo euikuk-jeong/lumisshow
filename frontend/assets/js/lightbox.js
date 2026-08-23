@@ -16,6 +16,7 @@
 import { api } from './api.js';
 import { createPhotoZoomViewer } from './photo-zoom-viewer.js';
 import { esc } from './utils.js';
+import { EXIF_LABELS } from './exif-labels.js';
 
 // backend/services/thumbnail.py의 VIDEO_EXTENSIONS와 동기 유지 필요(컨테이너 분리로
 // 코드 공유 불가 — admin_browse.py의 _AUDIO_EXTENSIONS와 동일한 이유).
@@ -87,26 +88,26 @@ export function openLightbox(paths, startIdx, options = {}) {
     const exifRows = [];
     const add = (label, value) => { if (value != null && value !== '') exifRows.push([label, String(value)]); };
 
-    add('Filename', info.filename);
+    add(EXIF_LABELS.filename, info.filename);
     const slashIdx = path.lastIndexOf('/');
     if (slashIdx > 0) add('경로', path.slice(0, slashIdx));
     if (info.taken_at) {
       const d = new Date(info.taken_at);
       const pad = n => String(n).padStart(2, '0');
-      add('Date', `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`);
+      add(EXIF_LABELS.date, `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`);
     }
-    if (info.width && info.height) add('Resolution', `${info.width} × ${info.height}`);
-    add('Make', info.make);
-    add('Camera', info.camera);
-    add('Software', info.software);
-    add('Shoot Mode', info.shoot_mode);
-    add('Exposure', info.shutter);
-    add('Aperture', info.aperture);
-    add('ISO', info.iso);
-    add('Focal Length', info.focal_length);
-    add('Flash', info.flash);
-    add('Metering', info.metering);
-    add('Exposure Mode', info.exposure_mode);
+    if (info.width && info.height) add(EXIF_LABELS.resolution, `${info.width} × ${info.height}`);
+    add(EXIF_LABELS.make, info.make);
+    add(EXIF_LABELS.camera, info.camera);
+    add(EXIF_LABELS.software, info.software);
+    add(EXIF_LABELS.shootMode, info.shoot_mode);
+    add(EXIF_LABELS.exposure, info.shutter);
+    add(EXIF_LABELS.aperture, info.aperture);
+    add(EXIF_LABELS.iso, info.iso);
+    add(EXIF_LABELS.focalLength, info.focal_length);
+    add(EXIF_LABELS.flash, info.flash);
+    add(EXIF_LABELS.metering, info.metering);
+    add(EXIF_LABELS.exposureMode, info.exposure_mode);
 
     const tagRows = [];
     const addList = (label, list) => { if (list && list.length) tagRows.push([label, list.join(', ')]); };

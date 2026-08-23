@@ -208,9 +208,26 @@
 .photo-thumb {
   position: relative;
   aspect-ratio: 1;
-  background: var(--elevated);
   border-radius: var(--radius);
   overflow: hidden;
+}
+.photo-thumb,
+.photo-list-thumb,
+.person-cover,
+.face-card {
+  background: var(--elevated);
+}
+.photo-thumb.thumb-loading,
+.photo-list-thumb.thumb-loading,
+.person-cover.thumb-loading,
+.face-card.thumb-loading {
+  background: linear-gradient(90deg, var(--elevated) 25%, var(--border) 50%, var(--elevated) 75%);
+  background-size: 200% 100%;
+  animation: thumb-shimmer 1.6s ease-in-out infinite;
+}
+@keyframes thumb-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
 }
 .photo-thumb img {
   width: 100%;
@@ -842,7 +859,6 @@
   flex-shrink: 0;
   border-radius: 4px;
   overflow: hidden;
-  background: var(--elevated);
 }
 .photo-list-thumb img { width: 100%; height: 100%; object-fit: cover; }
 .photo-list-name {
@@ -1081,7 +1097,6 @@
   align-items: center;
   justify-content: center;
   font-size: 40px;
-  background: var(--elevated);
   overflow: hidden;
 }
 .person-cover img { width: 100%; height: 100%; object-fit: cover; }
@@ -1101,7 +1116,6 @@
   overflow: hidden;
   border: 2px solid var(--border);
   cursor: pointer;
-  background: var(--elevated);
 }
 .face-card img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .face-card.selected { border-color: var(--primary); box-shadow: 0 0 0 2px var(--primary-glow); }

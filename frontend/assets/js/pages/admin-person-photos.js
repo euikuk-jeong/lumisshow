@@ -1,6 +1,6 @@
 import { api } from '../api.js';
 import { renderAdminShell } from '../layout.js';
-import { esc } from '../utils.js';
+import { esc, thumbImg } from '../utils.js';
 import { openLightbox } from '../lightbox.js';
 import { initDateScrollIndicator } from '../date-scroll-indicator.js';
 
@@ -118,8 +118,8 @@ export async function renderAdminPersonPhotos(personId) {
   // ── 렌더 ─────────────────────────────────────────────────────────────
   function photoCard(p, idx) {
     return `
-      <div class="photo-thumb" data-idx="${idx}" title="${esc(p.file_path)}">
-        <img src="${p.thumb_small_url}" alt="" loading="lazy" onerror="this.style.opacity='0.3'">
+      <div class="photo-thumb thumb-loading" data-idx="${idx}" title="${esc(p.file_path)}">
+        ${thumbImg(p.thumb_small_url, 0.3)}
       </div>`;
   }
 
@@ -127,8 +127,8 @@ export async function renderAdminPersonPhotos(personId) {
     const taken = p.taken_at ? p.taken_at.slice(0, 16).replace('T', ' ') : '—';
     return `
       <div class="photo-list-item" data-idx="${idx}" title="${esc(p.file_path)}">
-        <div class="photo-list-thumb">
-          <img src="${p.thumb_small_url}" alt="" loading="lazy" onerror="this.style.opacity='0.3'">
+        <div class="photo-list-thumb thumb-loading">
+          ${thumbImg(p.thumb_small_url, 0.3)}
         </div>
         <span class="photo-list-name">${esc(p.filename || '')}</span>
         <div class="photo-list-meta"><span>촬영: ${taken}</span></div>
