@@ -112,6 +112,7 @@ function renderEditForm(album, links, tzOffset, serverTheme = 'dark') {
       <!-- Info -->
       <div class="card aei-info">
           <p class="section-title">기본 정보</p>
+          <div id="cover-preview-wrap">${coverPreviewHtml(album.photos, album.cover_path)}</div>
           <div id="info-error" class="alert alert-error" style="display:none"></div>
           <form id="info-form" class="flex-col gap-3">
             <div class="form-group">
@@ -415,6 +416,8 @@ function renderEditForm(album, links, tzOffset, serverTheme = 'dark') {
     photoState.recomputeDateOffsets();
     const countEl = document.getElementById('photo-count-label');
     if (countEl) countEl.textContent = photoState.photos.length.toLocaleString();
+    const coverEl = document.getElementById('cover-preview-wrap');
+    if (coverEl) coverEl.innerHTML = coverPreviewHtml(photoState.photos, photoState.coverPath);
   }
 
   function setPhotoViewMode(mode) {
@@ -965,6 +968,17 @@ function photoListItemEdit(photo, coverPath, removeMode = false, isSelected = fa
         ${!isCover ? `<button class="photo-set-cover btn btn-ghost btn-sm" data-path="${esc(photo.file_path)}">커버로 설정</button>` : ''}
       </div>
     </div>`;
+}
+
+function coverPreviewHtml(photos, coverPath) {
+  const cover = photos.find(p => p.file_path === coverPath) || photos[0];
+  if (!cover) return '';
+  const thumbUrl = `/api/admin/thumb?path=${encodeURIComponent(cover.file_path)}&size=medium`;
+  return `
+    <div class="aei-cover-preview">
+      <img src="${thumbUrl}" alt="커버 미리보기">
+    </div>
+    <p class="text-muted text-sm" style="margin:6px 0 12px">공유 앨범 화면 상단에 이렇게 표시됩니다</p>`;
 }
 
 function photoSortLabel(sortBy, sortDir) {
