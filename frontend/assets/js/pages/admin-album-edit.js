@@ -130,7 +130,6 @@ function renderEditForm(album, links, tzOffset, serverTheme = 'dark') {
             <label class="form-label">커버</label>
             <div id="cover-preview-wrap">${coverPreviewHtml(album.photos, album.cover_path)}</div>
           </div>
-          <hr class="divider" style="margin:12px 0">
           <div class="flex items-center gap-2">
             <span class="form-label" style="margin:0">조회 수</span>
             <span id="view-count-value">${(album.view_count ?? 0).toLocaleString()}회</span>

@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.17.3] - 2026-08-23
+
+### Fixed
+- **Admin 앨범 편집 "기본 정보" 카드 수평선 중복**: 조회 수 위/아래로 두 개 있던 구분선을
+  조회 수와 앨범 테마 사이 하나로 정리 (`admin-album-edit.js`)
+- **Admin 앨범 편집 커버 미리보기 크롭이 실제 공유 화면과 다르게 보임**: 고정
+  `height:180px`+그라데이션 고정 54px 조합이 실제 뷰어(900px 폭/400px 높이)와 종횡비가
+  달라 크롭 영역이 어긋나던 것을, `aspect-ratio: 900/400`+그라데이션 `height:30%`로 변경해
+  실제 화면과 동일한 크롭·그라데이션 비율을 재현 (`admin.css`)
+- **공유 앨범 화면 브라우저 탭 타이틀이 앨범 이름을 반영하지 않음**: 앨범 로드 후
+  `document.title`을 앨범 이름으로 설정 (`album-view.js`)
+
 ## [2.17.2] - 2026-08-23
 
 ### Fixed
@@ -1448,7 +1460,8 @@ Phase 2 — AI 얼굴 인식 스마트 앨범. NAS 로컬 AI(InsightFace)로 사
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v2.17.2...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v2.17.3...HEAD
+[2.17.3]: https://github.com/euikuk-jeong/lumisshow/compare/v2.17.2...v2.17.3
 [2.17.2]: https://github.com/euikuk-jeong/lumisshow/compare/v2.17.1...v2.17.2
 [2.17.1]: https://github.com/euikuk-jeong/lumisshow/compare/v2.17.0...v2.17.1
 [2.17.0]: https://github.com/euikuk-jeong/lumisshow/compare/v2.16.5...v2.17.0
