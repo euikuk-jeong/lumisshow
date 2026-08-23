@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.17.1] - 2026-08-23
+
+### Fixed
+- **공유 앨범 히어로 커버 크롭 시 인물 잘림**: v2.16.5에서 도입한 `object-position: 50% 20%`
+  고정 크롭만으로는 사진마다 인물 위치가 달라 여전히 잘리는 사례가 있어, 커버 높이를
+  300px→400px(모바일 200px→260px)로 확대하고 하단에 배경색 그라데이션 오버레이를 추가해
+  잘림 경계를 완화 (`viewer.css`)
+- **공유 앨범 사진 전체 다운로드 버튼이 좁은 보조 버튼으로 축소된 문제**: v2.16.5에서
+  `width: fit-content`로 줄였던 것을 이전처럼 전체 폭 버튼으로 복귀 (`viewer.css`)
+
+### Added
+- **Admin 앨범 편집 화면 커버 미리보기**: "기본 정보" 카드 상단에 실제 공유 뷰어와 동일한
+  크롭으로 현재 설정된 커버를 표시. 그리드·라이트박스 어디서 커버를 변경해도 즉시 갱신
+  (`admin-album-edit.js`, `admin.css`)
+- **공유 앨범 구역 구분선**: 앨범 정보/사진/동영상 구역 사이에 구분선을 추가해 화면 구성을
+  명확히 구별 (`album-view.js`)
+
 ## [2.17.0] - 2026-08-23
 
 ### Added
@@ -1414,7 +1431,8 @@ Phase 2 — AI 얼굴 인식 스마트 앨범. NAS 로컬 AI(InsightFace)로 사
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v2.17.0...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v2.17.1...HEAD
+[2.17.1]: https://github.com/euikuk-jeong/lumisshow/compare/v2.17.0...v2.17.1
 [2.17.0]: https://github.com/euikuk-jeong/lumisshow/compare/v2.16.5...v2.17.0
 [2.16.5]: https://github.com/euikuk-jeong/lumisshow/compare/v2.16.4...v2.16.5
 [2.16.4]: https://github.com/euikuk-jeong/lumisshow/compare/v2.16.3...v2.16.4
