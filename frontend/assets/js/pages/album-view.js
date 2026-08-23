@@ -79,6 +79,7 @@ export async function renderAlbumView(token) {
           ${expiryHtml}
           ${album.has_music ? '<span>🎵 음악 있음</span>' : ''}
         </div>
+        ${(photos.length > 0 || videos.length > 0) ? '<hr class="divider">' : ''}
         ${photos.length > 0 ? `
           <div class="viewer-section-header" id="photo-section">
             <h2 class="viewer-section-title">📷 사진 (${photos.length.toLocaleString()})</h2>
@@ -99,6 +100,7 @@ export async function renderAlbumView(token) {
                 <img src="${p.thumb_small_url}" alt="" loading="lazy">
               </div>`).join('')}
           </div>` : ''}
+        ${(photos.length > 0 && videos.length > 0) ? '<hr class="divider">' : ''}
         ${videos.length > 0 ? `
           <div class="viewer-section-header" id="video-section">
             <h2 class="viewer-section-title">🎬 동영상 (${videos.length.toLocaleString()})</h2>
