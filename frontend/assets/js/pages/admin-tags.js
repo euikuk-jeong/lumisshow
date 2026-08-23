@@ -1,6 +1,6 @@
 import { api } from '../api.js';
 import { renderAdminShell } from '../layout.js';
-import { esc } from '../utils.js';
+import { esc, thumbImg } from '../utils.js';
 import { openLightbox } from '../lightbox.js';
 import { openAddTagModal, deleteTagFromPhotos } from '../tag-modal.js';
 
@@ -112,11 +112,11 @@ export async function renderAdminTags() {
 
 function tagCard(t) {
   const cover = t.sample_path
-    ? `<img src="/api/admin/thumb?path=${encodeURIComponent(t.sample_path)}&size=small" alt="" loading="lazy">`
+    ? thumbImg(`/api/admin/thumb?path=${encodeURIComponent(t.sample_path)}&size=small`)
     : '🏷️';
   return `
     <div class="person-card" data-tag="${esc(t.tag)}" data-source="${t.source}">
-      <div class="person-cover">${cover}</div>
+      <div class="person-cover${t.sample_path ? ' thumb-loading' : ''}">${cover}</div>
       <div class="person-info">
         <div class="person-name" title="${esc(t.tag)}">${esc(t.tag)}</div>
         <div class="person-meta">${SOURCE_LABELS[t.source] || t.source} · ${t.count.toLocaleString()}장</div>
@@ -230,9 +230,9 @@ export async function renderAdminTagPhotos() {
     }
     contentEl.className = 'photo-grid';
     contentEl.innerHTML = photos.map((p, i) => `
-      <div class="photo-thumb selectable${state.selected.has(p.file_path) ? ' selected' : ''}"
+      <div class="photo-thumb selectable thumb-loading${state.selected.has(p.file_path) ? ' selected' : ''}"
            data-idx="${i}" data-path="${esc(p.file_path)}" title="${esc(p.file_path)}">
-        <img src="${p.thumb_small_url}" alt="" loading="lazy" onerror="this.style.opacity='0.3'">
+        ${thumbImg(p.thumb_small_url, 0.3)}
         <input type="checkbox" ${state.selected.has(p.file_path) ? 'checked' : ''}>
       </div>`).join('');
   }

@@ -1,6 +1,6 @@
 import { api } from '../api.js';
 import { renderAdminShell } from '../layout.js';
-import { esc } from '../utils.js';
+import { esc, thumbImg } from '../utils.js';
 import { openLightbox } from '../lightbox.js';
 import { THEMES } from '../theme.js';
 import { EFFECTS, EFFECT_LABELS } from '../slideshow-config.js';
@@ -908,8 +908,8 @@ function photoListItemEdit(photo, coverPath, removeMode = false, isSelected = fa
   return `
     <div class="photo-list-item${isCover ? ' is-cover' : ''}${isSelected ? ' remove-selected' : ''}" data-path="${esc(photo.file_path)}">
       <input type="checkbox" class="remove-check" ${isSelected ? 'checked' : ''}>
-      <div class="photo-list-thumb">
-        <img src="${thumbUrl}" alt="" loading="lazy" onerror="this.style.opacity='0.3'">
+      <div class="photo-list-thumb thumb-loading">
+        ${thumbImg(thumbUrl, 0.3)}
       </div>
       <span class="photo-list-name" title="${esc(photo.file_path)}">${esc(name)}</span>
       ${isCover ? '<span class="cover-badge" style="position:static;font-size:11px;padding:2px 6px">커버</span>' : ''}
@@ -1053,8 +1053,8 @@ function photoThumb(photo, coverPath, removeMode = false, isSelected = false) {
   const isCover  = photo.file_path === coverPath;
   const isVideo  = photo.media_type === 'video';
   return `
-    <div class="photo-thumb${isCover ? ' is-cover' : ''}${isSelected ? ' remove-selected' : ''}" data-path="${esc(photo.file_path)}">
-      <img src="${thumbUrl}" alt="" loading="lazy" onerror="this.style.opacity='0.3'">
+    <div class="photo-thumb thumb-loading${isCover ? ' is-cover' : ''}${isSelected ? ' remove-selected' : ''}" data-path="${esc(photo.file_path)}">
+      ${thumbImg(thumbUrl, 0.3)}
       ${isVideo ? '<span class="media-video-badge"></span>' : ''}
       ${isCover ? '<span class="cover-badge">커버</span>' : ''}
       <input type="checkbox" class="remove-check" ${isSelected ? 'checked' : ''}>

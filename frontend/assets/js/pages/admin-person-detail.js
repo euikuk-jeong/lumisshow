@@ -1,6 +1,6 @@
 import { api } from '../api.js';
 import { renderAdminShell } from '../layout.js';
-import { esc } from '../utils.js';
+import { esc, thumbImg } from '../utils.js';
 import { openLightbox } from '../lightbox.js';
 
 const MATCHED_PAGE_SIZE = 200;
@@ -270,8 +270,8 @@ function matchedFaceCard(f, isSelected) {
   const score = f.score != null
     ? `<span class="face-score">${Math.round(f.score * 100)}%</span>` : '';
   return `
-    <div class="face-card selectable-face${isSelected ? ' selected' : ''}" data-face="${f.face_id}" title="${esc(f.photo_path)}">
-      <img src="/api/admin/faces/${f.face_id}/crop" alt="" loading="lazy">
+    <div class="face-card selectable-face thumb-loading${isSelected ? ' selected' : ''}" data-face="${f.face_id}" title="${esc(f.photo_path)}">
+      ${thumbImg(`/api/admin/faces/${f.face_id}/crop`)}
       ${score}
     </div>`;
 }
@@ -281,7 +281,7 @@ function matchedFaceListItem(f, isSelected) {
   return `
     <div class="photo-list-item selectable-face${isSelected ? ' selected' : ''}" data-face="${f.face_id}" title="${esc(f.photo_path)}">
       <input type="checkbox" ${isSelected ? 'checked' : ''}>
-      <div class="photo-list-thumb"><img src="/api/admin/faces/${f.face_id}/crop" alt="" loading="lazy"></div>
+      <div class="photo-list-thumb thumb-loading">${thumbImg(`/api/admin/faces/${f.face_id}/crop`)}</div>
       <span class="photo-list-name">${esc(f.photo_path)}</span>
       <div class="photo-list-meta"><span>${score}</span></div>
     </div>`;
@@ -421,8 +421,8 @@ function renderLabeledContent(personId) {
 function labeledFaceCard(f, idx) {
   const isCover = f.face_id === _coverFaceId;
   return `
-    <div class="face-card" data-face="${f.face_id}" data-idx="${idx}" title="${esc(f.photo_path)}">
-      <img src="/api/admin/faces/${f.face_id}/crop" alt="" loading="lazy">
+    <div class="face-card thumb-loading" data-face="${f.face_id}" data-idx="${idx}" title="${esc(f.photo_path)}">
+      ${thumbImg(`/api/admin/faces/${f.face_id}/crop`)}
       ${isCover ? '<span class="cover-badge">커버</span>' : ''}
       <div class="face-actions">
         ${isCover ? '' : '<button class="btn btn-sm btn-ghost" data-act="set-cover" title="커버로 설정">★</button>'}
@@ -436,7 +436,7 @@ function labeledFaceListItem(f, idx, isSelected) {
   return `
     <div class="photo-list-item${isSelected ? ' selected' : ''}" data-face="${f.face_id}" data-idx="${idx}" title="${esc(f.photo_path)}">
       <input type="checkbox" ${isSelected ? 'checked' : ''}>
-      <div class="photo-list-thumb"><img src="/api/admin/faces/${f.face_id}/crop" alt="" loading="lazy"></div>
+      <div class="photo-list-thumb thumb-loading">${thumbImg(`/api/admin/faces/${f.face_id}/crop`)}</div>
       <span class="photo-list-name">${esc(f.photo_path)}</span>
       <div class="photo-list-meta"><span>${isCover ? '확정 · 커버' : '확정'}</span></div>
       <div class="photo-list-actions">
@@ -587,8 +587,8 @@ function renderReviewContent(personId) {
 
 function reviewCandidateCard(c) {
   return `
-    <div class="face-card" data-face="${c.face_id}" title="${esc(c.photo_path)}">
-      <img src="/api/admin/faces/${c.face_id}/crop" alt="" loading="lazy">
+    <div class="face-card thumb-loading" data-face="${c.face_id}" title="${esc(c.photo_path)}">
+      ${thumbImg(`/api/admin/faces/${c.face_id}/crop`)}
       <span class="face-score">${Math.round(c.score * 100)}%</span>
       <div class="face-actions">
         <button class="btn btn-sm btn-primary" data-act="confirm" title="확정">✓</button>

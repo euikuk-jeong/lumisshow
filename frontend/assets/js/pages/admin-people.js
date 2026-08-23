@@ -1,6 +1,6 @@
 import { api } from '../api.js';
 import { renderAdminShell } from '../layout.js';
-import { esc } from '../utils.js';
+import { esc, thumbImg } from '../utils.js';
 
 // ── 인물 목록 (/admin/people) ─────────────────────────────────────────
 
@@ -257,11 +257,11 @@ async function loadPeople() {
 
 function personCard(p) {
   const cover = p.cover_face_id
-    ? `<img src="/api/admin/faces/${p.cover_face_id}/crop" alt="" loading="lazy">`
+    ? thumbImg(`/api/admin/faces/${p.cover_face_id}/crop`)
     : '👤';
   return `
     <div class="person-card" data-id="${p.id}">
-      <div class="person-cover">${cover}</div>
+      <div class="person-cover${p.cover_face_id ? ' thumb-loading' : ''}">${cover}</div>
       <div class="person-info">
         <div class="person-name" title="${esc(p.name)}">${esc(p.name)}</div>
         <div class="person-meta">확정 ${p.labeled_count.toLocaleString()} · 추정 ${p.matched_count.toLocaleString()}</div>
@@ -419,8 +419,8 @@ function faceCard(f) {
   const score = f.score != null
     ? `<span class="face-score">${Math.round(f.score * 100)}%</span>` : '';
   return `
-    <div class="face-card" data-face="${f.face_id}" data-photo="${esc(f.photo_path)}" title="${esc(f.photo_path)}">
-      <img src="/api/admin/faces/${f.face_id}/crop" alt="" loading="lazy">
+    <div class="face-card thumb-loading" data-face="${f.face_id}" data-photo="${esc(f.photo_path)}" title="${esc(f.photo_path)}">
+      ${thumbImg(`/api/admin/faces/${f.face_id}/crop`)}
       ${score}
       <div class="face-actions">
         <button class="btn btn-sm btn-ghost" data-act="similar" title="비슷한 얼굴 찾기">🔍</button>
@@ -529,8 +529,8 @@ async function loadIgnoredFaces() {
 
 function ignoredFaceCard(f) {
   return `
-    <div class="face-card" data-face="${f.face_id}" title="${esc(f.photo_path)}">
-      <img src="/api/admin/faces/${f.face_id}/crop" alt="" loading="lazy">
+    <div class="face-card thumb-loading" data-face="${f.face_id}" title="${esc(f.photo_path)}">
+      ${thumbImg(`/api/admin/faces/${f.face_id}/crop`)}
     </div>`;
 }
 

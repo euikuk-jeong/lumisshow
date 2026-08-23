@@ -83,7 +83,6 @@ export async function renderAlbumView(token) {
             <h2 class="viewer-section-title">📷 사진 (${photos.length.toLocaleString()})</h2>
             ${videos.length > 0 ? `<button type="button" class="viewer-section-jump" id="btn-jump-video">🎬 동영상 보기 ↓</button>` : ''}
           </div>
-          <a class="btn btn-ghost w-full viewer-download" href="/api/share/${token}/download">⬇ 사진 전체 다운로드 (ZIP)</a>
           <div class="viewer-actions">
             <button class="btn btn-primary btn-lg" id="btn-slideshow">▶ 슬라이드쇼</button>
             <button class="btn btn-ghost btn-lg" id="btn-settings">⚙ 설정</button>
@@ -92,6 +91,7 @@ export async function renderAlbumView(token) {
               간단히 보기
             </label>
           </div>
+          <a class="btn btn-ghost viewer-download" href="/api/share/${token}/download">⬇ 사진 전체 다운로드 (ZIP)</a>
           <div class="viewer-grid" id="thumb-grid">
             ${photos.map((p, i) => `
               <div class="viewer-thumb" data-idx="${i}">
@@ -103,7 +103,7 @@ export async function renderAlbumView(token) {
             <h2 class="viewer-section-title">🎬 동영상 (${videos.length.toLocaleString()})</h2>
             ${photos.length > 0 ? `<button type="button" class="viewer-section-jump" id="btn-jump-photo">📷 사진 보기 ↑</button>` : ''}
           </div>
-          <a class="btn btn-ghost w-full viewer-download" href="/api/share/${token}/download-videos">⬇ 동영상 전체 다운로드 (ZIP)</a>
+          <a class="btn btn-ghost viewer-download" href="/api/share/${token}/download-videos">⬇ 동영상 전체 다운로드 (ZIP)</a>
           <div class="viewer-grid" id="video-grid">
             ${videos.map((v, i) => `
               <div class="viewer-thumb" data-idx="${i}">

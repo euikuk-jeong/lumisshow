@@ -2,6 +2,7 @@ import { api, shareApi, AdminAuthError, ShareAuthError } from '../api.js';
 import { esc } from '../utils.js';
 import { EFFECTS, DEFAULT_SETTINGS, loadSlideshowSettings, saveSlideshowSettings } from '../slideshow-config.js';
 import { startedInEdgeZone, resolveSwipeDirection, isTap } from '../touch-gesture.js';
+import { EXIF_LABELS } from '../exif-labels.js';
 
 const TRANS_MS = 700;
 const KB_CLASSES = ['kb-tl','kb-tr','kb-bl','kb-br','kb-t','kb-b','kb-l','kb-r'];
@@ -304,24 +305,24 @@ async function runSlideshow(src) {
     const exifRows = [];
     const add = (label, value) => { if (value != null && value !== '') exifRows.push([label, String(value)]); };
 
-    add('Filename', photo.filename);
+    add(EXIF_LABELS.filename, photo.filename);
     if (photo.taken_at) {
       const d = new Date(photo.taken_at);
       const pad = n => String(n).padStart(2, '0');
-      add('Date', `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`);
+      add(EXIF_LABELS.date, `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`);
     }
-    if (photo.width && photo.height) add('Resolution', `${photo.width} × ${photo.height}`);
-    add('Make', photo.make);
-    add('Camera', photo.camera);
-    add('Software', photo.software);
-    add('Shoot Mode', photo.shoot_mode);
-    add('Exposure', photo.shutter);
-    add('Aperture', photo.aperture);
-    add('ISO', photo.iso);
-    add('Focal Length', photo.focal_length);
-    add('Flash', photo.flash);
-    add('Metering', photo.metering);
-    add('Exposure Mode', photo.exposure_mode);
+    if (photo.width && photo.height) add(EXIF_LABELS.resolution, `${photo.width} × ${photo.height}`);
+    add(EXIF_LABELS.make, photo.make);
+    add(EXIF_LABELS.camera, photo.camera);
+    add(EXIF_LABELS.software, photo.software);
+    add(EXIF_LABELS.shootMode, photo.shoot_mode);
+    add(EXIF_LABELS.exposure, photo.shutter);
+    add(EXIF_LABELS.aperture, photo.aperture);
+    add(EXIF_LABELS.iso, photo.iso);
+    add(EXIF_LABELS.focalLength, photo.focal_length);
+    add(EXIF_LABELS.flash, photo.flash);
+    add(EXIF_LABELS.metering, photo.metering);
+    add(EXIF_LABELS.exposureMode, photo.exposure_mode);
 
     // 태그(Phase 6) — 백엔드가 뷰어별로 노출 가능한 source만 채워 보내므로(공유
     // 링크는 person_tags/location_tags가 항상 빈 배열), 프론트에서 뷰어 종류를
