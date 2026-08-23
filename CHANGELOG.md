@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.16.5] - 2026-08-23
+
+### Fixed
+- **EXIF 정보 패널 라벨 한/영 혼용 통일**: Admin 라이트박스와 공유 슬라이드쇼 정보 패널의
+  `Filename`/`Date`/`Resolution` 등 영어 라벨을 공용 딕셔너리(`frontend/assets/js/exif-labels.js`)
+  기반 한글 라벨로 통일 (`lightbox.js`, `pages/slideshow.js`)
+- **사진 그리드 로딩 중 빈 칸 노출**: 썸네일 on-demand 생성 중 아무 표시 없는 빈 박스만
+  보이던 문제를 로딩 shimmer 스켈레톤으로 개선. 공용 헬퍼 `thumbImg()`(`utils.js`)와
+  `.thumb-loading` 클래스(`admin.css`)를 사진 탐색기·인물·태그·앨범 편집 등 전체
+  Admin 그리드에 적용
+- **공유 앨범 히어로 커버 크롭 시 인물 잘림 위험**: `.viewer-cover img`에
+  `object-position: 50% 20%`를 적용해 세로 인물샷 크롭 시 얼굴이 잘리는 문제 완화
+
+### Changed
+- **공유 앨범 버튼 시각적 위계 개선**: "슬라이드쇼" 주 액션 버튼을 ZIP 다운로드 버튼보다
+  앞에 배치하고, ZIP 다운로드는 전체 폭 버튼에서 중앙정렬된 보조 버튼으로 축소
+  (`pages/album-view.js`, `viewer.css`)
+
 ## [2.16.4] - 2026-08-21
 
 ### Fixed
@@ -1380,7 +1398,8 @@ Phase 2 — AI 얼굴 인식 스마트 앨범. NAS 로컬 AI(InsightFace)로 사
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v2.16.4...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v2.16.5...HEAD
+[2.16.5]: https://github.com/euikuk-jeong/lumisshow/compare/v2.16.4...v2.16.5
 [2.16.4]: https://github.com/euikuk-jeong/lumisshow/compare/v2.16.3...v2.16.4
 [2.16.3]: https://github.com/euikuk-jeong/lumisshow/compare/v2.16.2...v2.16.3
 [2.16.2]: https://github.com/euikuk-jeong/lumisshow/compare/v2.16.1...v2.16.2
