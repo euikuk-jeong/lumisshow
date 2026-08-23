@@ -166,6 +166,8 @@ export async function renderAlbumView(token) {
   if (album.title_font) {
     ensureTitleFontsLoaded();
     applyTitleFont(document.getElementById('viewer-title'), album.title_font);
+    document.querySelectorAll('.viewer-desc, .viewer-section-title')
+      .forEach(el => applyTitleFont(el, album.title_font));
   }
 
   _initSettingsPanel(token, album);

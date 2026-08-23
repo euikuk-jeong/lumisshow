@@ -112,7 +112,6 @@ function renderEditForm(album, links, tzOffset, serverTheme = 'dark') {
       <!-- Info -->
       <div class="card aei-info">
           <p class="section-title">기본 정보</p>
-          <div id="cover-preview-wrap">${coverPreviewHtml(album.photos, album.cover_path)}</div>
           <div id="info-error" class="alert alert-error" style="display:none"></div>
           <form id="info-form" class="flex-col gap-3">
             <div class="form-group">
@@ -127,6 +126,10 @@ function renderEditForm(album, links, tzOffset, serverTheme = 'dark') {
               <span id="save-ok" class="text-success text-sm" style="display:none">저장됨 ✓</span>
             </div>
           </form>
+          <div class="form-group">
+            <label class="form-label">커버</label>
+            <div id="cover-preview-wrap">${coverPreviewHtml(album.photos, album.cover_path)}</div>
+          </div>
           <hr class="divider" style="margin:12px 0">
           <div class="flex items-center gap-2">
             <span class="form-label" style="margin:0">조회 수</span>
