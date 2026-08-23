@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.17.0] - 2026-08-23
+
+### Added
+- **공유 앨범 타이틀 폰트 커스터마이징**: 앨범 히어로 타이틀(`.viewer-title`)에 한글 지원
+  Google Fonts 3종(명조체 Gowun Batang / 손글씨체 Nanum Pen Script / 고딕체 Jua) 또는
+  시스템 기본 중 앨범별로 선택 적용 가능. `albums.title_font` 컬럼 추가(nullable, 기존
+  앨범은 시스템 기본 유지). Admin 앨범 편집 화면에서 드롭다운 + 앨범 이름 실시간 미리보기로
+  선택(`frontend/assets/js/title-fonts.js`). Google Fonts는 필요한 경우에만 로드 —
+  공유뷰어는 폰트를 지정한 앨범만, Admin은 앨범 편집 화면에서만 요청이 발생하고 나머지
+  화면은 외부 요청 없이 유지
+
+### Changed
+- **Admin 앨범 편집 "기본 정보" 카드 재구성**: 이름/설명 → 조회수 → 앨범 테마/폰트/배경음악
+  순서로 재배치. 기존 "슬라이드쇼 기본 설정" 폼에 있던 앨범 테마 선택을 이쪽으로 이동
+  (`frontend/assets/js/pages/admin-album-edit.js`)
+
 ## [2.16.5] - 2026-08-23
 
 ### Fixed
@@ -1398,7 +1414,8 @@ Phase 2 — AI 얼굴 인식 스마트 앨범. NAS 로컬 AI(InsightFace)로 사
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v2.16.5...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v2.17.0...HEAD
+[2.17.0]: https://github.com/euikuk-jeong/lumisshow/compare/v2.16.5...v2.17.0
 [2.16.5]: https://github.com/euikuk-jeong/lumisshow/compare/v2.16.4...v2.16.5
 [2.16.4]: https://github.com/euikuk-jeong/lumisshow/compare/v2.16.3...v2.16.4
 [2.16.3]: https://github.com/euikuk-jeong/lumisshow/compare/v2.16.2...v2.16.3
