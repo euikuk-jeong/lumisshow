@@ -59,7 +59,7 @@ _ALLOWED_UPDATE_COLS = {
     "name", "description", "cover_path",
     "slideshow_interval", "slideshow_order", "slideshow_effect",
     "slideshow_music", "slideshow_volume", "slideshow_loop",
-    "photo_sort_by", "photo_sort_dir", "ui_theme",
+    "photo_sort_by", "photo_sort_dir", "ui_theme", "title_font",
 }
 
 
@@ -182,13 +182,13 @@ async def create_album(
            (name, description,
             slideshow_interval, slideshow_order, slideshow_effect,
             slideshow_music, slideshow_volume, slideshow_loop,
-            photo_sort_by, photo_sort_dir, ui_theme)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            photo_sort_by, photo_sort_dir, ui_theme, title_font)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (body.name, body.description,
          sv["slideshow_interval"], sv["slideshow_order"], sv["slideshow_effect"],
          int(sv["slideshow_music"]), sv["slideshow_volume"], int(sv["slideshow_loop"]),
          _PHOTO_SORT_DEFAULTS["photo_sort_by"], _PHOTO_SORT_DEFAULTS["photo_sort_dir"],
-         None),
+         None, None),
     ) as cur:
         album_id = cur.lastrowid
 
@@ -245,12 +245,12 @@ async def duplicate_album(
            (name, description, cover_path, music_path,
             slideshow_interval, slideshow_order, slideshow_effect,
             slideshow_music, slideshow_volume, slideshow_loop,
-            photo_sort_by, photo_sort_dir, ui_theme)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            photo_sort_by, photo_sort_dir, ui_theme, title_font)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (body.name, src["description"], src["cover_path"], src["music_path"],
          src["slideshow_interval"], src["slideshow_order"], src["slideshow_effect"],
          src["slideshow_music"], src["slideshow_volume"], src["slideshow_loop"],
-         src["photo_sort_by"], src["photo_sort_dir"], src["ui_theme"]),
+         src["photo_sort_by"], src["photo_sort_dir"], src["ui_theme"], src["title_font"]),
     ) as cur:
         new_id = cur.lastrowid
 

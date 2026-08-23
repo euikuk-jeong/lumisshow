@@ -156,6 +156,38 @@ async def test_update_album_cover_path(admin_client):
     assert r.json()["cover_path"] == "cover.jpg"
 
 
+async def test_create_album_title_font_defaults_null(admin_client):
+    r = await admin_client.post("/api/admin/albums", json={"name": "FontDefault"})
+    assert r.json()["title_font"] is None
+
+
+async def test_update_album_title_font_round_trip(admin_client):
+    r = await admin_client.post("/api/admin/albums", json={"name": "Font"})
+    album_id = r.json()["id"]
+    r = await admin_client.put(
+        f"/api/admin/albums/{album_id}", json={"title_font": "gowun-batang"}
+    )
+    assert r.status_code == 200
+    assert r.json()["title_font"] == "gowun-batang"
+
+    r = await admin_client.get(f"/api/admin/albums/{album_id}")
+    assert r.json()["title_font"] == "gowun-batang"
+
+    # null로 되돌리면 시스템 기본으로 복귀
+    r = await admin_client.put(f"/api/admin/albums/{album_id}", json={"title_font": None})
+    assert r.status_code == 200
+    assert r.json()["title_font"] is None
+
+
+async def test_update_album_title_font_invalid_rejected(admin_client):
+    r = await admin_client.post("/api/admin/albums", json={"name": "FontInvalid"})
+    album_id = r.json()["id"]
+    r = await admin_client.put(
+        f"/api/admin/albums/{album_id}", json={"title_font": "comic-sans"}
+    )
+    assert r.status_code == 422
+
+
 async def test_update_album_empty_body_is_noop(admin_client):
     r = await admin_client.post("/api/admin/albums", json={"name": "Stable"})
     album_id = r.json()["id"]
@@ -449,6 +481,18 @@ async def test_duplicate_album_copies_slideshow_settings(admin_client):
     data = r.json()
     assert data["slideshow_interval"] == 12
     assert data["slideshow_order"] == "random"
+
+
+async def test_duplicate_album_copies_title_font(admin_client):
+    r = await admin_client.post("/api/admin/albums", json={"name": "Src"})
+    album_id = r.json()["id"]
+    await admin_client.put(f"/api/admin/albums/{album_id}", json={"title_font": "jua"})
+
+    r = await admin_client.post(
+        f"/api/admin/albums/{album_id}/duplicate",
+        json={"name": "Dup"},
+    )
+    assert r.json()["title_font"] == "jua"
 
 
 async def test_duplicate_album_description_copied(admin_client):

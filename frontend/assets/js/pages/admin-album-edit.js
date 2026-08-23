@@ -3,6 +3,7 @@ import { renderAdminShell } from '../layout.js';
 import { esc, thumbImg } from '../utils.js';
 import { openLightbox } from '../lightbox.js';
 import { THEMES } from '../theme.js';
+import { TITLE_FONTS, ensureTitleFontsLoaded, applyTitleFont } from '../title-fonts.js';
 import { EFFECTS, EFFECT_LABELS } from '../slideshow-config.js';
 import { initDateScrollIndicator } from '../date-scroll-indicator.js';
 
@@ -121,6 +122,32 @@ function renderEditForm(album, links, tzOffset, serverTheme = 'dark') {
               <label class="form-label">설명</label>
               <textarea id="f-desc" class="form-textarea">${esc(album.description || '')}</textarea>
             </div>
+            <div>
+              <span id="save-ok" class="text-success text-sm" style="display:none">저장됨 ✓</span>
+            </div>
+          </form>
+          <hr class="divider" style="margin:12px 0">
+          <div class="flex items-center gap-2">
+            <span class="form-label" style="margin:0">조회 수</span>
+            <span id="view-count-value">${(album.view_count ?? 0).toLocaleString()}회</span>
+            <button type="button" class="btn btn-ghost btn-sm" id="btn-reset-views">초기화</button>
+          </div>
+          <hr class="divider" style="margin:12px 0">
+          <div id="style-error" class="alert alert-error" style="display:none"></div>
+          <form id="style-form" class="flex-col gap-3">
+            <div class="form-group">
+              <label class="form-label">앨범 테마</label>
+              <div class="theme-picker" id="album-theme-picker"></div>
+              <input type="hidden" id="f-ui-theme" value="${album.ui_theme || ''}">
+            </div>
+            <div class="form-group">
+              <label class="form-label">폰트</label>
+              <select id="f-title-font" class="form-select">
+                <option value="">시스템 기본</option>
+                ${TITLE_FONTS.map(f => `<option value="${f.id}" ${album.title_font === f.id ? 'selected' : ''}>${esc(f.label)}</option>`).join('')}
+              </select>
+              <p class="title-font-preview" id="title-font-preview"></p>
+            </div>
             <div class="form-group">
               <label class="form-label">배경음악</label>
               <div id="music-list" class="music-list"></div>
@@ -135,15 +162,9 @@ function renderEditForm(album, links, tzOffset, serverTheme = 'dark') {
               </details>
             </div>
             <div>
-              <span id="save-ok" class="text-success text-sm" style="display:none">저장됨 ✓</span>
+              <span id="style-save-ok" class="text-success text-sm" style="display:none">저장됨 ✓</span>
             </div>
           </form>
-          <hr class="divider" style="margin:12px 0">
-          <div class="flex items-center gap-2">
-            <span class="form-label" style="margin:0">조회 수</span>
-            <span id="view-count-value">${(album.view_count ?? 0).toLocaleString()}회</span>
-            <button type="button" class="btn btn-ghost btn-sm" id="btn-reset-views">초기화</button>
-          </div>
         </div>
 
       <!-- Slideshow defaults -->
@@ -151,11 +172,6 @@ function renderEditForm(album, links, tzOffset, serverTheme = 'dark') {
           <p class="section-title">슬라이드쇼 기본 설정</p>
           <div id="ss-error" class="alert alert-error" style="display:none"></div>
           <form id="ss-form" class="flex-col gap-3">
-            <div class="form-group">
-              <label class="form-label">앨범 테마</label>
-              <div class="theme-picker" id="album-theme-picker"></div>
-              <input type="hidden" id="ss-ui-theme" value="${album.ui_theme || ''}">
-            </div>
             <div class="form-group">
               <label class="form-label">전환 시간 (초)</label>
               <input id="ss-interval" type="number" min="2" max="60" class="form-input" style="width:100px"
@@ -261,10 +277,12 @@ function renderEditForm(album, links, tzOffset, serverTheme = 'dark') {
   `;
 
   let musicPaths = [...(album.music_paths || [])];
-  const scheduleInfoSave = bindInfoForm(album.id, () => musicPaths);
-  const scheduleSsSave   = bindSlideshowForm(album.id);
+  bindInfoForm(album.id);
+  const scheduleStyleSave = bindStyleForm(album.id, () => musicPaths);
+  const scheduleSsSave    = bindSlideshowForm(album.id);
 
-  initAlbumThemePicker(album.ui_theme, serverTheme, scheduleSsSave);
+  initAlbumThemePicker(album.ui_theme, serverTheme, scheduleStyleSave);
+  initTitleFontPicker(scheduleStyleSave);
 
   function refreshMusicList() {
     const listEl = document.getElementById('music-list');
@@ -285,7 +303,7 @@ function renderEditForm(album, links, tzOffset, serverTheme = 'dark') {
       btn.addEventListener('click', () => {
         musicPaths.splice(parseInt(btn.dataset.index, 10), 1);
         refreshMusicList();
-        scheduleInfoSave();
+        scheduleStyleSave();
       });
     });
 
@@ -328,14 +346,14 @@ function renderEditForm(album, links, tzOffset, serverTheme = 'dark') {
         // 원소 제거 후 인덱스 보정: 앞에서 뒤로 이동 시 target이 한 칸 당겨짐
         musicPaths.splice(dragSrcIdx < idx ? idx - 1 : idx, 0, moved);
         refreshMusicList();
-        scheduleInfoSave();
+        scheduleStyleSave();
       });
     });
   }
   refreshMusicList();
 
   document.getElementById('btn-browse-music').addEventListener('click', () => {
-    openMusicModal(musicPaths, selected => { musicPaths = selected; refreshMusicList(); scheduleInfoSave(); });
+    openMusicModal(musicPaths, selected => { musicPaths = selected; refreshMusicList(); scheduleStyleSave(); });
   });
 
   document.getElementById('ss-volume').addEventListener('input', e => {
@@ -441,7 +459,6 @@ function bindSlideshowForm(albumId) {
     slideshow_music:    document.querySelector('input[name="ss-music"]:checked').value === 'on',
     slideshow_volume:   parseInt(document.getElementById('ss-volume').value, 10),
     slideshow_loop:     document.querySelector('input[name="ss-loop"]:checked').value === 'on',
-    ui_theme:           document.getElementById('ss-ui-theme').value || null,
   }), 'ss-error', 'ss-save-ok');
 }
 
@@ -499,7 +516,7 @@ function bindViewCountReset(albumId) {
   });
 }
 
-function bindInfoForm(albumId, getMusicPaths) {
+function bindInfoForm(albumId) {
   document.getElementById('info-form').addEventListener('submit', e => e.preventDefault());
 
   const scheduleSave = createAutosave(() => {
@@ -508,14 +525,44 @@ function bindInfoForm(albumId, getMusicPaths) {
     return api.put(`/api/admin/albums/${albumId}`, {
       name,
       description: document.getElementById('f-desc').value.trim() || null,
-      music_paths: getMusicPaths(),
     });
   }, 'info-error', 'save-ok');
 
-  document.getElementById('f-name').addEventListener('input', scheduleSave);
+  document.getElementById('f-name').addEventListener('input', () => {
+    updateTitleFontPreview();
+    scheduleSave();
+  });
   document.getElementById('f-desc').addEventListener('input', scheduleSave);
 
   return scheduleSave;
+}
+
+function bindStyleForm(albumId, getMusicPaths) {
+  document.getElementById('style-form').addEventListener('submit', e => e.preventDefault());
+
+  return createAutosave(() => api.put(`/api/admin/albums/${albumId}`, {
+    ui_theme:   document.getElementById('f-ui-theme').value || null,
+    title_font: document.getElementById('f-title-font').value || null,
+    music_paths: getMusicPaths(),
+  }), 'style-error', 'style-save-ok');
+}
+
+/* 앨범 이름 + 선택된 폰트로 실제 Google Fonts 렌더링 미리보기 (드롭다운 변경·이름 입력 시 즉시 갱신) */
+function updateTitleFontPreview() {
+  const previewEl = document.getElementById('title-font-preview');
+  const nameEl = document.getElementById('f-name');
+  if (!previewEl || !nameEl) return;
+  previewEl.textContent = nameEl.value.trim() || '앨범 이름';
+  applyTitleFont(previewEl, document.getElementById('f-title-font').value || null);
+}
+
+function initTitleFontPicker(onChange) {
+  ensureTitleFontsLoaded();
+  updateTitleFontPreview();
+  document.getElementById('f-title-font').addEventListener('change', () => {
+    updateTitleFontPreview();
+    onChange();
+  });
 }
 
 async function openMusicModal(currentPaths, onConfirm) {
@@ -1025,7 +1072,7 @@ function initAlbumThemePicker(currentTheme, serverTheme = 'dark', onChange = () 
 
   container.querySelectorAll('.theme-swatch').forEach(el => {
     el.addEventListener('click', () => {
-      document.getElementById('ss-ui-theme').value = el.dataset.themeId;
+      document.getElementById('f-ui-theme').value = el.dataset.themeId;
       container.querySelectorAll('.theme-swatch').forEach(s => s.classList.remove('active'));
       el.classList.add('active');
       onChange();

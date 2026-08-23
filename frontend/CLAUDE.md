@@ -96,7 +96,13 @@ CSS animation 우선(GPU 가속). `EFFECTS` 배열에서 랜덤 선택. 수동 �
 HTML5 DnD (`draggable="true"` + `dragstart/dragover/dragleave/drop/dragend`). `dragstart`에서 `setTimeout` 지연으로 ghost 이미지 캡처 후 `.dragging` 스타일 적용. 인덱스 보정: 앞→뒤 이동 시 `splice` 후 `idx - 1`에 삽입.
 
 ### 앨범 편집 설정 자동저장 (`admin-album-edit.js`, `createAutosave()`)
-"기본 정보"(이름·설명·음악)/"슬라이드쇼 기본 설정" 두 폼 모두 저장 버튼 없이 필드 변경 시 자동 저장(`PUT /api/admin/albums/{id}`, 두 폼 동일 endpoint). 필드 변경마다 600ms debounce 후 저장, 진행 중 다시 필드가 바뀌면(`pending` 플래그) 현재 요청 끝난 뒤 최신 값으로 한 번 더 저장 — 재귀 호출 대신 `do…while(pending)` 루프로 처리(재귀 시 `finally`가 중첩 호출보다 먼저 실행돼 `isSaving` 상태가 꼬이는 문제 있었음). 폼 하나당 자동저장 트리거 함수 하나(`scheduleInfoSave`/`scheduleSsSave`)를 상위 스코프에서 만들어 음악 리스트 추가·삭제·재정렬, 테마 스와치 클릭 등 폼 외부 이벤트에서도 재사용한다.
+"기본 정보" 카드 안에 폼이 두 개(`info-form`: 이름·설명 / `style-form`: 앨범 테마·폰트·배경음악) + "슬라이드쇼 기본 설정" 카드의 `ss-form`(전환시간·재생순서·전환효과·배경음악 ON/OFF·음량·반복재생), 총 3개 폼 모두 저장 버튼 없이 필드 변경 시 자동 저장(`PUT /api/admin/albums/{id}`, 3개 폼 동일 endpoint). 필드 변경마다 600ms debounce 후 저장, 진행 중 다시 필드가 바뀌면(`pending` 플래그) 현재 요청 끝난 뒤 최신 값으로 한 번 더 저장 — 재귀 호출 대신 `do…while(pending)` 루프로 처리(재귀 시 `finally`가 중첩 호출보다 먼저 실행돼 `isSaving` 상태가 꼬이는 문제 있었음). 폼 하나당 자동저장 트리거 함수 하나(`scheduleInfoSave`/`scheduleStyleSave`/`scheduleSsSave`)를 상위 스코프에서 만들어 음악 리스트 추가·삭제·재정렬, 테마 스와치 클릭, 폰트 드롭다운 변경 등 폼 외부 이벤트에서도 재사용한다. `ui_theme`은 원래 `ss-form`에 있었으나(2026-08) "화면이 어떻게 보일지"를 고르는 시각적 설정이라는 이유로 폰트 신설과 함께 `style-form`으로 이동했다.
+
+### 앨범 타이틀 폰트 (`title-fonts.js`, `.viewer-title` 전용)
+공유 앨범 히어로 타이틀(`.viewer-title`, `album-view.js`)에만 적용되는 display 폰트 — Admin 화면·슬라이드쇼는 대상이 아니다. `TITLE_FONTS`(한글 지원 Google Fonts 3종 고정: 명조체 Gowun Batang/손글씨체 Nanum Pen Script/고딕체 Jua) + `ensureTitleFontsLoaded()`(idempotent `<link>` 동적 삽입) + `applyTitleFont(el, fontId)`(인라인 `font-family`/`font-weight` 적용, 폰트별 실제 지원 weight만 사용 — 단일 weight 폰트에 700을 강제하면 브라우저가 synthetic bold를 그려 특히 손글씨체가 어색해짐)를 `album-view.js`(뷰어)와 `admin-album-edit.js`(편집 화면 미리보기)가 공용한다. 앨범 값(`album.title_font`, nullable = "시스템 기본")은 `admin-album-edit.js`의 `style-form`에서 드롭다운으로 고른다.
+
+- **뷰어**: `album.title_font`가 설정된 앨범만 `ensureTitleFontsLoaded()` 호출 — 시스템 기본을 쓰는 앨범 방문자는 Google Fonts CDN 요청이 아예 발생하지 않는다.
+- **Admin 편집 화면**: 드롭다운으로 3종 중 아무거나 골라볼 수 있어야 하므로 화면 진입 시 무조건 `ensureTitleFontsLoaded()` 호출 — 이 화면에 한해서만 admin이 외부 CDN 요청을 만든다(다른 admin 화면은 여전히 0건 유지). 미리보기(`#title-font-preview`)는 앨범 이름 입력값을 실시간으로 반영(`updateTitleFontPreview()`, 이름 입력·폰트 선택 양쪽에서 즉시 갱신, 저장 debounce와 무관).
 
 ### 전체화면 사진 뷰어 제스처 (`photo-zoom-viewer.js`)
 Admin 라이트박스(`lightbox.js`)와 공유뷰어(`album-view.js`의 `_openSharePhotoViewer`)가 휠 줌·더블클릭 줌·핀치 줌·드래그 팬·스와이프 넘기기·마우스 가운데 버튼 리셋을 공용 모듈로 공유한다(슬라이드쇼는 대상 아님 — Ken Burns 자동 효과만 있고 사용자 줌이 없음).

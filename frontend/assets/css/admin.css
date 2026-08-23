@@ -1073,6 +1073,17 @@
   border-radius: 50%;
 }
 
+.title-font-preview {
+  margin-top: 8px;
+  padding: 10px 14px;
+  border-radius: var(--radius-lg);
+  background: var(--elevated);
+  border: 1px solid var(--glass-border);
+  font-size: 20px;
+  color: var(--text);
+  overflow-wrap: break-word;
+}
+
 /* ── People (Phase 2 AI) ────────────────────────────────── */
 .section-title { font-size: 15px; font-weight: 600; margin: 8px 0 12px; }
 .text-muted { color: var(--muted); font-weight: 400; font-size: 13px; }

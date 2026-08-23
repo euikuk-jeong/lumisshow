@@ -245,7 +245,7 @@ async def get_album(token: str, request: Request, db=Depends(get_db)):
         SELECT a.name, a.description, a.music_path, a.cover_path, a.created_at,
                a.slideshow_interval, a.slideshow_order, a.slideshow_effect,
                a.slideshow_music, a.slideshow_volume, a.slideshow_loop,
-               a.ui_theme, sl.expires_at,
+               a.ui_theme, a.title_font, sl.expires_at,
                COALESCE(SUM(CASE WHEN ap.id IS NULL OR ap.media_type = 'video' THEN 0 ELSE 1 END), 0) AS photo_count,
                COALESCE(SUM(CASE WHEN ap.media_type = 'video' THEN 1 ELSE 0 END), 0) AS video_count
         FROM share_links sl
@@ -308,6 +308,7 @@ async def get_album(token: str, request: Request, db=Depends(get_db)):
         "slideshow_defaults": slideshow_defaults,
         "timezone_offset": sv["timezone_offset"],
         "ui_theme": row["ui_theme"] or sv["ui_theme"],
+        "title_font": row["title_font"],
     }
 
 
