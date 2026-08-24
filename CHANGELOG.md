@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.17.6] - 2026-08-24
+
 ### Fixed
 - **음악이 자동으로 다음 곡 넘어갈 때 재생 정보(토스트·정보 패널) 표시 안 됨**: 이전/다음 버튼
   클릭 시에만 `showMusicToast()`/`refreshInfoPanel()`를 호출하고 `ended` 이벤트(자동 전환)에는
@@ -1489,7 +1491,8 @@ Phase 2 — AI 얼굴 인식 스마트 앨범. NAS 로컬 AI(InsightFace)로 사
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v2.17.5...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v2.17.6...HEAD
+[2.17.6]: https://github.com/euikuk-jeong/lumisshow/compare/v2.17.5...v2.17.6
 [2.17.5]: https://github.com/euikuk-jeong/lumisshow/compare/v2.17.4...v2.17.5
 [2.17.4]: https://github.com/euikuk-jeong/lumisshow/compare/v2.17.3...v2.17.4
 [2.17.3]: https://github.com/euikuk-jeong/lumisshow/compare/v2.17.2...v2.17.3
