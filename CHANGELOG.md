@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **음악이 자동으로 다음 곡 넘어갈 때 재생 정보(토스트·정보 패널) 표시 안 됨**: 이전/다음 버튼
+  클릭 시에만 `showMusicToast()`/`refreshInfoPanel()`를 호출하고 `ended` 이벤트(자동 전환)에는
+  누락돼 있던 것을 동일하게 호출하도록 수정 (`slideshow.js`)
+- **모바일 전체화면에서 이전/다음 곡·전체화면 버튼이 항상 숨겨짐**: 좁은 화면(≤640px)·터치 단말
+  미디어쿼리 양쪽에서 `#ss-prev-track`/`#ss-next-track`/`#ss-fs-btn`을 숨기던 규칙을 제거해
+  핵심 버튼(음악 On/Off·이전/다음 곡·일시정지·전체화면·다운로드·닫기)에 포함 (`slideshow.css`)
+
 ## [2.17.5] - 2026-08-24
 
 ### Added
