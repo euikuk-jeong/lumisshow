@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.17.4] - 2026-08-24
+
+### Added
+- **앨범 타이틀 폰트 5종으로 확장**: 기존 4종(명조체/손글씨체/고딕체/시스템 기본)에서 귀엽다·상큼체
+  (Gamja Flower)/레트로·빈티지(Poor Story) 2종을 추가. 손글씨체 대표 폰트는 나눔펜스크립트에서
+  개구체(Gaegu)로 교체 — 카테고리별 인기 후보 3종씩 실제 앨범명 예시로 비교해 확정
+  (`title-fonts.js`)
+- **타이틀 폰트 선택 시 어울리는 스타일 안내**: Admin 앨범 편집 화면에서 폰트 선택 즉시 "이런
+  앨범에 어울려요" 한 줄 설명을 미리보기 아래 표시 (`admin-album-edit.js`)
+
+### Changed
+- **기존 앨범의 손글씨체 폰트 id 자동 마이그레이션**: `title_font='nanum-pen'`으로 저장된 앨범을
+  서버 기동 시 `'gaegu'`로 일괄 변환 (`database.py`의 `_migrate_legacy_title_font()`)
+
 ## [2.17.3] - 2026-08-23
 
 ### Fixed
@@ -1460,7 +1474,8 @@ Phase 2 — AI 얼굴 인식 스마트 앨범. NAS 로컬 AI(InsightFace)로 사
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v2.17.3...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v2.17.4...HEAD
+[2.17.4]: https://github.com/euikuk-jeong/lumisshow/compare/v2.17.3...v2.17.4
 [2.17.3]: https://github.com/euikuk-jeong/lumisshow/compare/v2.17.2...v2.17.3
 [2.17.2]: https://github.com/euikuk-jeong/lumisshow/compare/v2.17.1...v2.17.2
 [2.17.1]: https://github.com/euikuk-jeong/lumisshow/compare/v2.17.0...v2.17.1
