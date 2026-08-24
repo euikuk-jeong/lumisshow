@@ -177,7 +177,7 @@ async def test_get_album_title_font_included(admin_client):
     r = await admin_client.post("/api/admin/albums", json={"name": "Font Album"})
     album_id = r.json()["id"]
     assert r.json()["title_font"] is None
-    await admin_client.put(f"/api/admin/albums/{album_id}", json={"title_font": "nanum-pen"})
+    await admin_client.put(f"/api/admin/albums/{album_id}", json={"title_font": "gaegu"})
 
     r = await admin_client.post(f"/api/admin/albums/{album_id}/links", json={})
     token = r.json()["token"]
@@ -185,7 +185,7 @@ async def test_get_album_title_font_included(admin_client):
 
     r = await admin_client.get(f"/api/share/{token}/album")
     assert r.status_code == 200
-    assert r.json()["title_font"] == "nanum-pen"
+    assert r.json()["title_font"] == "gaegu"
 
 
 async def test_get_album_music_tags_from_id3(admin_client, tmp_path):

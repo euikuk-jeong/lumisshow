@@ -1103,6 +1103,10 @@
   overflow-wrap: break-word;
 }
 
+.title-font-note {
+  margin-top: 6px;
+}
+
 /* ── People (Phase 2 AI) ────────────────────────────────── */
 .section-title { font-size: 15px; font-weight: 600; margin: 8px 0 12px; }
 .text-muted { color: var(--muted); font-weight: 400; font-size: 13px; }

@@ -150,6 +150,7 @@ function renderEditForm(album, links, tzOffset, serverTheme = 'dark') {
                 ${TITLE_FONTS.map(f => `<option value="${f.id}" ${album.title_font === f.id ? 'selected' : ''}>${esc(f.label)}</option>`).join('')}
               </select>
               <p class="title-font-preview" id="title-font-preview"></p>
+              <p class="text-muted title-font-note" id="title-font-note"></p>
             </div>
             <div class="form-group">
               <label class="form-label">배경음악</label>
@@ -555,10 +556,16 @@ function bindStyleForm(albumId, getMusicPaths) {
 /* 앨범 이름 + 선택된 폰트로 실제 Google Fonts 렌더링 미리보기 (드롭다운 변경·이름 입력 시 즉시 갱신) */
 function updateTitleFontPreview() {
   const previewEl = document.getElementById('title-font-preview');
+  const noteEl = document.getElementById('title-font-note');
   const nameEl = document.getElementById('f-name');
   if (!previewEl || !nameEl) return;
+  const fontId = document.getElementById('f-title-font').value || null;
   previewEl.textContent = nameEl.value.trim() || '앨범 이름';
-  applyTitleFont(previewEl, document.getElementById('f-title-font').value || null);
+  applyTitleFont(previewEl, fontId);
+  if (noteEl) {
+    const font = TITLE_FONTS.find(f => f.id === fontId);
+    noteEl.textContent = font ? font.note : '시스템 기본 폰트를 사용해요';
+  }
 }
 
 function initTitleFontPicker(onChange) {

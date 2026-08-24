@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Literal, Optional
 from pydantic import BaseModel, Field
 
-TitleFont = Literal["gowun-batang", "nanum-pen", "jua"]
+TitleFont = Literal["gowun-batang", "gaegu", "jua", "gamja-flower", "poor-story"]
 
 
 def parse_music_paths(raw: str | None) -> list[str]:
