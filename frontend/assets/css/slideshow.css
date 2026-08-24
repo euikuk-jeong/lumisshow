@@ -351,18 +351,15 @@
   min-width: 0;
 }
 
-/* ── 좁은 화면 (≤ 640px): 핵심 4개 버튼만 표시 ────────────── */
+/* ── 좁은 화면 (≤ 640px): 핵심 버튼만 표시 (음악 On/Off·이전/다음 곡·일시정지·전체화면·다운로드·닫기) ── */
 
 @media (max-width: 640px) {
-  #ss-prev-track,
-  #ss-next-track,
   .ss-vol,
   .ss-speed-group,
   #ss-prev-btn,
   .ss-counter,
   #ss-next-btn,
-  #ss-info-btn,
-  #ss-fs-btn { display: none; }
+  #ss-info-btn { display: none; }
 }
 
 /* ── UI auto-hide (triggered by .ss-ui-hidden on wrap) ─────── */
@@ -379,7 +376,6 @@
   .ss-wrap { touch-action: none; }
   .ss-arrow { display: none; }
   .ss-vol { display: none; }
-  #ss-prev-track, #ss-next-track { display: none; }
   .ss-info-btn-icon { display: none; }
   .ss-toolbar { gap: 4px; padding: 10px 8px; }
   .ss-tb-btn { padding: 11px 11px; font-size: 18px; }

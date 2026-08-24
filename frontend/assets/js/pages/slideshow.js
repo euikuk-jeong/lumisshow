@@ -168,7 +168,10 @@ async function runSlideshow(src) {
       audio.addEventListener('ended', () => {
         musicTrackIdx = (musicTrackIdx + 1) % musicCount;
         audio.src = src.musicUrl(musicTrackIdx);
-        if (musicOn) audio.play().catch(() => {});
+        if (musicOn) {
+          audio.play().then(() => showMusicToast()).catch(() => {});
+          refreshInfoPanel();
+        }
       });
     }
   }
