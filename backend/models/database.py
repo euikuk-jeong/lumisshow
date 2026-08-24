@@ -180,6 +180,13 @@ async def _migrate_absolute_to_relative(db) -> None:
         )
 
 
+async def _migrate_legacy_title_font(db) -> None:
+    """앨범 타이틀 폰트 개편: 손글씨체 대표 폰트가 nanum-pen → gaegu로 교체됨."""
+    await db.execute(
+        "UPDATE albums SET title_font = 'gaegu' WHERE title_font = 'nanum-pen'"
+    )
+
+
 async def init_db() -> None:
     path = _db_path()
     os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -201,6 +208,7 @@ async def init_db() -> None:
         )
 
         await _migrate_absolute_to_relative(db)
+        await _migrate_legacy_title_font(db)
         await db.commit()
 
     await _init_pool()
