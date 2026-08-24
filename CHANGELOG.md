@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.17.5] - 2026-08-24
+
+### Added
+- **기본 제공 배경음악 무드별 2곡으로 확장**: 무드당 1곡뿐이던 번들 음원을 Pixabay Music에서
+  추가 선정해 총 10곡(무드당 2곡)으로 확장. 신규 5곡에 ID3 태그(제목/아티스트/앨범="Pixabay
+  Music"/커버 이미지)를 삽입 (`admin-album-edit.js`의 `BUNDLED_MUSIC_CREDITS`)
+
 ## [2.17.4] - 2026-08-24
 
 ### Added
@@ -1474,7 +1481,8 @@ Phase 2 — AI 얼굴 인식 스마트 앨범. NAS 로컬 AI(InsightFace)로 사
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v2.17.4...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v2.17.5...HEAD
+[2.17.5]: https://github.com/euikuk-jeong/lumisshow/compare/v2.17.4...v2.17.5
 [2.17.4]: https://github.com/euikuk-jeong/lumisshow/compare/v2.17.3...v2.17.4
 [2.17.3]: https://github.com/euikuk-jeong/lumisshow/compare/v2.17.2...v2.17.3
 [2.17.2]: https://github.com/euikuk-jeong/lumisshow/compare/v2.17.1...v2.17.2
