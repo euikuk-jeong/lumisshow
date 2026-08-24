@@ -10,10 +10,15 @@ import { initDateScrollIndicator } from '../date-scroll-indicator.js';
 const BUNDLED_MUSIC_DIR_PREFIX = 'bundled/';
 const BUNDLED_MUSIC_CREDITS = [
   { mood: '잔잔한', title: 'Calm Piano', artist: 'alex-morgan', file: 'alex-morgan-calm-piano-541028.mp3' },
+  { mood: '잔잔한', title: 'Evening Calm Piano', artist: 'andriih', file: 'andriih-evening-calm-piano-580085.mp3' },
   { mood: '감성적', title: 'Emotional', artist: 'PaulYudin', file: 'paulyudin-emotional-emotional-music-573976.mp3' },
+  { mood: '감성적', title: 'Emotional', artist: 'alex-morgan', file: 'alex-morgan-emotional-545518.mp3' },
   { mood: '경쾌한', title: 'Summer Pop', artist: 'JonasBlakewood', file: 'jonasblakewood-summer-pop-546980.mp3' },
+  { mood: '경쾌한', title: 'Positive Dream Upbeat Pop', artist: 'LightBeatsMusic', file: 'lightbeatsmusic-positive-dream-upbeat-pop-513937.mp3' },
   { mood: '따뜻한·노스탤직', title: 'Warm Nostalgic Sentimental Music', artist: 'andriig', file: 'andriig-warm-nostalgic-sentimental-music-471262.mp3' },
+  { mood: '따뜻한·노스탤직', title: 'Nostalgic Acoustic Guitar', artist: 'Tunetank', file: 'tunetank-nostalgic-acoustic-guitar-348939.mp3' },
   { mood: '웅장한', title: 'Epic Piano', artist: 'PaulYudin', file: 'paulyudin-epic-piano-154655.mp3' },
+  { mood: '웅장한', title: 'Majestic Triumphant Epic Music', artist: 'alex-morgan', file: 'alex-morgan-majestic-triumphant-epic-music-583277.mp3' },
 ];
 
 export async function renderAdminAlbumEdit(albumId) {
@@ -158,7 +163,7 @@ function renderEditForm(album, links, tzOffset, serverTheme = 'dark') {
               <button type="button" class="btn btn-ghost btn-sm" id="btn-browse-music">+ 음악 파일 선택</button>
               <p class="music-copyright-notice">저작권을 확인한 음원만 사용하세요. 저작권 문제는 사용자 책임입니다. 저작권 무료 음악은 <a href="https://pixabay.com/music/" target="_blank" rel="noopener noreferrer">Pixabay Music</a> 등에서 구할 수 있습니다.</p>
               <details class="bundled-music-info">
-                <summary>기본 제공 음원 5곡 (무료, 저장소에 번들됨)</summary>
+                <summary>기본 제공 음원 ${BUNDLED_MUSIC_CREDITS.length}곡 (무료, 저장소에 번들됨)</summary>
                 <ul>
                   ${BUNDLED_MUSIC_CREDITS.map(t => `<li>${esc(t.mood)} — ${esc(t.title)} <span class="text-muted">(${esc(t.artist)})</span></li>`).join('')}
                 </ul>
