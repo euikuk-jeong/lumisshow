@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.17.8] - 2026-08-26
+
+### Added
+- **공유 앨범/Admin 사진 단독 보기에 실제 전체화면(Fullscreen API) 버튼 추가**: v2.17.7의
+  edge-to-edge 레이아웃 수정만으로는 브라우저 주소창이 그대로 남아 있던 문제. 공유뷰어
+  (`spv-actions`)·Admin 라이트박스(`lightbox-actions`) 양쪽에 ⛶ 버튼을 추가해 슬라이드쇼와
+  동일한 `requestFullscreen`/`exitFullscreen` 토글 제공 (`album-view.js`, `lightbox.js`)
+
 ## [2.17.7] - 2026-08-25
 
 ### Fixed
@@ -1499,7 +1507,8 @@ Phase 2 — AI 얼굴 인식 스마트 앨범. NAS 로컬 AI(InsightFace)로 사
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v2.17.7...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v2.17.8...HEAD
+[2.17.8]: https://github.com/euikuk-jeong/lumisshow/compare/v2.17.7...v2.17.8
 [2.17.7]: https://github.com/euikuk-jeong/lumisshow/compare/v2.17.6...v2.17.7
 [2.17.6]: https://github.com/euikuk-jeong/lumisshow/compare/v2.17.5...v2.17.6
 [2.17.5]: https://github.com/euikuk-jeong/lumisshow/compare/v2.17.4...v2.17.5
