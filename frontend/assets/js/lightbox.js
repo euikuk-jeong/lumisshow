@@ -56,6 +56,7 @@ export function openLightbox(paths, startIdx, options = {}) {
       </div>` : ''}
       <div class="lightbox-actions">
         <button class="lightbox-action-btn" id="lb-btn-info">정보보기</button>
+        <button class="lightbox-action-btn" id="lb-btn-fs" title="전체화면">&#x26F6;</button>
         ${options.onSetCover  ? '<button class="lightbox-action-btn" id="lb-btn-cover">커버로 설정</button>' : ''}
         ${options.extraAction ? `<button class="lightbox-action-btn" id="lb-btn-extra">${options.extraAction.label}</button>` : ''}
         ${options.onDelete    ? `<button class="lightbox-action-btn lightbox-action-danger" id="lb-btn-delete">${options.deleteLabel || '앨범에서 삭제'}</button>` : ''}
@@ -71,6 +72,7 @@ export function openLightbox(paths, startIdx, options = {}) {
   const captionEl  = overlay.querySelector('.lightbox-caption');
   const infoBtn    = overlay.querySelector('#lb-btn-info');
   const infoEl     = overlay.querySelector('#lb-info');
+  const fsBtn      = overlay.querySelector('#lb-btn-fs');
 
   // ── 정보 패널 (정보보기 버튼: EXIF·태그, person/location 포함 — Admin 전용) ──
   // 매번 새로 조회한다(캐싱 안 함) — admin-tags.js의 "+ 태그 추가"(extraAction)로
@@ -219,12 +221,27 @@ export function openLightbox(paths, startIdx, options = {}) {
     zoomViewer.goTo(i);
   }
 
+  // ── 전체화면 (브라우저 주소창 등 상단 UI를 가려 실제 화면 전체를 채운다) ──
+  function handleFSChange() {
+    fsBtn.innerHTML = document.fullscreenElement ? '&#x22A1;' : '&#x26F6;';
+  }
+  document.addEventListener('fullscreenchange', handleFSChange);
+  fsBtn.addEventListener('click', () => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen?.().catch(() => {});
+    } else {
+      document.exitFullscreen();
+    }
+  });
+
   let closed = false;
   function close() {
     if (closed) return;
     closed = true;
     videoEl.pause();
     document.removeEventListener('keydown', onKey);
+    document.removeEventListener('fullscreenchange', handleFSChange);
+    if (document.fullscreenElement) document.exitFullscreen();
     overlay.remove();
     if (window._pageCleanup === close) window._pageCleanup = null;
   }

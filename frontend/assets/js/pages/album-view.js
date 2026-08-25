@@ -295,6 +295,7 @@ function _openSharePhotoViewer(token, photos, startIdx) {
       <div class="spv-actions">
         <a class="spv-btn" download>⬇ 다운로드</a>
         <button class="spv-btn spv-info-btn">i 정보</button>
+        <button class="spv-btn spv-fs-btn" title="전체화면">&#x26F6;</button>
         <button class="spv-btn spv-ss-btn">▶ 슬라이드쇼</button>
       </div>
     </div>`;
@@ -311,6 +312,7 @@ function _openSharePhotoViewer(token, photos, startIdx) {
   const dlBtn      = overlay.querySelector('.spv-btn[download]');
   const infoBtnEl  = overlay.querySelector('.spv-info-btn');
   const infoEl     = overlay.querySelector('.spv-info');
+  const fsBtn      = overlay.querySelector('.spv-fs-btn');
 
   // ── 확대/이동/스와이프 (Admin 라이트박스와 공용 — photo-zoom-viewer.js) ──
   const zoomViewer = createPhotoZoomViewer({
@@ -390,8 +392,23 @@ function _openSharePhotoViewer(token, photos, startIdx) {
   // 확대 중에는 화살표 키 이동을 막는다(먼저 줌을 리셋해야 넘어감) — onZoomChange에서 갱신
   let zoomedIn = false;
 
+  // ── 전체화면 (브라우저 주소창 등 상단 UI를 가려 실제 화면 전체를 채운다) ──
+  function handleFSChange() {
+    fsBtn.innerHTML = document.fullscreenElement ? '&#x22A1;' : '&#x26F6;';
+  }
+  document.addEventListener('fullscreenchange', handleFSChange);
+  fsBtn.addEventListener('click', () => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen?.().catch(() => {});
+    } else {
+      document.exitFullscreen();
+    }
+  });
+
   function close() {
     document.removeEventListener('keydown', onKey);
+    document.removeEventListener('fullscreenchange', handleFSChange);
+    if (document.fullscreenElement) document.exitFullscreen();
     overlay.remove();
     if (window._pageCleanup === close) window._pageCleanup = null;
   }
