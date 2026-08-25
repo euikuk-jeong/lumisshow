@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.17.7] - 2026-08-25
+
+### Fixed
+- **공유 앨범/Admin 사진 단독 보기가 전체화면으로 표시되지 않음**: footer 바가 세로 공간을
+  차지하고 이미지 좌우 120px 여백이 있어 슬라이드쇼보다 사진이 작게 보이던 문제. footer/nav를
+  이미지 위 반투명 오버레이로 변경, 이미지는 여백 없이 화면 전체를 채우도록 수정(슬라이드쇼
+  `.ss-img`와 동일 edge-to-edge 방식) (`viewer.css`의 `.spv-*`, `admin.css`의 `.lightbox-*`)
+
 ## [2.17.6] - 2026-08-24
 
 ### Fixed
@@ -1491,7 +1499,8 @@ Phase 2 — AI 얼굴 인식 스마트 앨범. NAS 로컬 AI(InsightFace)로 사
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v2.17.6...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v2.17.7...HEAD
+[2.17.7]: https://github.com/euikuk-jeong/lumisshow/compare/v2.17.6...v2.17.7
 [2.17.6]: https://github.com/euikuk-jeong/lumisshow/compare/v2.17.5...v2.17.6
 [2.17.5]: https://github.com/euikuk-jeong/lumisshow/compare/v2.17.4...v2.17.5
 [2.17.4]: https://github.com/euikuk-jeong/lumisshow/compare/v2.17.3...v2.17.4
