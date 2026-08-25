@@ -242,6 +242,7 @@ export function openLightbox(paths, startIdx, options = {}) {
     document.removeEventListener('keydown', onKey);
     document.removeEventListener('fullscreenchange', handleFSChange);
     if (document.fullscreenElement) document.exitFullscreen();
+    zoomViewer.destroy();
     overlay.remove();
     if (window._pageCleanup === close) window._pageCleanup = null;
   }
