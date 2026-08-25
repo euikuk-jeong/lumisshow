@@ -96,11 +96,21 @@ export function createPhotoZoomViewer({
   // ── 화면 회전/리사이즈: peek 이미지 위치·팬 범위 재계산 ──────
   // peek 엘리먼트는 bodyEl.offsetWidth(px)로 화면 밖 위치를 고정하는데, 리사이즈만
   // 발생하고 goTo/zoom 등 applyTransform 재호출이 없으면 옛 너비 기준 오프셋이 남아
-  // 회전 직후 이전/다음 사진이 화면에 걸쳐 보인다.
-  const onResize = () => { clampPan(); applyTransform(); };
+  // 회전 직후 이전/다음 사진이 화면에 걸쳐 보인다. iOS는 orientationchange 시점에
+  // offsetWidth가 아직 회전 전 값일 수 있어 rAF 한 틱 미뤄서 읽는다.
+  let resizeRaf = null;
+  const onResize = () => {
+    if (resizeRaf != null) return;
+    resizeRaf = requestAnimationFrame(() => {
+      resizeRaf = null;
+      clampPan();
+      applyTransform();
+    });
+  };
   window.addEventListener('resize', onResize);
   function destroy() {
     window.removeEventListener('resize', onResize);
+    if (resizeRaf != null) cancelAnimationFrame(resizeRaf);
   }
 
   // ── 마우스 가운데 버튼: 줌 리셋 ──────────────────────────
