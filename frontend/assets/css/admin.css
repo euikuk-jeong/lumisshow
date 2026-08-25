@@ -505,29 +505,25 @@
 .lightbox-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0,0,0,0.92);
-  display: flex;
-  flex-direction: column;
+  background: #000;
   z-index: 500;
 }
 .lightbox-body {
-  flex: 1;
-  position: relative;
+  position: absolute;
+  inset: 0;
   display: flex;
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  min-height: 0;
   touch-action: none;
 }
 .lightbox-img, .lightbox-peek-img {
   position: absolute;
   top: 50%;
   left: 50%;
-  max-width: calc(100% - 120px);
+  max-width: 100%;
   max-height: 100%;
   object-fit: contain;
-  border-radius: 4px;
   transition: opacity 0.15s;
   will-change: transform;
   touch-action: none;   /* 확대 시 드래그 팬이 페이지 스크롤로 새지 않게 */
@@ -538,9 +534,8 @@
   pointer-events: none;
 }
 .lightbox-video {
-  max-width: calc(100% - 120px);
+  max-width: 100%;
   max-height: 100%;
-  border-radius: 4px;
   background: #000;
 }
 .lightbox-caption {
@@ -585,13 +580,17 @@
 .lightbox-prev { left: 0; }
 .lightbox-next { right: 0; }
 .lightbox-footer {
-  flex-shrink: 0;
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 10px 20px;
-  background: rgba(0,0,0,0.5);
+  background: linear-gradient(to top, rgba(0,0,0,0.65), transparent);
   gap: 12px;
+  z-index: 10;
 }
 .lightbox-sel-area {
   display: flex;
