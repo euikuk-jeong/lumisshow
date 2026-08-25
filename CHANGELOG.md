@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.17.9] - 2026-08-26
+
+### Fixed
+- **공유 앨범/Admin 사진 단독 보기 화면 회전 시 이전/다음 사진 일부 노출**: peek 이미지
+  위치를 `bodyEl.offsetWidth`(px) 기준으로 고정해두는데 리사이즈/회전 시 재계산 트리거가
+  없어 옛 너비 기준 오프셋이 남아 회전 직후 좌우로 이전/다음 사진이 걸쳐 보이던 문제.
+  `window resize` 이벤트에서 팬 범위·peek 위치를 재계산하도록 수정, 뷰어 종료 시 리스너
+  누수 방지를 위해 `destroy()`를 노출 (`photo-zoom-viewer.js`, `album-view.js`, `lightbox.js`)
+
 ## [2.17.8] - 2026-08-26
 
 ### Added
@@ -1507,7 +1516,8 @@ Phase 2 — AI 얼굴 인식 스마트 앨범. NAS 로컬 AI(InsightFace)로 사
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v2.17.8...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v2.17.9...HEAD
+[2.17.9]: https://github.com/euikuk-jeong/lumisshow/compare/v2.17.8...v2.17.9
 [2.17.8]: https://github.com/euikuk-jeong/lumisshow/compare/v2.17.7...v2.17.8
 [2.17.7]: https://github.com/euikuk-jeong/lumisshow/compare/v2.17.6...v2.17.7
 [2.17.6]: https://github.com/euikuk-jeong/lumisshow/compare/v2.17.5...v2.17.6
