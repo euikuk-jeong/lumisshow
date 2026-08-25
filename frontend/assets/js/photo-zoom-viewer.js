@@ -23,7 +23,7 @@
  *                               전부 무시한다 — 동영상(혼합 그리드의 라이트박스 등)처럼
  *                               이 엔진의 대상이 아닌 슬라이드를 보여주는 중일 때 사용.
  *
- * 반환: { goTo(idx, opts), resetZoom(), changeZoom(factor) }
+ * 반환: { goTo(idx, opts), resetZoom(), changeZoom(factor), destroy() }
  */
 import { startedInEdgeZone, resolveSwipeDirection, clampDragOffset } from './touch-gesture.js';
 
@@ -91,6 +91,16 @@ export function createPhotoZoomViewer({
     if (zoom <= MIN_ZOOM) { panX = 0; panY = 0; }
     clampPan();
     applyTransform();
+  }
+
+  // ── 화면 회전/리사이즈: peek 이미지 위치·팬 범위 재계산 ──────
+  // peek 엘리먼트는 bodyEl.offsetWidth(px)로 화면 밖 위치를 고정하는데, 리사이즈만
+  // 발생하고 goTo/zoom 등 applyTransform 재호출이 없으면 옛 너비 기준 오프셋이 남아
+  // 회전 직후 이전/다음 사진이 화면에 걸쳐 보인다.
+  const onResize = () => { clampPan(); applyTransform(); };
+  window.addEventListener('resize', onResize);
+  function destroy() {
+    window.removeEventListener('resize', onResize);
   }
 
   // ── 마우스 가운데 버튼: 줌 리셋 ──────────────────────────
@@ -300,5 +310,5 @@ export function createPhotoZoomViewer({
     imgEl.src = url;
   }
 
-  return { goTo, resetZoom, changeZoom };
+  return { goTo, resetZoom, changeZoom, destroy };
 }
