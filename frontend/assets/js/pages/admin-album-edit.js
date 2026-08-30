@@ -127,6 +127,7 @@ function renderEditForm(album, links, tzOffset, serverTheme = 'dark') {
               <label class="form-label">설명</label>
               <textarea id="f-desc" class="form-textarea">${esc(album.description || '')}</textarea>
             </div>
+            <div class="form-group" id="ai-suggest-area"></div>
             <div>
               <span id="save-ok" class="text-success text-sm" style="display:none">저장됨 ✓</span>
             </div>
@@ -373,6 +374,10 @@ function renderEditForm(album, links, tzOffset, serverTheme = 'dark') {
     openMusicModal(musicPaths, selected => { musicPaths = selected; refreshMusicList(); scheduleStyleSave(); });
   });
 
+  bindStyleSuggest(album.id, {
+    setMusicPaths: paths => { musicPaths = paths; refreshMusicList(); },
+  }, scheduleStyleSave);
+
   document.getElementById('ss-volume').addEventListener('input', e => {
     document.getElementById('ss-vol-label').textContent = `${e.target.value}%`;
     scheduleSsSave();
@@ -565,6 +570,113 @@ function bindStyleForm(albumId, getMusicPaths) {
     music_paths: getMusicPaths(),
     show_all_tags: document.getElementById('f-show-all-tags').checked,
   }), 'style-error', 'style-save-ok');
+}
+
+/* AI 스타일 추천(LLM) — 앨범 이름·설명만 전송, 사진/EXIF/태그는 절대 보내지 않음.
+   버튼은 항상 보이되, 설정(Admin 설정 화면)에서 provider+API 키가 등록돼 있지 않으면
+   비활성화하고 버튼 아래 안내 문구로 "설정에서 등록하라"고 알려준다. */
+async function bindStyleSuggest(albumId, musicCtl, scheduleStyleSave) {
+  const area = document.getElementById('ai-suggest-area');
+  if (!area) return;
+
+  area.innerHTML = `
+    <button type="button" class="btn btn-ghost btn-sm" id="btn-ai-suggest" disabled>✨ AI 스타일 추천 받기</button>
+    <p class="text-muted text-sm" id="ai-suggest-hint" style="margin:4px 0 0">불러오는 중...</p>
+    <div id="ai-suggest-card" style="display:none"></div>`;
+  const btn = document.getElementById('btn-ai-suggest');
+  const hint = document.getElementById('ai-suggest-hint');
+
+  let cfg = null;
+  try {
+    cfg = await api.get('/api/admin/llm/settings');
+  } catch {
+    cfg = null; // 조회 실패(권한 등) — 미설정과 동일하게 처리(버튼 비활성 유지)
+  }
+
+  // await 동안 다른 앨범으로 이동했을 수 있음(lightbox.js의 photo-info 응답과 동일한 stale 가드) —
+  // 같은 id로 다시 조회해 그 사이 DOM이 사라졌거나 다른 화면으로 교체되지 않았는지 확인.
+  if (document.getElementById('ai-suggest-area') !== area) return;
+
+  const configured = !!(cfg && cfg.provider && cfg.api_key_set);
+  if (!configured) {
+    hint.innerHTML = `AI가 앨범 이름·설명을 보고 배경음악·테마·폰트를 추천해줘요.
+      <a href="/admin/settings" data-link>설정</a>에서 키를 등록하면 이용할 수 있습니다.`;
+    return;
+  }
+
+  btn.disabled = false;
+  hint.textContent = '앨범 이름·설명만 AI에 전송됩니다 (사진은 보내지 않음)';
+
+  btn.addEventListener('click', async () => {
+    const cardEl = document.getElementById('ai-suggest-card');
+    const name = document.getElementById('f-name').value.trim();
+    if (!name) { alert('앨범 이름을 먼저 입력하세요'); return; }
+    btn.disabled = true;
+    btn.textContent = '추천 받는 중...';
+    cardEl.style.display = 'none';
+    try {
+      const suggestion = await api.post('/api/admin/llm/suggest-style', {
+        name,
+        description: document.getElementById('f-desc').value.trim() || null,
+      });
+      renderSuggestCard(cardEl, suggestion, musicCtl, scheduleStyleSave);
+    } catch (e) {
+      alert(e.message);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = '✨ AI 스타일 추천 받기';
+    }
+  });
+}
+
+function renderSuggestCard(cardEl, suggestion, musicCtl, scheduleStyleSave) {
+  const { music_path, ui_theme, title_font, reason } = suggestion;
+  // 음악 목록 모달(openMusicModal)과 동일하게 파일명이 아니라 큐레이션 라벨("무드 — 곡명")로 표시 —
+  // 매칭 안 되면(번들 곡 신설 등으로 크레딧 목록이 아직 안 따라온 경우) 파일명으로 폴백.
+  const musicFile = music_path ? music_path.split(/[\\/]/).pop() : null;
+  const musicCredit = musicFile && BUNDLED_MUSIC_CREDITS.find(c => c.file === musicFile);
+  const musicLabel = musicCredit ? `${musicCredit.mood} — ${musicCredit.title}` : musicFile;
+  const themeData  = THEMES.find(t => t.id === ui_theme);
+  const fontData   = TITLE_FONTS.find(f => f.id === title_font);
+  const hasAny = musicLabel || themeData || fontData;
+
+  cardEl.innerHTML = `
+    <div class="ai-suggest-card">
+      ${reason ? `<p class="ai-suggest-reason">"${esc(reason)}"</p>` : ''}
+      <ul class="ai-suggest-list">
+        ${musicLabel ? `<li>🎵 배경음악 — ${esc(musicLabel)}</li>` : ''}
+        ${themeData  ? `<li>🎨 테마 — ${esc(themeData.label)}</li>` : ''}
+        ${fontData   ? `<li>🔤 폰트 — ${esc(fontData.label)}</li>` : ''}
+        ${hasAny ? '' : '<li class="text-muted">추천할 항목을 찾지 못했습니다</li>'}
+      </ul>
+      ${musicLabel ? '<p class="text-muted text-sm">적용하면 기존 배경음악 목록을 대체합니다</p>' : ''}
+      <div class="settings-actions">
+        ${hasAny ? '<button type="button" class="btn btn-primary btn-sm" id="btn-ai-suggest-apply">적용</button>' : ''}
+        <button type="button" class="btn btn-ghost btn-sm" id="btn-ai-suggest-dismiss">닫기</button>
+      </div>
+    </div>`;
+  cardEl.style.display = '';
+
+  document.getElementById('btn-ai-suggest-dismiss').addEventListener('click', () => {
+    cardEl.style.display = 'none';
+    cardEl.innerHTML = '';
+  });
+
+  document.getElementById('btn-ai-suggest-apply')?.addEventListener('click', () => {
+    if (music_path) musicCtl.setMusicPaths([music_path]);
+    if (ui_theme) {
+      document.getElementById('f-ui-theme').value = ui_theme;
+      document.getElementById('album-theme-picker')?.querySelectorAll('.theme-swatch').forEach(s =>
+        s.classList.toggle('active', s.dataset.themeId === ui_theme));
+    }
+    if (title_font) {
+      document.getElementById('f-title-font').value = title_font;
+      updateTitleFontPreview();
+    }
+    scheduleStyleSave();
+    cardEl.style.display = 'none';
+    cardEl.innerHTML = '';
+  });
 }
 
 /* 앨범 이름 + 선택된 폰트로 실제 Google Fonts 렌더링 미리보기 (드롭다운 변경·이름 입력 시 즉시 갱신) */
