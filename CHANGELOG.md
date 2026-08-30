@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.18.0] - 2026-08-30
+
+### Added
+- **배경음악·앨범 테마·타이틀 폰트 AI(LLM) 자동 추천 기능**: 앨범 이름·설명 텍스트만
+  LLM에 보내 배경음악(번들 10곡 중)·앨범 테마(8종)·타이틀 폰트(5종)를 추천(사진 원본·
+  EXIF·태그는 전송하지 않음). OpenAI 호환(Gemini·로컬 Ollama 등 포함)/Anthropic 2개
+  provider 지원, API 키는 `JWT_SECRET` 기반 Fernet 암호화로 저장. Admin 설정 화면에
+  provider 등록·연결 테스트·초기화, 앨범 편집 화면에 추천 버튼(미설정 시 비활성화+
+  안내 문구)+제안 카드("적용" 시 배경음악·테마·폰트 한 번에 반영) (`routers/admin_llm.py`,
+  `services/llm_settings.py`, `services/llm_client.py`, `services/album_style_suggest.py`,
+  `admin-settings.js`, `admin-album-edit.js`)
+
 ## [2.17.11] - 2026-08-30
 
 ### Added
@@ -1534,7 +1546,8 @@ Phase 2 — AI 얼굴 인식 스마트 앨범. NAS 로컬 AI(InsightFace)로 사
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v2.17.11...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v2.18.0...HEAD
+[2.18.0]: https://github.com/euikuk-jeong/lumisshow/compare/v2.17.11...v2.18.0
 [2.17.11]: https://github.com/euikuk-jeong/lumisshow/compare/v2.17.10...v2.17.11
 [2.17.10]: https://github.com/euikuk-jeong/lumisshow/compare/v2.17.9...v2.17.10
 [2.17.9]: https://github.com/euikuk-jeong/lumisshow/compare/v2.17.8...v2.17.9
