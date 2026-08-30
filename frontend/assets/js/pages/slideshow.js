@@ -505,6 +505,24 @@ async function runSlideshow(src) {
     musicToastTimer = setTimeout(() => toast.classList.remove('visible'), 3000);
   }
 
+  // ── Wake Lock: 재생 중 화면 꺼짐 방지 (탭 전환/화면 잠금 시 브라우저가 자동
+  // 해제하므로 visibilitychange 복귀 시 재획득) ─────────────────
+  let wakeLock = null;
+  async function requestWakeLock() {
+    try {
+      wakeLock = await navigator.wakeLock?.request('screen');
+    } catch (_) {}
+  }
+  function releaseWakeLock() {
+    wakeLock?.release().catch(() => {});
+    wakeLock = null;
+  }
+  function handleVisibilityChange() {
+    if (document.visibilityState === 'visible' && !wakeLock) requestWakeLock();
+  }
+  document.addEventListener('visibilitychange', handleVisibilityChange);
+  requestWakeLock();
+
   // ── Cleanup (registered early so navigation during init is safe) ──
   function cleanup() {
     bgLoadAborted = true;
@@ -515,6 +533,8 @@ async function runSlideshow(src) {
     clearTimeout(hideTimer);
     document.removeEventListener('keydown', handleKeydown);
     document.removeEventListener('fullscreenchange', handleFSChange);
+    document.removeEventListener('visibilitychange', handleVisibilityChange);
+    releaseWakeLock();
     if (audio) { audio.pause(); audio.src = ''; }
     screen.orientation?.unlock();
   }
