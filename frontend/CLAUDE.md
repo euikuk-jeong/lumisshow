@@ -110,6 +110,9 @@ HTML5 DnD (`draggable="true"` + `dragstart/dragover/dragleave/drop/dragend`). `d
 - **"적용" 버튼은 3개 필드를 한 번에 반영**: 음악은 `musicCtl.setMusicPaths([music_path])`로 기존 목록을 통째로 교체(추가 아님, 카드 문구로 명시), 테마는 `#f-ui-theme` 히든 입력값 갱신 + `#album-theme-picker`의 `.theme-swatch.active` 클래스를 직접 토글(테마 피커는 자기 자신의 클릭 핸들러로만 active를 관리하므로 값만 바꿔서는 하이라이트가 안 움직인다), 폰트는 `#f-title-font` 값 갱신 후 `updateTitleFontPreview()` 재호출. 셋 다 반영한 뒤 `scheduleStyleSave()` 한 번만 호출해 기존 자동저장 debounce 경로를 그대로 탄다. `null`로 온 필드(후보 목록에 없어 서버가 걸러낸 값)는 건드리지 않아 사용자가 이미 골라둔 값이 지워지지 않는다. 음악 라벨은 파일명이 아니라 `BUNDLED_MUSIC_CREDITS`로 찾은 "무드 — 곡명"(음악 선택 모달과 동일 표기, 매칭 실패 시 파일명 폴백). `bindStyleSuggest`가 provider 조회 `await` 중 다른 화면으로 이동했을 수 있어 재개 직후 `#ai-suggest-area`가 여전히 같은 DOM인지 확인 후 진행(lightbox.js의 photo-info stale 응답 가드와 동일 패턴). 실브라우저에서 `fetch` 스텁으로 제안 카드 렌더링→적용→새로고침 후 서버 반영까지 확인 완료.
 - **버튼 노출 여부는 매 진입마다 재조회** — 캐시하지 않음. 설정 화면에서 방금 키를 등록했어도 이 화면은 별도 페이지 로드이므로 새로 물어본다.
 
+### 슬라이드쇼 화면 꺼짐 방지 (Wake Lock)
+`slideshow.js` 진입 시 `navigator.wakeLock.request('screen')` 획득, `cleanup()`에서 해제. 미지원 브라우저는 옵셔널 체이닝으로 조용히 무시. 탭 전환/화면 잠금 시 브라우저가 wake lock을 자동 해제하는 스펙이라 `visibilitychange`로 다시 보이면 재획득한다.
+
 ### 전체화면 사진 뷰어 제스처 (`photo-zoom-viewer.js`)
 Admin 라이트박스(`lightbox.js`)와 공유뷰어(`album-view.js`의 `_openSharePhotoViewer`)가 휠 줌·더블클릭 줌·핀치 줌·드래그 팬·스와이프 넘기기·마우스 가운데 버튼 리셋을 공용 모듈로 공유한다(슬라이드쇼는 대상 아님 — Ken Burns 자동 효과만 있고 사용자 줌이 없음).
 
