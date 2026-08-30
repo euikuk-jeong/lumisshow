@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.18.2] - 2026-08-31
+
+### Fixed
+- **슬라이드쇼 재생 중 화면 꺼짐 방지**: 모바일 등 단말 장치에서 공유 앨범
+  슬라이드쇼를 전체화면으로 재생할 때 단말 화면 보호기/자동 잠금으로 화면이
+  꺼지던 문제. Wake Lock API로 슬라이드쇼 진입 시 화면 유지, 종료 시 해제,
+  탭 전환 후 복귀 시 재획득 (`slideshow.js`)
+
 ## [2.18.1] - 2026-08-30
 
 ### Fixed
@@ -1553,7 +1561,8 @@ Phase 2 — AI 얼굴 인식 스마트 앨범. NAS 로컬 AI(InsightFace)로 사
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v2.18.1...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v2.18.2...HEAD
+[2.18.2]: https://github.com/euikuk-jeong/lumisshow/compare/v2.18.1...v2.18.2
 [2.18.1]: https://github.com/euikuk-jeong/lumisshow/compare/v2.18.0...v2.18.1
 [2.18.0]: https://github.com/euikuk-jeong/lumisshow/compare/v2.17.11...v2.18.0
 [2.17.11]: https://github.com/euikuk-jeong/lumisshow/compare/v2.17.10...v2.17.11
