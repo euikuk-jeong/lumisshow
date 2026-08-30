@@ -59,7 +59,7 @@ _ALLOWED_UPDATE_COLS = {
     "name", "description", "cover_path",
     "slideshow_interval", "slideshow_order", "slideshow_effect",
     "slideshow_music", "slideshow_volume", "slideshow_loop",
-    "photo_sort_by", "photo_sort_dir", "ui_theme", "title_font",
+    "photo_sort_by", "photo_sort_dir", "ui_theme", "title_font", "show_all_tags",
 }
 
 
@@ -80,7 +80,7 @@ def _row_to_album_dict(row) -> dict:
     for col, default in _PHOTO_SORT_DEFAULTS.items():
         if d.get(col) is None:
             d[col] = default
-    for col in ('slideshow_music', 'slideshow_loop'):
+    for col in ('slideshow_music', 'slideshow_loop', 'show_all_tags'):
         if not isinstance(d[col], bool):
             d[col] = bool(d[col])
     return d
@@ -245,12 +245,13 @@ async def duplicate_album(
            (name, description, cover_path, music_path,
             slideshow_interval, slideshow_order, slideshow_effect,
             slideshow_music, slideshow_volume, slideshow_loop,
-            photo_sort_by, photo_sort_dir, ui_theme, title_font)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            photo_sort_by, photo_sort_dir, ui_theme, title_font, show_all_tags)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (body.name, src["description"], src["cover_path"], src["music_path"],
          src["slideshow_interval"], src["slideshow_order"], src["slideshow_effect"],
          src["slideshow_music"], src["slideshow_volume"], src["slideshow_loop"],
-         src["photo_sort_by"], src["photo_sort_dir"], src["ui_theme"], src["title_font"]),
+         src["photo_sort_by"], src["photo_sort_dir"], src["ui_theme"], src["title_font"],
+         src["show_all_tags"]),
     ) as cur:
         new_id = cur.lastrowid
 
@@ -288,7 +289,7 @@ async def update_album(
             json.dumps(body_data['music_paths']) if body_data['music_paths'] else None
         )
     # SQLite는 bool을 INTEGER로 저장
-    for col in ('slideshow_music', 'slideshow_loop'):
+    for col in ('slideshow_music', 'slideshow_loop', 'show_all_tags'):
         if col in updates and isinstance(updates[col], bool):
             updates[col] = int(updates[col])
     if updates:

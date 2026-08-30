@@ -81,6 +81,7 @@ class AlbumUpdate(BaseModel):
     photo_sort_dir: Optional[str] = None
     ui_theme: Optional[str] = None
     title_font: Optional[TitleFont] = None
+    show_all_tags: Optional[bool] = None
 
 class AlbumPhotoResponse(BaseModel):
     id: int
@@ -115,6 +116,7 @@ class AlbumResponse(BaseModel):
     photo_sort_dir: str = "asc"
     ui_theme: Optional[str] = None
     title_font: Optional[TitleFont] = None
+    show_all_tags: bool = False
 
 class AlbumDetail(AlbumResponse):
     photos: list[AlbumPhotoResponse]
