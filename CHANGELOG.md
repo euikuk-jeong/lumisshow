@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.17.11] - 2026-08-30
+
+### Added
+- **공유 앨범 설정에 "태그 모두 표시" 옵션 추가**: 기본값 unchecked이며 체크하면 공유
+  링크 정보 패널(i 버튼)에서도 Admin과 동일하게 인물·위치 태그까지 노출. 앨범 편집
+  화면 기본 정보 카드에 체크박스 추가(앨범이름/설명/커버/조회수 다음, 앨범테마 앞).
+  AI 인식 카테고리 on/off는 이 설정과 무관하게 그대로 적용 (`albums.show_all_tags`,
+  `routers/share.py`, `admin-album-edit.js`)
+
 ## [2.17.10] - 2026-08-26
 
 ### Fixed
@@ -1525,7 +1534,8 @@ Phase 2 — AI 얼굴 인식 스마트 앨범. NAS 로컬 AI(InsightFace)로 사
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v2.17.10...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v2.17.11...HEAD
+[2.17.11]: https://github.com/euikuk-jeong/lumisshow/compare/v2.17.10...v2.17.11
 [2.17.10]: https://github.com/euikuk-jeong/lumisshow/compare/v2.17.9...v2.17.10
 [2.17.9]: https://github.com/euikuk-jeong/lumisshow/compare/v2.17.8...v2.17.9
 [2.17.8]: https://github.com/euikuk-jeong/lumisshow/compare/v2.17.7...v2.17.8
