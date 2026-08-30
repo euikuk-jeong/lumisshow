@@ -344,6 +344,66 @@ async def test_get_photos_excludes_disabled_category_tags(admin_client):
     assert photo["path_tags"] == ["서울대공원"]
 
 
+async def test_get_photos_show_all_tags_exposes_person_and_location(admin_client):
+    """앨범 설정에서 "태그 모두 표시"(show_all_tags)를 켜면 공유 링크에서도
+    person/location 태그가 Admin과 동일하게 노출돼야 한다."""
+    import aiosqlite
+
+    from backend.models.ai_database import _ai_db_path
+
+    r = await admin_client.post(
+        "/api/admin/albums", json={"name": "AllTags", "photo_paths": ["a.jpg", "b.jpg"]}
+    )
+    album_id = r.json()["id"]
+    await admin_client.put(f"/api/admin/albums/{album_id}", json={"show_all_tags": True})
+    r = await admin_client.post(f"/api/admin/albums/{album_id}/links", json={})
+    token = r.json()["token"]
+    await _auth(admin_client, token)
+
+    async with aiosqlite.connect(_ai_db_path()) as db:
+        await db.execute(
+            "INSERT INTO photo_tags (photo_path, tag, source) VALUES "
+            "('a.jpg', '지우', 'person'), "
+            "('a.jpg', '서울', 'location'), "
+            "('a.jpg', '캠핑', 'ai')"
+        )
+        await db.commit()
+
+    photos = (await admin_client.get(f"/api/share/{token}/photos")).json()["photos"]
+    photo = next(p for p in photos if p["url"] == "/media/a.jpg")
+    assert photo["person_tags"] == ["지우"]
+    assert photo["location_tags"] == ["서울"]
+    assert photo["ai_tags"] == ["캠핑"]
+
+
+async def test_get_photos_show_all_tags_still_respects_disabled_category(admin_client):
+    """show_all_tags를 켜도 AI 인식 카테고리(얼굴 인식)가 꺼져 있으면 person 태그는
+    여전히 제외돼야 한다 — enabled_sources()는 이 스위치와 별개로 항상 적용."""
+    import aiosqlite
+
+    from backend.models.ai_database import _ai_db_path
+
+    r = await admin_client.post(
+        "/api/admin/albums", json={"name": "AllTagsOff", "photo_paths": ["a.jpg"]}
+    )
+    album_id = r.json()["id"]
+    await admin_client.put(f"/api/admin/albums/{album_id}", json={"show_all_tags": True})
+    r = await admin_client.post(f"/api/admin/albums/{album_id}/links", json={})
+    token = r.json()["token"]
+    await _auth(admin_client, token)
+
+    async with aiosqlite.connect(_ai_db_path()) as db:
+        await db.execute(
+            "INSERT INTO photo_tags (photo_path, tag, source) VALUES ('a.jpg', '지우', 'person')"
+        )
+        await db.commit()
+
+    await admin_client.patch("/api/admin/ai/settings", json={"face_enabled": False})
+    photos = (await admin_client.get(f"/api/share/{token}/photos")).json()["photos"]
+    photo = next(p for p in photos if p["url"] == "/media/a.jpg")
+    assert photo["person_tags"] == []
+
+
 async def test_get_photos_survives_ai_db_failure(admin_client, monkeypatch):
     """ai.db(photo_tags) 조회가 실패해도(예: 잠김·손상) 공유 앨범 조회 자체는
     500이 아니라 200으로 응답해야 한다 — 태그만 빠지고 나머지는 정상 동작

@@ -144,6 +144,13 @@ function renderEditForm(album, links, tzOffset, serverTheme = 'dark') {
           <div id="style-error" class="alert alert-error" style="display:none"></div>
           <form id="style-form" class="flex-col gap-3">
             <div class="form-group">
+              <label style="display:flex;align-items:center;gap:6px;font-size:14px">
+                <input type="checkbox" id="f-show-all-tags" ${album.show_all_tags ? 'checked' : ''}>
+                태그 모두 표시
+              </label>
+              <p class="text-muted text-sm" style="margin:4px 0 0">인물 등 개인 정보가 포함된 모든 태그가 표시됩니다</p>
+            </div>
+            <div class="form-group">
               <label class="form-label">앨범 테마</label>
               <div class="theme-picker" id="album-theme-picker"></div>
               <input type="hidden" id="f-ui-theme" value="${album.ui_theme || ''}">
@@ -288,6 +295,7 @@ function renderEditForm(album, links, tzOffset, serverTheme = 'dark') {
   let musicPaths = [...(album.music_paths || [])];
   bindInfoForm(album.id);
   const scheduleStyleSave = bindStyleForm(album.id, () => musicPaths);
+  document.getElementById('f-show-all-tags').addEventListener('change', scheduleStyleSave);
   const scheduleSsSave    = bindSlideshowForm(album.id);
 
   initAlbumThemePicker(album.ui_theme, serverTheme, scheduleStyleSave);
@@ -555,6 +563,7 @@ function bindStyleForm(albumId, getMusicPaths) {
     ui_theme:   document.getElementById('f-ui-theme').value || null,
     title_font: document.getElementById('f-title-font').value || null,
     music_paths: getMusicPaths(),
+    show_all_tags: document.getElementById('f-show-all-tags').checked,
   }), 'style-error', 'style-save-ok');
 }
 

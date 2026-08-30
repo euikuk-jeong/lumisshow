@@ -28,7 +28,12 @@ from backend.services.auth import (
 from backend.services.paths import assert_within_photo_root, resolve_abs
 from backend.services.photo_meta import load_photo_meta
 from backend.services.ai_settings import read_ai_settings
-from backend.services.photo_tags import SHARE_INFO_PANEL_SOURCES, enabled_sources, load_photo_tags
+from backend.services.photo_tags import (
+    ADMIN_INFO_PANEL_SOURCES,
+    SHARE_INFO_PANEL_SOURCES,
+    enabled_sources,
+    load_photo_tags,
+)
 from backend.services.settings import get_settings
 from backend.services.thumbnail import generate_thumbnail
 from backend.services.zip_stream import zip_generator
@@ -322,7 +327,13 @@ async def get_photos(
     ai_db=Depends(get_ai_db),
 ):
     verify_share_session_cookie(token, request.cookies.get(_COOKIE_NAME))
-    await _get_valid_link(token, db)
+    link = await _get_valid_link(token, db)
+
+    async with db.execute(
+        "SELECT show_all_tags FROM albums WHERE id = ?", (link["album_id"],)
+    ) as cur:
+        album_row = await cur.fetchone()
+    show_all_tags = bool(album_row["show_all_tags"]) if album_row else False
 
     async with db.execute(
         """
@@ -358,7 +369,11 @@ async def get_photos(
     # CLIP 태깅 실패가 얼굴 스캔을 막지 않는 것(pipeline.py의 best-effort 원칙)과 같은
     # 이유로, 태그가 안 붙는 건 감수해도 앨범 자체가 안 열리는 건 안 된다.
     try:
-        allowed = set(SHARE_INFO_PANEL_SOURCES) & set(enabled_sources(await read_ai_settings(ai_db)))
+        # 앨범 설정에서 "태그 모두 표시"를 켜면 인물(person)·위치(location)까지
+        # Admin과 동일한 범위로 노출한다 — 그 외에는 AI 인식 카테고리 on/off를
+        # 그대로 따른다(enabled_sources()).
+        base_sources = ADMIN_INFO_PANEL_SOURCES if show_all_tags else SHARE_INFO_PANEL_SOURCES
+        allowed = set(base_sources) & set(enabled_sources(await read_ai_settings(ai_db)))
         tags_map = await load_photo_tags(file_paths, ai_db, tuple(allowed))
     except Exception:
         tags_map = {}

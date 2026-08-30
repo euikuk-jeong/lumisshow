@@ -188,6 +188,30 @@ async def test_update_album_title_font_invalid_rejected(admin_client):
     assert r.status_code == 422
 
 
+async def test_create_album_show_all_tags_defaults_false(admin_client):
+    r = await admin_client.post("/api/admin/albums", json={"name": "TagsDefault"})
+    assert r.json()["show_all_tags"] is False
+
+
+async def test_update_album_show_all_tags_round_trip(admin_client):
+    r = await admin_client.post("/api/admin/albums", json={"name": "Tags"})
+    album_id = r.json()["id"]
+    r = await admin_client.put(
+        f"/api/admin/albums/{album_id}", json={"show_all_tags": True}
+    )
+    assert r.status_code == 200
+    assert r.json()["show_all_tags"] is True
+
+    r = await admin_client.get(f"/api/admin/albums/{album_id}")
+    assert r.json()["show_all_tags"] is True
+
+    r = await admin_client.put(
+        f"/api/admin/albums/{album_id}", json={"show_all_tags": False}
+    )
+    assert r.status_code == 200
+    assert r.json()["show_all_tags"] is False
+
+
 async def test_update_album_empty_body_is_noop(admin_client):
     r = await admin_client.post("/api/admin/albums", json={"name": "Stable"})
     album_id = r.json()["id"]
@@ -493,6 +517,18 @@ async def test_duplicate_album_copies_title_font(admin_client):
         json={"name": "Dup"},
     )
     assert r.json()["title_font"] == "jua"
+
+
+async def test_duplicate_album_copies_show_all_tags(admin_client):
+    r = await admin_client.post("/api/admin/albums", json={"name": "SrcTags"})
+    album_id = r.json()["id"]
+    await admin_client.put(f"/api/admin/albums/{album_id}", json={"show_all_tags": True})
+
+    r = await admin_client.post(
+        f"/api/admin/albums/{album_id}/duplicate",
+        json={"name": "DupTags"},
+    )
+    assert r.json()["show_all_tags"] is True
 
 
 async def test_duplicate_album_description_copied(admin_client):
