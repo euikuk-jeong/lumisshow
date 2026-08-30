@@ -15,6 +15,7 @@ from backend.routers import (
     admin_albums,
     admin_browse,
     admin_links,
+    admin_llm,
     admin_people,
     admin_settings,
     auth,
@@ -72,6 +73,7 @@ app.include_router(admin_links.router)
 app.include_router(admin_people.router)
 app.include_router(admin_ai_tags.router)
 app.include_router(admin_settings.router)
+app.include_router(admin_llm.router)
 app.include_router(share.router)
 app.include_router(media.router)
 

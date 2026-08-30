@@ -193,6 +193,36 @@ class SettingsUpdate(BaseModel):
     ui_theme: Optional[str] = None
 
 
+# ── LLM 스타일 추천 (음악·테마·폰트) ────────────────────────────────────────────
+
+class LlmSettingsResponse(BaseModel):
+    provider: Optional[Literal["openai_compatible", "anthropic"]] = None
+    base_url: Optional[str] = None
+    model: Optional[str] = None
+    api_key_set: bool = False
+
+class LlmSettingsUpdate(BaseModel):
+    provider: Optional[Literal["openai_compatible", "anthropic"]] = None
+    base_url: Optional[str] = None
+    model: Optional[str] = None
+    # 빈 문자열("") = 키 삭제, None = 변경 안 함(write-only — 기존 값은 절대 되돌려주지 않음)
+    api_key: Optional[str] = None
+
+class LlmTestConnectionResponse(BaseModel):
+    ok: bool
+    message: str
+
+class LlmSuggestRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+    description: Optional[str] = Field(default=None, max_length=2000)
+
+class LlmSuggestResponse(BaseModel):
+    music_path: Optional[str] = None
+    ui_theme: Optional[str] = None
+    title_font: Optional[str] = None
+    reason: str = ""
+
+
 # ── Share (public viewer) ─────────────────────────────────────────────────────
 
 class ShareAuthRequest(BaseModel):

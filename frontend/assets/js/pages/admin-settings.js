@@ -268,6 +268,43 @@ function renderSettingsForm(settings) {
         </div>
       </div>
 
+      <!-- AI 스타일 추천 (LLM) -->
+      <div class="settings-section card">
+        <div class="settings-section-header">
+          <p class="section-title">AI 스타일 추천 (LLM)</p>
+          <p class="text-muted text-sm">앨범 이름·설명 텍스트만 보내 배경음악·앨범 테마·타이틀 폰트를 추천받습니다(사진 원본·EXIF·태그는 전송하지 않음). 등록해야 앨범 편집 화면에 추천 버튼이 나타납니다.</p>
+        </div>
+        <div class="settings-group">
+          <div class="settings-item">
+            <label class="settings-label">Provider</label>
+            <select id="s-llm-provider" class="form-input settings-select">
+              <option value="openai_compatible">OpenAI 호환 (로컬 Ollama 등 포함)</option>
+              <option value="anthropic">Anthropic</option>
+            </select>
+          </div>
+          <div class="settings-item" id="llm-base-url-item">
+            <label class="settings-label">Base URL</label>
+            <input id="s-llm-base-url" type="text" class="form-input settings-select" placeholder="비워두면 https://api.openai.com/v1">
+          </div>
+          <div class="settings-item">
+            <label class="settings-label">모델</label>
+            <input id="s-llm-model" type="text" class="form-input settings-select" placeholder="예: gpt-4o-mini / claude-3-5-haiku-latest">
+          </div>
+          <div class="settings-item">
+            <label class="settings-label">API 키</label>
+            <input id="s-llm-api-key" type="password" class="form-input settings-select" placeholder="변경하려면 새 값 입력" autocomplete="off">
+            <p class="text-muted text-sm" id="llm-api-key-status" style="margin:4px 0 0"></p>
+          </div>
+        </div>
+        <div class="settings-actions">
+          <button class="btn btn-primary btn-sm" id="btn-save-llm">저장</button>
+          <button class="btn btn-ghost btn-sm" id="btn-test-llm">연결 테스트</button>
+          <button class="btn btn-danger btn-sm" id="btn-reset-llm">초기화</button>
+          <span id="llm-ok" class="text-success text-sm" style="display:none">저장됨 ✓</span>
+          <span id="llm-test-result" class="text-sm" style="display:none"></span>
+        </div>
+      </div>
+
       <!-- 슬라이드쇼 기본값 -->
       <div class="settings-section card">
         <div class="settings-section-header">
@@ -333,6 +370,7 @@ function renderSettingsForm(settings) {
   initSiteTitle(settings);
   bindSaveHandlers();
   initAiScanSection();
+  initLlmSection();
 }
 
 /* ── 타이틀 (편집 토글) ─────────────────────────────────── */
@@ -453,6 +491,99 @@ async function initAiScanSection() {
     try {
       await api.patch('/api/admin/ai/settings', { tag_threshold: value });
       showOk('tag-threshold-ok');
+    } catch (e) {
+      alert(e.message);
+    } finally {
+      btn.disabled = false;
+    }
+  });
+}
+
+/* ── AI 스타일 추천 (LLM) provider 설정 ─────────────────── */
+async function initLlmSection() {
+  const providerSelect = document.getElementById('s-llm-provider');
+  const baseUrlInput   = document.getElementById('s-llm-base-url');
+  const modelInput     = document.getElementById('s-llm-model');
+  const apiKeyInput    = document.getElementById('s-llm-api-key');
+  const statusEl       = document.getElementById('llm-api-key-status');
+
+  function updateBaseUrlVisibility() {
+    document.getElementById('llm-base-url-item').style.display =
+      providerSelect.value === 'openai_compatible' ? '' : 'none';
+  }
+
+  function updateKeyStatus(apiKeySet) {
+    statusEl.textContent = apiKeySet ? '키 설정됨 (변경하려면 새 값 입력)' : '키 미설정';
+  }
+
+  let current;
+  try {
+    current = await api.get('/api/admin/llm/settings');
+  } catch {
+    return; // 조회 실패 시 기본값(사용 안 함)으로 폼만 남겨둠
+  }
+  if (current.provider) providerSelect.value = current.provider;
+  baseUrlInput.value = current.base_url || '';
+  modelInput.value = current.model || '';
+  updateBaseUrlVisibility();
+  updateKeyStatus(current.api_key_set);
+
+  providerSelect.addEventListener('change', updateBaseUrlVisibility);
+
+  document.getElementById('btn-save-llm').addEventListener('click', async () => {
+    const btn = document.getElementById('btn-save-llm');
+    btn.disabled = true;
+    try {
+      const body = {
+        provider: providerSelect.value,
+        base_url: baseUrlInput.value.trim() || null,
+        model: modelInput.value.trim() || null,
+      };
+      if (apiKeyInput.value) body.api_key = apiKeyInput.value;
+      const result = await api.patch('/api/admin/llm/settings', body);
+      apiKeyInput.value = '';
+      updateKeyStatus(result.api_key_set);
+      showOk('llm-ok');
+    } catch (e) {
+      alert(e.message);
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  document.getElementById('btn-test-llm').addEventListener('click', async () => {
+    const btn = document.getElementById('btn-test-llm');
+    const resultEl = document.getElementById('llm-test-result');
+    btn.disabled = true;
+    resultEl.style.display = 'none';
+    try {
+      const r = await api.post('/api/admin/llm/settings/test');
+      resultEl.textContent = r.message;
+      resultEl.className = r.ok ? 'text-success text-sm' : 'text-error text-sm';
+      resultEl.style.display = 'inline';
+    } catch (e) {
+      resultEl.textContent = e.message;
+      resultEl.className = 'text-error text-sm';
+      resultEl.style.display = 'inline';
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  document.getElementById('btn-reset-llm').addEventListener('click', async () => {
+    if (!confirm('LLM 설정(Provider·Base URL·모델·API 키)을 모두 초기화하시겠습니까?\n\n되돌릴 수 없습니다.')) return;
+    const btn = document.getElementById('btn-reset-llm');
+    btn.disabled = true;
+    try {
+      const result = await api.delete('/api/admin/llm/settings');
+      providerSelect.value = 'openai_compatible';
+      baseUrlInput.value = '';
+      modelInput.value = '';
+      apiKeyInput.value = '';
+      updateBaseUrlVisibility();
+      updateKeyStatus(result.api_key_set);
+      document.getElementById('llm-test-result').style.display = 'none';
+      showOk('llm-ok');
     } catch (e) {
       alert(e.message);
     } finally {

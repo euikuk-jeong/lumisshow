@@ -104,6 +104,12 @@ HTML5 DnD (`draggable="true"` + `dragstart/dragover/dragleave/drop/dragend`). `d
 - **뷰어**: `album.title_font`가 설정된 앨범만 `ensureTitleFontsLoaded()` 호출 — 시스템 기본을 쓰는 앨범 방문자는 Google Fonts CDN 요청이 아예 발생하지 않는다.
 - **Admin 편집 화면**: 드롭다운으로 5종 중 아무거나 골라볼 수 있어야 하므로 화면 진입 시 무조건 `ensureTitleFontsLoaded()` 호출 — 이 화면에 한해서만 admin이 외부 CDN 요청을 만든다(다른 admin 화면은 여전히 0건 유지). 미리보기(`#title-font-preview`)는 앨범 이름 입력값을 실시간으로 반영하고, 바로 아래 `#title-font-note`가 선택된 폰트의 `note`(어떤 스타일에 어울리는지)를 표시한다(`updateTitleFontPreview()`, 이름 입력·폰트 선택 양쪽에서 즉시 갱신, 저장 debounce와 무관). 드롭다운 옵션 텍스트 자체는 "명조체 (Gowun Batang)"처럼 짧게 유지하고 설명은 이 note 영역에만 둔다 — `<option>`은 긴 문장을 담기에 부적합하다는 판단.
 
+### 앨범 스타일 AI 추천 버튼 (`admin-album-edit.js`, `bindStyleSuggest`)
+"기본 정보" 카드의 이름/설명 필드 바로 아래(`#ai-suggest-area`)에 배치. **버튼은 항상 렌더링** — 화면 진입 시 `GET /api/admin/llm/settings`로 provider+API 키 등록 여부를 조회하는 동안은 `disabled` + "불러오는 중..." 문구, 조회 결과 미설정이면 계속 `disabled` + 버튼 바로 아래(`#ai-suggest-hint`)에 "설정에서 키를 등록하면 이용할 수 있습니다" 안내(설정 화면 링크 포함), 설정되어 있으면 버튼 활성화 + 안내 문구를 전송 범위 고지("사진은 보내지 않음")로 교체한다 — 버튼 자체를 통째로 숨기지 않는 이유는 "기능이 있다는 것"을 항상 보여주고 왜 못 쓰는지를 그 자리에서 설명하기 위해서다. 클릭 시 그 시점의 이름/설명 입력값(아직 저장 안 됐어도 무방 — 저장된 앨범 값이 아니라 필드 자체를 읽음)을 `POST /api/admin/llm/suggest-style`로 보내고, 결과를 제안 카드(`renderSuggestCard`, `.ai-suggest-card`)로 표시한다. 백엔드 설계는 [`backend/CLAUDE.md`](../backend/CLAUDE.md)의 "앨범 스타일 AI 추천" 항목 참고.
+
+- **"적용" 버튼은 3개 필드를 한 번에 반영**: 음악은 `musicCtl.setMusicPaths([music_path])`로 기존 목록을 통째로 교체(추가 아님, 카드 문구로 명시), 테마는 `#f-ui-theme` 히든 입력값 갱신 + `#album-theme-picker`의 `.theme-swatch.active` 클래스를 직접 토글(테마 피커는 자기 자신의 클릭 핸들러로만 active를 관리하므로 값만 바꿔서는 하이라이트가 안 움직인다), 폰트는 `#f-title-font` 값 갱신 후 `updateTitleFontPreview()` 재호출. 셋 다 반영한 뒤 `scheduleStyleSave()` 한 번만 호출해 기존 자동저장 debounce 경로를 그대로 탄다. `null`로 온 필드(후보 목록에 없어 서버가 걸러낸 값)는 건드리지 않아 사용자가 이미 골라둔 값이 지워지지 않는다. 음악 라벨은 파일명이 아니라 `BUNDLED_MUSIC_CREDITS`로 찾은 "무드 — 곡명"(음악 선택 모달과 동일 표기, 매칭 실패 시 파일명 폴백). `bindStyleSuggest`가 provider 조회 `await` 중 다른 화면으로 이동했을 수 있어 재개 직후 `#ai-suggest-area`가 여전히 같은 DOM인지 확인 후 진행(lightbox.js의 photo-info stale 응답 가드와 동일 패턴). 실브라우저에서 `fetch` 스텁으로 제안 카드 렌더링→적용→새로고침 후 서버 반영까지 확인 완료.
+- **버튼 노출 여부는 매 진입마다 재조회** — 캐시하지 않음. 설정 화면에서 방금 키를 등록했어도 이 화면은 별도 페이지 로드이므로 새로 물어본다.
+
 ### 전체화면 사진 뷰어 제스처 (`photo-zoom-viewer.js`)
 Admin 라이트박스(`lightbox.js`)와 공유뷰어(`album-view.js`의 `_openSharePhotoViewer`)가 휠 줌·더블클릭 줌·핀치 줌·드래그 팬·스와이프 넘기기·마우스 가운데 버튼 리셋을 공용 모듈로 공유한다(슬라이드쇼는 대상 아님 — Ken Burns 자동 효과만 있고 사용자 줌이 없음).
 

@@ -56,6 +56,7 @@ routers/
   admin_links.py     # CRUD /api/admin/albums/{id}/links
   admin_people.py    # Phase 2: 인물 CRUD, 얼굴 라벨/교정, 인물 사진 상세(슬라이드쇼용), 크롭 서빙, AI 잡 트리거, 경로 복구 승인
   admin_ai_tags.py   # Phase 5: 태그 목록/사진 그리드/삭제/일괄이름변경/수동태그추가 (photo_tags 기반, person·location은 조회만 또는 미노출). Phase 7: GET /tags/xmp-export — DB 메타데이터를 XMP 사이드카 ZIP으로 스트리밍 다운로드
+  admin_llm.py       # GET|PATCH /api/admin/llm/settings, POST /settings/test, POST /suggest-style — 앨범 이름/설명 기반 배경음악·테마·폰트 AI 추천
   share.py           # GET|POST /api/share/{token}/*
   media.py           # /thumb/, /media/, /music/{token}?index=N, /music/{token}/cover?index=N 서빙
 models/
@@ -73,6 +74,10 @@ services/
   zip_stream.py      # 스트리밍 ZIP 생성 (zip_generator: 디스크 파일, zip_generator_from_content: 메모리 텍스트 — XMP export 전용)
   tag_vocab.py       # Phase 5: 수동 태그 추가용 어휘 목록 — ai_worker/tag_vocab.py의 label만 복제(컨테이너 분리로 코드 공유 불가, 어휘 바뀌면 양쪽 동기화 필요)
   music_tags.py      # mutagen으로 음악 파일 임베디드 태그(제목/아티스트/앨범/커버 이미지) 읽기 — read_music_tags/read_cover_image, 태그 없거나 파싱 실패 시 예외 없이 빈 값 폴백
+  llm_settings.py    # LLM provider 설정 저장(settings 테이블 재사용, DEFAULTS엔 미등록) — API 키는 JWT_SECRET 기반 Fernet 대칭키로 암호화. get_llm_settings()는 api_key_set 불리언만 반환(원문/암호문 노출 안 함), get_decrypted_config()는 내부 호출(연결 테스트/추천) 전용
+  llm_client.py      # OpenAI 호환/Anthropic REST 직접 호출(SDK 없음, requests 동기) — call_llm()은 반드시 run_in_threadpool로 감싸 호출(이벤트 루프 블로킹 방지), extract_json()으로 관대한 JSON 파싱
+  album_style_vocab.py    # LLM 프롬프트·검증용 후보 목록 — frontend BUNDLED_MUSIC_CREDITS/THEMES/TITLE_FONTS 미러(tag_vocab.py와 동일한 의도적 중복 패턴, 프론트 값 바뀌면 동기화 필요)
+  album_style_suggest.py  # suggest_style() — 이름/설명으로 프롬프트 구성 → LLM 호출 → 응답을 album_style_vocab allowlist로 검증(후보 밖 값은 그 필드만 무시), 음악은 DATA_DIR 실제 파일 존재까지 확인 후 경로 반환
 ```
 
 ---
@@ -164,3 +169,16 @@ EXIF를 직접 수정한 경우 등 파일 내용이 캐시 이후 바뀐 경우
 
 - 프론트는 뷰어별 분기가 필요 없음 — `SharePhotoItem`의 `person_tags`/`location_tags`가 채워지는지 여부만 백엔드가 결정하고, `slideshow.js`의 정보 패널은 받은 필드를 그대로 렌더링한다([`frontend/CLAUDE.md`](../frontend/CLAUDE.md)의 "정보 패널(i 버튼)" 항목 참고).
 - Admin 라이트박스(`photo-info`)·XMP export는 이 설정과 무관 — 원래부터 Admin 전용 조회라 항상 전체 노출.
+
+### 앨범 스타일 AI 추천 (배경음악·테마·타이틀 폰트, 2026-08)
+`POST /api/admin/llm/suggest-style`(`routers/admin_llm.py`) — 앨범 이름+설명 텍스트만 LLM에 보내 배경음악(번들 10곡 중 1곡)·앨범 테마(8종 중 1개)·타이틀 폰트(5종 중 1개)를 추천한다. **사진 원본·EXIF·태그는 절대 전송하지 않음**(NAS 셀프호스팅 프라이버시 전제). doc/todo/todo.md(2026-08-24 grilling)에서 설계 확정.
+
+- **Provider 2종, SDK 없이 `requests` 직접 호출**: OpenAI 호환(`base_url`+`api_key`+`model` 자유입력, 로컬 Ollama 등도 커버) / Anthropic. `services/llm_client.py`의 `call_llm()`은 동기 함수라 async 라우터에서 반드시 `run_in_threadpool`로 감싼다(`xmp_export`의 동기 조립 스레드 오프로드와 동일 이유 — 안 그러면 LLM 응답 대기 5~30초 동안 `/thumb`·`/media`·공유뷰어 전체가 멈춘다).
+- **API 키 암호화 저장 — 이 프로젝트에서 유일한 "비밀값을 DB에 저장" 예외**: 다른 비밀값은 전부 환경변수인데, LLM API 키는 과금 민감성 때문에 사용자가 Admin UI에서 직접 등록하는 걸 선택(grilling으로 확정). `services/llm_settings.py`가 `JWT_SECRET`을 sha256 해시한 값으로 Fernet 대칭키를 만들어 암호화 후 기존 `settings` 테이블에 저장 — 단, `services/settings.py`의 `DEFAULTS`에는 올리지 않는다(올리면 `GET /api/admin/settings`가 암호화 blob까지 그대로 응답에 실어보낸다). 공개 조회(`get_llm_settings`)는 `api_key_set` 불리언만 반환하고 원문/암호문 모두 응답에 담지 않는다 — API 키 입력 필드는 프론트에서도 write-only(기존 값을 절대 되돌려주지 않음).
+- **`JWT_SECRET` 회전 시 안전한 성능 저하**: 저장된 암호문을 복호화하지 못하면(`InvalidToken`) `decrypt_api_key()`가 예외 대신 `None`을 반환 — 500이 아니라 "설정 없음"으로 취급되어 설정 화면·앨범 편집 화면 모두 정상 렌더링되고, 사용자는 키를 다시 등록하기만 하면 된다.
+- **후보 vocab은 백엔드에 별도 미러 필요**: 무드-곡 매핑(`admin-album-edit.js`의 `BUNDLED_MUSIC_CREDITS`)·테마(`theme.js`의 `THEMES`)·폰트(`title-fonts.js`의 `TITLE_FONTS`)가 전부 프론트 전용 모듈이라 프롬프트 구성·응답 검증에 그대로 쓸 수 없다 — `services/album_style_vocab.py`가 `tag_vocab.py`와 동일한 "레이어 분리로 인한 의도적 중복" 패턴으로 세 목록을 미러한다. 프론트 쪽이 바뀌면 이 파일도 함께 갱신해야 한다.
+- **관대한 파싱 + 부분 적용**: LLM 응답은 JSON을 강제 요청하지만 마크다운 코드펜스 등으로 감싸져 올 수 있어 `extract_json()`이 첫 `{...}` 블록만 정규식으로 추출한다. 추출된 JSON이라도 각 필드(`music_id`/`theme_id`/`font_id`)가 allowlist(vocab)에 없으면 그 필드만 `null`로 무시하고 나머지는 그대로 반환(부분 적용 허용) — JSON 자체를 못 찾으면(완전 파싱 실패) `LlmError`로 502를 반환하고 자동 재시도는 하지 않는다. 음악은 allowlist 통과 후에도 `DATA_DIR/music/bundled/`에 실제 파일이 있는지 `os.path.isfile`로 한 번 더 확인한다(있어야 할 파일이 배포 환경에 없을 수 있어서).
+- **프론트 적용은 교체이지 병합이 아님**: "적용" 버튼은 배경음악 후보가 있으면 앨범의 기존 `music_paths` 전체를 추천곡 1개로 교체한다(추가가 아님) — 카드 문구로 명시. 테마/폰트가 `null`로 온 필드는 기존 앨범 값을 그대로 두고 건드리지 않는다.
+- **OpenAI 호환 provider — 커스텀 base_url엔 모델명 필수**: `base_url`을 직접 입력했는데 `model`을 비워두면 `_DEFAULT_OPENAI_MODEL`("gpt-4o-mini")로 조용히 채워지던 게 실사용 중 발견된 버그 — Gemini 등 OpenAI 호환 레이어를 쓸 때 OpenAI 전용 모델명이 원격에서 404로 튕겨 원인 파악이 어려웠다(`call_llm()`이 이제 이 조합이면 즉시 `LlmError`로 명확히 안내). `base_url`이 비어있을 때(=진짜 OpenAI)만 기본 모델 폴백이 유효하다.
+- **provider 에러 본문을 그대로 노출**: `requests.HTTPError`의 기본 `str()`은 상태코드/URL만 담고 실제 원인(예: Gemini의 "The model is overloaded" 503, "no longer available to new users" 404)을 버린다 — `_error_detail()`이 응답 JSON의 `error.message`(또는 배열로 감싸진 형태)를 우선 추출하고 없으면 본문 텍스트 앞 200자를 붙인다. 연결 테스트·추천 실패 메시지 둘 다 이 함수를 거친다.
+- **초기화(`DELETE /api/admin/llm/settings`)**: PATCH의 "None = 변경 안 함" 관례로는 provider/base_url/model을 지울 방법이 없어(빈 문자열 관례가 없음) 별도 삭제 라우트가 필요했다 — `reset_llm_settings()`가 4개 키(`llm_provider`/`llm_base_url`/`llm_model`/`llm_api_key_enc`) 행을 통째로 DELETE. Admin 설정 화면의 "초기화" 버튼(`confirm()` 확인 후 호출)이 이 경로를 쓴다.
