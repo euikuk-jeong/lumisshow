@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.18.1] - 2026-08-30
+
+### Fixed
+- **공유 앨범 설명 줄바꿈 미표시 수정**: `.viewer-desc`에 `white-space` 지정이 없어
+  기본값(normal)이 개행 문자를 공백으로 병합, 여러 줄로 입력한 앨범 설명이 공유
+  링크에서 한 줄로 표시되던 문제. `white-space: pre-line` 추가 (`viewer.css`)
+
 ## [2.18.0] - 2026-08-30
 
 ### Added
@@ -1546,7 +1553,8 @@ Phase 2 — AI 얼굴 인식 스마트 앨범. NAS 로컬 AI(InsightFace)로 사
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v2.18.0...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v2.18.1...HEAD
+[2.18.1]: https://github.com/euikuk-jeong/lumisshow/compare/v2.18.0...v2.18.1
 [2.18.0]: https://github.com/euikuk-jeong/lumisshow/compare/v2.17.11...v2.18.0
 [2.17.11]: https://github.com/euikuk-jeong/lumisshow/compare/v2.17.10...v2.17.11
 [2.17.10]: https://github.com/euikuk-jeong/lumisshow/compare/v2.17.9...v2.17.10
