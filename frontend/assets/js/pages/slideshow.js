@@ -162,18 +162,16 @@ async function runSlideshow(src) {
   if (musicCount > 0) {
     audio = new Audio(src.musicUrl(0));
     audio.volume = cfg.volume / 100;
-    if (musicCount === 1) {
-      audio.loop = true;
-    } else {
-      audio.addEventListener('ended', () => {
-        musicTrackIdx = (musicTrackIdx + 1) % musicCount;
-        audio.src = src.musicUrl(musicTrackIdx);
-        if (musicOn) {
-          audio.play().then(() => showMusicToast()).catch(() => {});
-          refreshInfoPanel();
-        }
-      });
-    }
+    // loop 속성 대신 ended 리스너로 재생 — loop=true면 스펙상 ended 이벤트가 안 떠서
+    // 단일 트랙 반복 시 토스트/정보패널 갱신이 누락됨 (멀티트랙과 로직 통일)
+    audio.addEventListener('ended', () => {
+      musicTrackIdx = (musicTrackIdx + 1) % musicCount;
+      audio.src = src.musicUrl(musicTrackIdx);
+      if (musicOn) {
+        audio.play().then(() => showMusicToast()).catch(() => {});
+        refreshInfoPanel();
+      }
+    });
   }
 
   // ID3 등 임베디드 태그(제목/아티스트/앨범/커버) 기반 트랙 정보 — 태그가 없으면
