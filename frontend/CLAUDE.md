@@ -59,8 +59,8 @@ CSS animation 우선(GPU 가속). `EFFECTS` 배열에서 랜덤 선택. 수동 �
 ### 배경음악 플레이어 (다중 트랙)
 - `album.music_count`, `album.music_names`, `album.music_tags` — ShareAlbumResponse에서 수신
 - `GET /music/{token}?index=N` — 곡 인덱스로 스트리밍 요청
-- 단일 트랙: `audio.loop = true`
-- 복수 트랙: `ended` 이벤트로 자동 다음 곡, 이전/다음 버튼 표시
+- 단일/복수 트랙 모두 `ended` 이벤트로 재생성 — `audio.loop = true`는 스펙상 `ended`가 발생하지 않아 반복 시 토스트/정보패널 갱신이 누락되므로 사용하지 않음(2026-08). 복수 트랙은 다음 곡으로, 단일 트랙은 같은 곡으로 `audio.src` 재할당 후 재생
+- 복수 트랙: 이전/다음 버튼 표시
 - 브라우저 정책: 첫 사용자 제스처(슬라이드쇼 시작) 이후 `audio.play()` 호출
 - 음악 On/Off 상태는 `localStorage`의 `slideshow_settings`에 저장
 
