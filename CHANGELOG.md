@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.18.3] - 2026-08-31
+
+### Fixed
+- **단일 트랙 배경음악 반복재생 시 토스트/정보패널 갱신 누락 수정**: 단일 트랙
+  앨범은 `audio.loop = true`로 재생했는데, HTML5 스펙상 `loop=true`면 `ended`
+  이벤트가 발생하지 않아 첫 재생 이후 반복될 때마다 떠야 할 재생 토스트와
+  정보패널 갱신이 누락되던 문제. 복수 트랙과 동일하게 `ended` 리스너에서 같은
+  곡을 재할당·재생하는 방식으로 통일 (`slideshow.js`)
+
 ## [2.18.2] - 2026-08-31
 
 ### Fixed
@@ -1561,7 +1570,8 @@ Phase 2 — AI 얼굴 인식 스마트 앨범. NAS 로컬 AI(InsightFace)로 사
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v2.18.2...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v2.18.3...HEAD
+[2.18.3]: https://github.com/euikuk-jeong/lumisshow/compare/v2.18.2...v2.18.3
 [2.18.2]: https://github.com/euikuk-jeong/lumisshow/compare/v2.18.1...v2.18.2
 [2.18.1]: https://github.com/euikuk-jeong/lumisshow/compare/v2.18.0...v2.18.1
 [2.18.0]: https://github.com/euikuk-jeong/lumisshow/compare/v2.17.11...v2.18.0
