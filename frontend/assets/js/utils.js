@@ -29,3 +29,12 @@ export async function getSiteTitle() {
 export function invalidateSiteInfo() {
   _infoCache = null;
 }
+
+export function formatPlayTime(totalSeconds) {
+  const total = Math.max(0, Math.round(totalSeconds));
+  const m = Math.floor(total / 60);
+  const s = total % 60;
+  if (m === 0) return `${s}초`;
+  if (s === 0) return `${m}분`;
+  return `${m}분 ${s}초`;
+}

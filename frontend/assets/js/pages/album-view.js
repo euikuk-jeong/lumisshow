@@ -1,5 +1,5 @@
 import { shareApi, ShareAuthError } from '../api.js';
-import { esc, getVersion, getSiteTitle } from '../utils.js';
+import { esc, getVersion, getSiteTitle, formatPlayTime } from '../utils.js';
 import { EFFECTS, EFFECT_LABELS, loadSlideshowSettings } from '../slideshow-config.js';
 import { createPhotoZoomViewer } from '../photo-zoom-viewer.js';
 import { ensureTitleFontsLoaded, applyTitleFont } from '../title-fonts.js';
@@ -125,6 +125,7 @@ export async function renderAlbumView(token) {
         <div class="form-group">
           <label class="form-label">전환 시간 (초)</label>
           <input type="number" id="s-interval" min="2" max="60" class="form-input" style="width:100px">
+          <span id="s-interval-estimate" class="text-muted text-sm" style="margin-left:8px"></span>
         </div>
         <div class="form-group">
           <label class="form-label">순서</label>
@@ -465,6 +466,14 @@ function _initSettingsPanel(token, album) {
   document.getElementById('s-volume-label').textContent = `${s.volume}%`;
   document.getElementById('s-effect').value = s.effect;
 
+  function updateIntervalEstimate() {
+    const interval = parseInt(document.getElementById('s-interval').value, 10) || 0;
+    document.getElementById('s-interval-estimate').textContent =
+      `(예상 플레이 시간 : ${formatPlayTime(interval * album.photo_count)})`;
+  }
+  updateIntervalEstimate();
+  document.getElementById('s-interval').addEventListener('input', updateIntervalEstimate);
+
   document.getElementById('s-volume').addEventListener('input', (e) => {
     document.getElementById('s-volume-label').textContent = `${e.target.value}%`;
   });
@@ -477,6 +486,7 @@ function _initSettingsPanel(token, album) {
     document.getElementById('s-volume').value = s.volume;
     document.getElementById('s-volume-label').textContent = `${s.volume}%`;
     document.getElementById('s-effect').value = s.effect;
+    updateIntervalEstimate();
   }
 
   document.getElementById('btn-cancel').addEventListener('click', () => {

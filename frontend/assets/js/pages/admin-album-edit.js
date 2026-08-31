@@ -1,6 +1,6 @@
 import { api } from '../api.js';
 import { renderAdminShell } from '../layout.js';
-import { esc, thumbImg } from '../utils.js';
+import { esc, thumbImg, formatPlayTime } from '../utils.js';
 import { openLightbox } from '../lightbox.js';
 import { THEMES } from '../theme.js';
 import { TITLE_FONTS, ensureTitleFontsLoaded, applyTitleFont } from '../title-fonts.js';
@@ -193,6 +193,7 @@ function renderEditForm(album, links, tzOffset, serverTheme = 'dark') {
               <label class="form-label">전환 시간 (초)</label>
               <input id="ss-interval" type="number" min="2" max="60" class="form-input" style="width:100px"
                      value="${ss.slideshow_interval ?? 5}">
+              <span id="ss-interval-estimate" class="text-muted text-sm" style="margin-left:8px">(예상 플레이 시간 : ${formatPlayTime((ss.slideshow_interval ?? 5) * album.photos.length)})</span>
             </div>
             <div class="form-group">
               <label class="form-label">재생 순서</label>
@@ -383,7 +384,16 @@ function renderEditForm(album, links, tzOffset, serverTheme = 'dark') {
     scheduleSsSave();
   });
 
-  document.getElementById('ss-interval').addEventListener('input', scheduleSsSave);
+  function updateSsIntervalEstimate() {
+    const interval = parseInt(document.getElementById('ss-interval').value, 10) || 0;
+    const el = document.getElementById('ss-interval-estimate');
+    if (el) el.textContent = `(예상 플레이 시간 : ${formatPlayTime(interval * photoState.photos.length)})`;
+  }
+
+  document.getElementById('ss-interval').addEventListener('input', () => {
+    scheduleSsSave();
+    updateSsIntervalEstimate();
+  });
   document.getElementById('ss-effect').addEventListener('change', scheduleSsSave);
   ['ss-order', 'ss-music', 'ss-loop'].forEach(name =>
     document.querySelectorAll(`input[name="${name}"]`).forEach(el => el.addEventListener('change', scheduleSsSave))
@@ -437,6 +447,7 @@ function renderEditForm(album, links, tzOffset, serverTheme = 'dark') {
     photoState.recomputeDateOffsets();
     const countEl = document.getElementById('photo-count-label');
     if (countEl) countEl.textContent = photoState.photos.length.toLocaleString();
+    updateSsIntervalEstimate();
     const coverEl = document.getElementById('cover-preview-wrap');
     if (coverEl) coverEl.innerHTML = coverPreviewHtml(photoState.photos, photoState.coverPath);
   }
