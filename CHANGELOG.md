@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.18.4] - 2026-08-31
+
+### Added
+- **슬라이드쇼 설정에 예상 플레이 시간 표시**: 앨범 편집 화면과 공유 앨범 설정 패널의
+  "전환 시간 (초)" 입력 옆에 전환 시간 × 현재 사진 수로 계산한 예상 플레이 시간(예:
+  "1분 40초")을 표시. 전환 시간 값을 바꾸거나 사진을 추가/제외하면 실시간으로 갱신
+  (`utils.js`의 `formatPlayTime()` 공용 헬퍼, `admin-album-edit.js`, `album-view.js`)
+
 ## [2.18.3] - 2026-08-31
 
 ### Fixed
@@ -1570,7 +1578,8 @@ Phase 2 — AI 얼굴 인식 스마트 앨범. NAS 로컬 AI(InsightFace)로 사
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v2.18.3...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v2.18.4...HEAD
+[2.18.4]: https://github.com/euikuk-jeong/lumisshow/compare/v2.18.3...v2.18.4
 [2.18.3]: https://github.com/euikuk-jeong/lumisshow/compare/v2.18.2...v2.18.3
 [2.18.2]: https://github.com/euikuk-jeong/lumisshow/compare/v2.18.1...v2.18.2
 [2.18.1]: https://github.com/euikuk-jeong/lumisshow/compare/v2.18.0...v2.18.1
