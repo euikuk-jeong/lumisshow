@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.19.0] - 2026-10-17
+
+### Added
+- **앨범 커버 표시 영역 설정**: 앨범 편집 "기본 정보"의 커버 옆 드롭다운에서
+  공유 앨범 상단 커버로 보일 사진 영역을 자동(기존 동작, 상단 20% 기준)/상단/중앙/하단
+  중에서 선택. 인물이 사진 중앙·하단에 있어 기존 고정 영역으로는 커버로 쓰기 어려웠던
+  문제 해결. 변경 즉시 저장되고 미리보기에 바로 반영되며, 공유뷰어 커버에도 동일하게
+  적용 (`utils.js`의 `coverObjectPosition()` 공용 매핑, `admin-album-edit.js`,
+  `album-view.js`). 앨범 복제 시 설정도 함께 복사
+- `albums.cover_position` 컬럼 추가 — 기동 시 자동 마이그레이션. 기존 앨범은 값이
+  비어 있어 "자동"으로 취급되므로 표시 변화 없음
+
+### Changed
+- 하위 디렉토리 `CLAUDE.md` 파일 git 추적 해제 (로컬 전용 문서)
+
 ## [2.18.4] - 2026-08-31
 
 ### Added
@@ -1578,7 +1593,8 @@ Phase 2 — AI 얼굴 인식 스마트 앨범. NAS 로컬 AI(InsightFace)로 사
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v2.18.4...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v2.19.0...HEAD
+[2.19.0]: https://github.com/euikuk-jeong/lumisshow/compare/v2.18.4...v2.19.0
 [2.18.4]: https://github.com/euikuk-jeong/lumisshow/compare/v2.18.3...v2.18.4
 [2.18.3]: https://github.com/euikuk-jeong/lumisshow/compare/v2.18.2...v2.18.3
 [2.18.2]: https://github.com/euikuk-jeong/lumisshow/compare/v2.18.1...v2.18.2
