@@ -56,7 +56,7 @@ _PHOTO_SORT_DEFAULTS = {
 }
 
 _ALLOWED_UPDATE_COLS = {
-    "name", "description", "cover_path",
+    "name", "description", "cover_path", "cover_position",
     "slideshow_interval", "slideshow_order", "slideshow_effect",
     "slideshow_music", "slideshow_volume", "slideshow_loop",
     "photo_sort_by", "photo_sort_dir", "ui_theme", "title_font", "show_all_tags",
@@ -83,6 +83,8 @@ def _row_to_album_dict(row) -> dict:
     for col in ('slideshow_music', 'slideshow_loop', 'show_all_tags'):
         if not isinstance(d[col], bool):
             d[col] = bool(d[col])
+    if d.get('cover_position') is None:
+        d['cover_position'] = 'auto'
     return d
 
 
@@ -242,12 +244,12 @@ async def duplicate_album(
 
     async with db.execute(
         """INSERT INTO albums
-           (name, description, cover_path, music_path,
+           (name, description, cover_path, cover_position, music_path,
             slideshow_interval, slideshow_order, slideshow_effect,
             slideshow_music, slideshow_volume, slideshow_loop,
             photo_sort_by, photo_sort_dir, ui_theme, title_font, show_all_tags)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-        (body.name, src["description"], src["cover_path"], src["music_path"],
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (body.name, src["description"], src["cover_path"], src["cover_position"], src["music_path"],
          src["slideshow_interval"], src["slideshow_order"], src["slideshow_effect"],
          src["slideshow_music"], src["slideshow_volume"], src["slideshow_loop"],
          src["photo_sort_by"], src["photo_sort_dir"], src["ui_theme"], src["title_font"],

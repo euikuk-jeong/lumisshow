@@ -247,7 +247,7 @@ async def get_album(token: str, request: Request, db=Depends(get_db)):
 
     async with db.execute(
         """
-        SELECT a.name, a.description, a.music_path, a.cover_path, a.created_at,
+        SELECT a.name, a.description, a.music_path, a.cover_path, a.cover_position, a.created_at,
                a.slideshow_interval, a.slideshow_order, a.slideshow_effect,
                a.slideshow_music, a.slideshow_volume, a.slideshow_loop,
                a.ui_theme, a.title_font, sl.expires_at,
@@ -310,6 +310,7 @@ async def get_album(token: str, request: Request, db=Depends(get_db)):
         "music_names": [os.path.basename(p) for p in music_paths],
         "music_tags": music_tags,
         "cover_index": cover_index,
+        "cover_position": row["cover_position"] or "auto",
         "slideshow_defaults": slideshow_defaults,
         "timezone_offset": sv["timezone_offset"],
         "ui_theme": row["ui_theme"] or sv["ui_theme"],

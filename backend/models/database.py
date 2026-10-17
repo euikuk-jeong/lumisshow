@@ -129,6 +129,7 @@ _ALBUM_MIGRATIONS = [
     "ALTER TABLE albums ADD COLUMN ui_theme           TEXT",
     "ALTER TABLE albums ADD COLUMN title_font         TEXT",
     "ALTER TABLE albums ADD COLUMN show_all_tags      INTEGER",
+    "ALTER TABLE albums ADD COLUMN cover_position     TEXT",
 ]
 
 

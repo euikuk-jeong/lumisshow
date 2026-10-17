@@ -84,3 +84,18 @@ async def test_get_db_rolls_back_uncommitted_write_on_exit(db_env):
         row = await cur.fetchone()
     assert row["n"] == 0
     await gen2.aclose()
+
+
+async def test_existing_album_cover_position_reads_auto(db_env):
+    """cover_position 컬럼 추가 전 생성된 앨범(NULL)은 API에서 "auto"로 보인다."""
+    from backend.routers.admin_albums import _row_to_album_dict
+
+    gen = get_db()
+    db = await gen.__anext__()
+    await db.execute("INSERT INTO albums (name) VALUES (?)", ("LegacyCover",))
+    await db.commit()
+    async with db.execute("SELECT * FROM albums WHERE name = ?", ("LegacyCover",)) as cur:
+        row = await cur.fetchone()
+    assert row["cover_position"] is None
+    assert _row_to_album_dict(row)["cover_position"] == "auto"
+    await gen.aclose()

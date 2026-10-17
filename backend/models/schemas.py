@@ -5,6 +5,8 @@ from typing import Literal, Optional
 from pydantic import BaseModel, Field
 
 TitleFont = Literal["gowun-batang", "gaegu", "jua", "gamja-flower", "poor-story"]
+# 공유 앨범 상단 커버 이미지의 세로 표시 영역. NULL(기존 앨범) = "auto"(상단 20% 기준, 기존 동작)
+CoverPosition = Literal["auto", "top", "center", "bottom"]
 
 
 def parse_music_paths(raw: str | None) -> list[str]:
@@ -70,6 +72,7 @@ class AlbumUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
     cover_path: Optional[str] = None
+    cover_position: Optional[CoverPosition] = None
     music_paths: Optional[list[str]] = None
     slideshow_interval: Optional[int] = None
     slideshow_order: Optional[str] = None
@@ -97,6 +100,7 @@ class AlbumResponse(BaseModel):
     name: str
     description: Optional[str]
     cover_path: Optional[str]
+    cover_position: CoverPosition = "auto"
     first_photo_path: Optional[str] = None
     music_paths: list[str]
     photo_count: int
@@ -246,6 +250,7 @@ class ShareAlbumResponse(BaseModel):
     music_names: list[str]
     music_tags: list[MusicTrackTag] = []
     cover_index: Optional[int] = None
+    cover_position: CoverPosition = "auto"
     slideshow_defaults: Optional[SlideshowDefaults] = None
     timezone_offset: int = 0
     ui_theme: str = "dark"

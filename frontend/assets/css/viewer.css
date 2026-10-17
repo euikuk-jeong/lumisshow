@@ -60,7 +60,7 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
-  object-position: 50% 20%;
+  /* object-position은 앨범 cover_position 값으로 인라인 지정 (utils.js coverObjectPosition) */
 }
 
 .viewer-cover::after {
