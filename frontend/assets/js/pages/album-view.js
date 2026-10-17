@@ -1,5 +1,5 @@
 import { shareApi, ShareAuthError } from '../api.js';
-import { esc, getVersion, getSiteTitle, formatPlayTime } from '../utils.js';
+import { esc, getVersion, getSiteTitle, formatPlayTime, coverObjectPosition } from '../utils.js';
 import { EFFECTS, EFFECT_LABELS, loadSlideshowSettings } from '../slideshow-config.js';
 import { createPhotoZoomViewer } from '../photo-zoom-viewer.js';
 import { ensureTitleFontsLoaded, applyTitleFont } from '../title-fonts.js';
@@ -69,7 +69,7 @@ export async function renderAlbumView(token) {
 
   app.innerHTML = `
     <div class="viewer-page">
-      ${coverUrl ? `<div class="viewer-cover"><img src="${coverUrl}" alt="커버"></div>` : ''}
+      ${coverUrl ? `<div class="viewer-cover"><img src="${coverUrl}" alt="커버" style="object-position:${coverObjectPosition(album.cover_position)}"></div>` : ''}
       <div class="viewer-body">
         <h1 class="viewer-title" id="viewer-title">${esc(album.album_name)}</h1>
         ${album.description ? `<p class="viewer-desc text-muted">${esc(album.description)}</p>` : ''}

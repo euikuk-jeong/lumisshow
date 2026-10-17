@@ -188,6 +188,23 @@ async def test_get_album_title_font_included(admin_client):
     assert r.json()["title_font"] == "gaegu"
 
 
+async def test_get_album_cover_position_included(admin_client):
+    r = await admin_client.post("/api/admin/albums", json={"name": "CoverPos Album"})
+    album_id = r.json()["id"]
+
+    r = await admin_client.post(f"/api/admin/albums/{album_id}/links", json={})
+    token = r.json()["token"]
+    await _auth(admin_client, token)
+
+    r = await admin_client.get(f"/api/share/{token}/album")
+    assert r.json()["cover_position"] == "auto"
+
+    await admin_client.put(f"/api/admin/albums/{album_id}", json={"cover_position": "bottom"})
+    r = await admin_client.get(f"/api/share/{token}/album")
+    assert r.status_code == 200
+    assert r.json()["cover_position"] == "bottom"
+
+
 async def test_get_album_music_tags_from_id3(admin_client, tmp_path):
     music_dir = tmp_path / "data" / "music"
     music_dir.mkdir(parents=True, exist_ok=True)

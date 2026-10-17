@@ -188,6 +188,48 @@ async def test_update_album_title_font_invalid_rejected(admin_client):
     assert r.status_code == 422
 
 
+async def test_create_album_cover_position_defaults_auto(admin_client):
+    r = await admin_client.post("/api/admin/albums", json={"name": "CoverPosDefault"})
+    assert r.json()["cover_position"] == "auto"
+
+
+@pytest.mark.parametrize("position", ["auto", "top", "center", "bottom"])
+async def test_update_album_cover_position_round_trip(admin_client, position):
+    r = await admin_client.post("/api/admin/albums", json={"name": "CoverPos"})
+    album_id = r.json()["id"]
+    r = await admin_client.put(
+        f"/api/admin/albums/{album_id}", json={"cover_position": position}
+    )
+    assert r.status_code == 200
+    assert r.json()["cover_position"] == position
+
+    r = await admin_client.get(f"/api/admin/albums/{album_id}")
+    assert r.json()["cover_position"] == position
+
+
+async def test_update_album_cover_position_null_reads_auto(admin_client):
+    r = await admin_client.post("/api/admin/albums", json={"name": "CoverPosNull"})
+    album_id = r.json()["id"]
+    await admin_client.put(f"/api/admin/albums/{album_id}", json={"cover_position": "bottom"})
+    r = await admin_client.put(f"/api/admin/albums/{album_id}", json={"cover_position": None})
+    assert r.status_code == 200
+    assert r.json()["cover_position"] == "auto"
+
+
+async def test_update_album_cover_position_invalid_rejected(admin_client):
+    r = await admin_client.post("/api/admin/albums", json={"name": "CoverPosInvalid"})
+    album_id = r.json()["id"]
+    r = await admin_client.put(
+        f"/api/admin/albums/{album_id}", json={"cover_position": "left"}
+    )
+    assert r.status_code == 422
+
+
+async def test_update_album_cover_position_requires_auth(client):
+    r = await client.put("/api/admin/albums/1", json={"cover_position": "top"})
+    assert r.status_code == 401
+
+
 async def test_create_album_show_all_tags_defaults_false(admin_client):
     r = await admin_client.post("/api/admin/albums", json={"name": "TagsDefault"})
     assert r.json()["show_all_tags"] is False
@@ -517,6 +559,18 @@ async def test_duplicate_album_copies_title_font(admin_client):
         json={"name": "Dup"},
     )
     assert r.json()["title_font"] == "jua"
+
+
+async def test_duplicate_album_copies_cover_position(admin_client):
+    r = await admin_client.post("/api/admin/albums", json={"name": "SrcCoverPos"})
+    album_id = r.json()["id"]
+    await admin_client.put(f"/api/admin/albums/{album_id}", json={"cover_position": "center"})
+
+    r = await admin_client.post(
+        f"/api/admin/albums/{album_id}/duplicate",
+        json={"name": "DupCoverPos"},
+    )
+    assert r.json()["cover_position"] == "center"
 
 
 async def test_duplicate_album_copies_show_all_tags(admin_client):

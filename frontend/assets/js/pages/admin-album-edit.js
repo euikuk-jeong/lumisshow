@@ -1,6 +1,6 @@
 import { api } from '../api.js';
 import { renderAdminShell } from '../layout.js';
-import { esc, thumbImg, formatPlayTime } from '../utils.js';
+import { esc, thumbImg, formatPlayTime, COVER_POSITIONS, coverObjectPosition } from '../utils.js';
 import { openLightbox } from '../lightbox.js';
 import { THEMES } from '../theme.js';
 import { TITLE_FONTS, ensureTitleFontsLoaded, applyTitleFont } from '../title-fonts.js';
@@ -133,8 +133,13 @@ function renderEditForm(album, links, tzOffset, serverTheme = 'dark') {
             </div>
           </form>
           <div class="form-group">
-            <label class="form-label">커버</label>
-            <div id="cover-preview-wrap">${coverPreviewHtml(album.photos, album.cover_path)}</div>
+            <div class="aei-cover-head">
+              <label class="form-label" for="f-cover-position">커버</label>
+              <select id="f-cover-position" class="form-select" title="공유 앨범 상단에 보일 사진 영역">
+                ${COVER_POSITIONS.map(p => `<option value="${p.id}" ${album.cover_position === p.id ? 'selected' : ''}>${esc(p.label)}</option>`).join('')}
+              </select>
+            </div>
+            <div id="cover-preview-wrap">${coverPreviewHtml(album.photos, album.cover_path, album.cover_position)}</div>
           </div>
           <div class="flex items-center gap-2">
             <span class="form-label" style="margin:0">조회 수</span>
@@ -399,7 +404,7 @@ function renderEditForm(album, links, tzOffset, serverTheme = 'dark') {
     document.querySelectorAll(`input[name="${name}"]`).forEach(el => el.addEventListener('change', scheduleSsSave))
   );
 
-  const photoState = { viewMode: 'grid', coverPath: album.cover_path, photos: [...album.photos], removeMode: false, removeSelected: new Set() };
+  const photoState = { viewMode: 'grid', coverPath: album.cover_path, coverPosition: album.cover_position, photos: [...album.photos], removeMode: false, removeSelected: new Set() };
   photoState.recomputeDateOffsets = initDateScrollIndicator(
     'date-scroll-indicator', '#photo-grid', () => photoState.viewMode === 'date'
   );
@@ -449,7 +454,7 @@ function renderEditForm(album, links, tzOffset, serverTheme = 'dark') {
     if (countEl) countEl.textContent = photoState.photos.length.toLocaleString();
     updateSsIntervalEstimate();
     const coverEl = document.getElementById('cover-preview-wrap');
-    if (coverEl) coverEl.innerHTML = coverPreviewHtml(photoState.photos, photoState.coverPath);
+    if (coverEl) coverEl.innerHTML = coverPreviewHtml(photoState.photos, photoState.coverPath, photoState.coverPosition);
   }
 
   function setPhotoViewMode(mode) {
@@ -477,6 +482,7 @@ function renderEditForm(album, links, tzOffset, serverTheme = 'dark') {
   bindViewCountReset(album.id);
   bindPhotoRemoveMode(album.id, photoState, refreshPhotoGrid);
   bindCoverSet(album.id, photoState, refreshPhotoGrid);
+  bindCoverPosition(album.id, photoState);
   bindPhotoSort(album.id, photoState, refreshPhotoGrid);
   bindPhotoPreview(album.id, photoState, refreshPhotoGrid);
   bindRepairPaths(album.id, photoState, refreshPhotoGrid, () => { brokenDetected = false; });
@@ -811,6 +817,29 @@ function bindCoverSet(albumId, photoState, refresh) {
   });
 }
 
+// 커버 영역(자동/상단/중앙/하단)은 info-form/style-form 밖이라 자동저장 debounce를 타지 않고
+// 커버 사진 지정(bindCoverSet)처럼 변경 즉시 저장한다. 실패 시 이전 값으로 되돌림.
+function bindCoverPosition(albumId, photoState) {
+  const select = document.getElementById('f-cover-position');
+  const apply = position => {
+    photoState.coverPosition = position;
+    select.value = position;
+    const img = document.querySelector('#cover-preview-wrap img');
+    if (img) img.style.objectPosition = coverObjectPosition(position);
+  };
+  select.addEventListener('change', async () => {
+    const prev = photoState.coverPosition;
+    const next = select.value;
+    apply(next);
+    try {
+      await api.put(`/api/admin/albums/${albumId}`, { cover_position: next });
+    } catch (err) {
+      apply(prev);
+      alert(err.message);
+    }
+  });
+}
+
 function bindPhotoRemoveMode(albumId, photoState, refresh) {
   const enterBtn   = document.getElementById('btn-enter-remove-mode');
   const cancelBtn  = document.getElementById('btn-cancel-remove');
@@ -1116,13 +1145,13 @@ function photoListItemEdit(photo, coverPath, removeMode = false, isSelected = fa
     </div>`;
 }
 
-function coverPreviewHtml(photos, coverPath) {
+function coverPreviewHtml(photos, coverPath, coverPosition) {
   const cover = photos.find(p => p.file_path === coverPath) || photos[0];
   if (!cover) return '';
   const thumbUrl = `/api/admin/thumb?path=${encodeURIComponent(cover.file_path)}&size=medium`;
   return `
     <div class="aei-cover-preview">
-      <img src="${thumbUrl}" alt="커버 미리보기">
+      <img src="${thumbUrl}" alt="커버 미리보기" style="object-position:${coverObjectPosition(coverPosition)}">
     </div>
     <p class="text-muted text-sm" style="margin:6px 0 12px">공유 앨범 화면 상단에 이렇게 표시됩니다</p>`;
 }
