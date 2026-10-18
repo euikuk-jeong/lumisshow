@@ -1,15 +1,18 @@
 import asyncio
 import json
 import os
-from datetime import datetime
+from datetime import date, datetime, time, timedelta
+from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from backend.models.database import get_db
 from backend.models.schemas import (
     AlbumCreate,
+    AlbumDateFacets,
     AlbumDetail,
     AlbumDuplicateRequest,
+    AlbumListResponse,
     AlbumResponse,
     AlbumUpdate,
     PhotoOrderRequest,
@@ -152,10 +155,54 @@ async def _fetch_album(album_id: int, db) -> dict:
 
 # ── CRUD ──────────────────────────────────────────────────────────────────────
 
-@router.get("", response_model=list[AlbumResponse])
-async def list_albums(_: str = Depends(get_current_admin), db=Depends(get_db)):
+_UTC_FMT = "%Y-%m-%d %H:%M:%S"  # SQLite CURRENT_TIMESTAMP 형식
+
+
+def _album_filter_sql(
+    q: Optional[str], date_from: Optional[date], date_to: Optional[date], tz_offset: int,
+) -> tuple[str, list]:
+    """목록/facet 공용 WHERE 절. 날짜는 서버 timezone 기준 로컬 날짜(양 끝 포함)를
+    UTC 경계로 변환해 created_at(UTC 저장)과 직접 비교 — 컬럼에 함수를 씌우지 않아 index 사용."""
+    clauses, params = [], []
+    if q and q.strip():
+        like = "%" + q.strip().translate(str.maketrans({"\\": "\\\\", "%": "\\%", "_": "\\_"})) + "%"
+        clauses.append("(a.name LIKE ? ESCAPE '\\' OR a.description LIKE ? ESCAPE '\\')")
+        params += [like, like]
+    offset = timedelta(minutes=tz_offset)
+    if date_from:
+        clauses.append("a.created_at >= ?")
+        params.append((datetime.combine(date_from, time.min) - offset).strftime(_UTC_FMT))
+    if date_to:
+        clauses.append("a.created_at < ?")
+        params.append((datetime.combine(date_to + timedelta(days=1), time.min) - offset).strftime(_UTC_FMT))
+    return (" WHERE " + " AND ".join(clauses)) if clauses else "", params
+
+
+@router.get("", response_model=AlbumListResponse)
+async def list_albums(
+    q: Optional[str] = Query(None, max_length=200),
+    date_from: Optional[date] = None,
+    date_to: Optional[date] = None,
+    page: int = Query(1, ge=1),
+    size: int = Query(24, ge=1, le=100),
+    _: str = Depends(get_current_admin),
+    db=Depends(get_db),
+):
+    if date_from and date_to and date_from > date_to:
+        raise HTTPException(status_code=422, detail="date_from must be on or before date_to")
+    tz_offset = (await get_settings(db))["timezone_offset"]
+    where, params = _album_filter_sql(q, date_from, date_to, tz_offset)
+
+    async with db.execute(f"SELECT COUNT(*) FROM albums a{where}", params) as cur:
+        total = (await cur.fetchone())[0]
+
+    # 페이지에 해당하는 id만 먼저 고른 뒤 그 행들에만 집계/서브쿼리 적용
     async with db.execute(
-        """
+        f"""
+        WITH page_ids AS (
+          SELECT a.id FROM albums a{where}
+          ORDER BY a.created_at DESC, a.id DESC LIMIT ? OFFSET ?
+        )
         SELECT a.*,
           COALESCE(SUM(CASE WHEN p.id IS NULL OR p.media_type = 'video' THEN 0 ELSE 1 END), 0) AS photo_count,
           COALESCE(SUM(CASE WHEN p.media_type = 'video' THEN 1 ELSE 0 END), 0) AS video_count,
@@ -164,12 +211,48 @@ async def list_albums(_: str = Depends(get_current_admin), db=Depends(get_db)):
              AND (sl.expires_at IS NULL OR sl.expires_at > datetime('now'))) AS active_link_count,
           (SELECT MIN(sl.expires_at) FROM share_links sl WHERE sl.album_id = a.id AND sl.is_active = 1
              AND sl.expires_at IS NOT NULL AND sl.expires_at > datetime('now')) AS next_expires_at
-        FROM albums a LEFT JOIN album_photos p ON p.album_id = a.id
-        GROUP BY a.id ORDER BY a.created_at DESC
-        """
+        FROM page_ids JOIN albums a ON a.id = page_ids.id
+        LEFT JOIN album_photos p ON p.album_id = a.id
+        GROUP BY a.id ORDER BY a.created_at DESC, a.id DESC
+        """,
+        [*params, size, (page - 1) * size],
     ) as cur:
         rows = await cur.fetchall()
-    return [_row_to_album_dict(r) for r in rows]
+    return {
+        "items": [_row_to_album_dict(r) for r in rows],
+        "total": total,
+        "page": page,
+        "size": size,
+        "timezone_offset": tz_offset,
+    }
+
+
+@router.get("/date-facets", response_model=AlbumDateFacets)
+async def album_date_facets(
+    q: Optional[str] = Query(None, max_length=200),
+    _: str = Depends(get_current_admin),
+    db=Depends(get_db),
+):
+    """년/월 select 옵션용 — 서버 timezone 기준 년월별 앨범 수(q 반영)."""
+    tz_offset = (await get_settings(db))["timezone_offset"]
+    where, params = _album_filter_sql(q, None, None, tz_offset)
+    async with db.execute(
+        f"""
+        SELECT strftime('%Y', a.created_at, ?) AS y, strftime('%m', a.created_at, ?) AS m, COUNT(*) AS cnt
+        FROM albums a{where}
+        GROUP BY y, m ORDER BY y DESC, m DESC
+        """,
+        [f"{tz_offset:+d} minutes", f"{tz_offset:+d} minutes", *params],
+    ) as cur:
+        rows = await cur.fetchall()
+    years: dict[int, dict] = {}
+    for r in rows:
+        if r["y"] is None:
+            continue
+        y = years.setdefault(int(r["y"]), {"year": int(r["y"]), "count": 0, "months": []})
+        y["count"] += r["cnt"]
+        y["months"].append({"month": int(r["m"]), "count": r["cnt"]})
+    return {"years": list(years.values())}
 
 
 @router.post("", response_model=AlbumResponse, status_code=201)

@@ -125,6 +125,25 @@ class AlbumResponse(BaseModel):
 class AlbumDetail(AlbumResponse):
     photos: list[AlbumPhotoResponse]
 
+class AlbumListResponse(BaseModel):
+    items: list[AlbumResponse]
+    total: int
+    page: int
+    size: int
+    timezone_offset: int  # 분 단위. created_at 표시·필터 기준 timezone
+
+class AlbumMonthFacet(BaseModel):
+    month: int
+    count: int
+
+class AlbumYearFacet(BaseModel):
+    year: int
+    count: int
+    months: list[AlbumMonthFacet]
+
+class AlbumDateFacets(BaseModel):
+    years: list[AlbumYearFacet]
+
 
 # ── Album Photos ──────────────────────────────────────────────────────────────
 

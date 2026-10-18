@@ -35,6 +35,10 @@ CREATE TABLE IF NOT EXISTS share_links (
     is_active     BOOLEAN  NOT NULL DEFAULT 1
 );
 
+-- 앨범 목록 페이징(created_at DESC, id DESC) / 앨범별 공유 링크 집계용
+CREATE INDEX IF NOT EXISTS idx_albums_created_at ON albums(created_at, id);
+CREATE INDEX IF NOT EXISTS idx_share_links_album_id ON share_links(album_id);
+
 CREATE TABLE IF NOT EXISTS thumbnail_cache (
     file_path  TEXT     NOT NULL,
     size       TEXT     NOT NULL,
