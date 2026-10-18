@@ -955,8 +955,17 @@ async def test_list_albums_paged_counts_still_aggregated(admin_client):
     assert items[0]["photo_count"] == 2
 
 
+async def test_list_albums_extreme_dates_do_not_500(admin_client):
+    await _set_tz(admin_client, 540)
+    await _make_album(admin_client, "A", "2026-01-01 00:00:00")
+    r = await admin_client.get("/api/admin/albums", params={"date_from": "0001-01-01", "date_to": "9999-12-31"})
+    assert r.status_code == 200
+    assert _names(r) == ["A"]
+
+
 @pytest.mark.parametrize("params", [
     {"page": 0},
+    {"page": 10**18},
     {"size": 0},
     {"size": 101},
     {"date_from": "2026-13-01"},

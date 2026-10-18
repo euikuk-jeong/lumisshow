@@ -168,14 +168,23 @@ def _album_filter_sql(
         like = "%" + q.strip().translate(str.maketrans({"\\": "\\\\", "%": "\\%", "_": "\\_"})) + "%"
         clauses.append("(a.name LIKE ? ESCAPE '\\' OR a.description LIKE ? ESCAPE '\\')")
         params += [like, like]
-    offset = timedelta(minutes=tz_offset)
-    if date_from:
+    if date_from and (lower := _local_midnight_to_utc(date_from, 0, tz_offset)):
         clauses.append("a.created_at >= ?")
-        params.append((datetime.combine(date_from, time.min) - offset).strftime(_UTC_FMT))
-    if date_to:
+        params.append(lower)
+    if date_to and (upper := _local_midnight_to_utc(date_to, 1, tz_offset)):
         clauses.append("a.created_at < ?")
-        params.append((datetime.combine(date_to + timedelta(days=1), time.min) - offset).strftime(_UTC_FMT))
+        params.append(upper)
     return (" WHERE " + " AND ".join(clauses)) if clauses else "", params
+
+
+def _local_midnight_to_utc(d: date, add_days: int, tz_offset: int) -> Optional[str]:
+    """로컬 날짜 d(+add_days)의 00:00을 UTC 문자열로. 0001-01-01/9999-12-31 근처처럼
+    datetime 범위를 벗어나면 None — 그 경계는 모든 앨범을 포함하므로 조건을 생략해도 같다."""
+    try:
+        local = datetime.combine(d + timedelta(days=add_days), time.min)
+        return (local - timedelta(minutes=tz_offset)).strftime(_UTC_FMT)
+    except OverflowError:
+        return None
 
 
 @router.get("", response_model=AlbumListResponse)
@@ -183,7 +192,7 @@ async def list_albums(
     q: Optional[str] = Query(None, max_length=200),
     date_from: Optional[date] = None,
     date_to: Optional[date] = None,
-    page: int = Query(1, ge=1),
+    page: int = Query(1, ge=1, le=100_000),  # 상한 없으면 OFFSET이 SQLite INTEGER 범위를 넘어 500
     size: int = Query(24, ge=1, le=100),
     _: str = Depends(get_current_admin),
     db=Depends(get_db),

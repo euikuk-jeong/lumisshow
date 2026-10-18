@@ -4,6 +4,7 @@ import { esc } from '../utils.js';
 
 const PAGE_SIZE = 24;
 const SEARCH_DEBOUNCE_MS = 300;
+const LIST_CACHE_MAX = 30;
 const DATE_MODES = [
   { id: 'all',   label: '전체 기간' },
   { id: 'year',  label: '년' },
@@ -241,7 +242,10 @@ async function _loadAlbums() {
       _state.page = lastPage;
       return _loadAlbums();
     }
+    // 검색어를 칠 때마다 키가 늘어나므로 최근 항목만 유지 (Map은 삽입 순서 = 가장 오래된 것부터)
+    _listCache.delete(key);
     _listCache.set(key, data);
+    if (_listCache.size > LIST_CACHE_MAX) _listCache.delete(_listCache.keys().next().value);
     _renderAlbums(el, data);
   } catch (e) {
     if (seq === _listSeq && !_listCache.has(key)) {
