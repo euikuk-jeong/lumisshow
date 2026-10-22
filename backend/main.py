@@ -63,6 +63,13 @@ async def _security_headers(request, call_next):
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    # 프론트 JS/CSS·SPA HTML은 버전 쿼리 없이 서빙되므로 heuristic 캐시 시 배포 후 옛 JS가
+    # 새 API와 어긋남 → 매번 ETag 재검증(변경 없으면 304). 라우트가 직접 지정한 값은 유지.
+    if "cache-control" not in response.headers and (
+        request.url.path.startswith("/assets/")
+        or response.headers.get("content-type", "").startswith("text/html")
+    ):
+        response.headers["Cache-Control"] = "no-cache"
     return response
 
 
