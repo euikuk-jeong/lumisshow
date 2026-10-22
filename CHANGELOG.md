@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.20.0] - 2026-10-22
+
+### Added
+- **Admin 앨범 목록 검색**: 앨범 이름·설명 텍스트 검색(대소문자 무시, 300ms 디바운스,
+  한글 IME 조합 중에는 요청 보류). `%`, `_` 등 와일드카드 문자는 그대로 검색됨
+- **생성일 날짜 필터**: 전체 / 연도 / 연·월 / 기간 지정 중 선택. 날짜 경계는 Admin 설정의
+  서버 타임존(`timezone_offset`) 기준으로 계산하며, 연도·월 선택지는 실제 앨범이 있는
+  값만 개수와 함께 표시 (`GET /api/admin/albums/date-facets`)
+- **앨범 목록 페이징**: 기본 보기와 검색 결과 모두 페이지당 24개, 페이지 번호 방식.
+  검색어·필터·페이지 상태가 URL에 유지되어 새로고침 후에도 복원
+- `albums(created_at, id)`, `share_links(album_id)` 인덱스 추가 — 기동 시 자동 생성
+
+### Changed
+- `GET /api/admin/albums` 응답을 배열에서 `{items, total, page, size, timezone_offset}`
+  형태로 변경. `q`, `date_from`, `date_to`, `page`, `size` 쿼리 파라미터 지원.
+  목록 조회는 현재 페이지 앨범에 대해서만 사진 수·링크 수를 집계해 앨범 수가 늘어도
+  응답 속도 유지
+- 앨범 카드 생성일을 서버 타임존 기준으로 표시
+
+### Fixed
+- 극단적인 날짜(`0001-01-01`, `9999-12-31`)나 매우 큰 `page` 값 요청 시 500 오류 대신
+  정상 응답 또는 422 반환
+
 ## [2.19.0] - 2026-10-17
 
 ### Added
@@ -1593,7 +1616,8 @@ Phase 2 — AI 얼굴 인식 스마트 앨범. NAS 로컬 AI(InsightFace)로 사
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v2.19.0...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v2.20.0...HEAD
+[2.20.0]: https://github.com/euikuk-jeong/lumisshow/compare/v2.19.0...v2.20.0
 [2.19.0]: https://github.com/euikuk-jeong/lumisshow/compare/v2.18.4...v2.19.0
 [2.18.4]: https://github.com/euikuk-jeong/lumisshow/compare/v2.18.3...v2.18.4
 [2.18.3]: https://github.com/euikuk-jeong/lumisshow/compare/v2.18.2...v2.18.3
