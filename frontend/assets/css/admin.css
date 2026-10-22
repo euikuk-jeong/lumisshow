@@ -121,6 +121,46 @@
   margin-bottom: 24px;
 }
 
+/* ── Album Search / Pagination ──────────────────────────── */
+.album-search { margin-bottom: 16px; }
+.album-search-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.album-search-q { flex: 1; min-width: 200px; }
+.album-search-mode { width: auto; }
+.album-search-dates {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.album-search-dates:empty { display: none; }
+.album-search-dates .form-select,
+.album-search-dates .form-input { width: auto; }
+.album-search-status {
+  justify-content: flex-end;
+  margin-top: 8px;
+  min-height: 28px;
+  font-size: 13px;
+}
+.pagination {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+  margin-top: 24px;
+}
+.pagination .btn { min-width: 32px; justify-content: center; }
+.pagination .btn-primary:disabled { opacity: 1; cursor: default; }
+.pagination-gap { color: var(--muted); padding: 0 4px; }
+@media (max-width: 768px) {
+  .album-search-q { flex-basis: 100%; }
+}
+
 /* ── Album Grid ─────────────────────────────────────────── */
 .album-grid {
   display: grid;

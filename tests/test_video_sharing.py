@@ -60,7 +60,7 @@ async def test_list_albums_reports_video_count(admin_client):
         "/api/admin/albums",
         json={"name": "L", "photo_paths": ["a.jpg", "b.mp4", "c.m4v"]},
     )
-    data = (await admin_client.get("/api/admin/albums")).json()
+    data = (await admin_client.get("/api/admin/albums")).json()["items"]
     assert data[0]["photo_count"] == 1
     assert data[0]["video_count"] == 2
 
