@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.20.1] - 2026-10-22
+
+### Fixed
+- **배포 후 브라우저가 예전 JS를 계속 쓰던 문제**: `/assets/*`(JS·CSS 등)와 SPA HTML
+  (`/`, `/admin/*`, `/s/*`)이 `Cache-Control` 없이 서빙되어, 브라우저가 서버에 확인하지 않고
+  캐시된 예전 파일을 사용할 수 있었음. v2.20.0 배포 직후 예전 `admin-albums.js`가 바뀐 앨범 목록
+  API 응답을 해석하지 못해 앨범이 하나도 보이지 않던 증상의 원인. 이제 `Cache-Control: no-cache`로
+  매번 ETag 재검증하고, 파일이 바뀌지 않았으면 304만 받음. 썸네일·원본 이미지처럼 라우트가 직접
+  지정한 캐시 설정은 그대로 유지 (`main.py`)
+
 ## [2.20.0] - 2026-10-22
 
 ### Added
@@ -1616,7 +1626,8 @@ Phase 2 — AI 얼굴 인식 스마트 앨범. NAS 로컬 AI(InsightFace)로 사
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v2.20.0...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v2.20.1...HEAD
+[2.20.1]: https://github.com/euikuk-jeong/lumisshow/compare/v2.20.0...v2.20.1
 [2.20.0]: https://github.com/euikuk-jeong/lumisshow/compare/v2.19.0...v2.20.0
 [2.19.0]: https://github.com/euikuk-jeong/lumisshow/compare/v2.18.4...v2.19.0
 [2.18.4]: https://github.com/euikuk-jeong/lumisshow/compare/v2.18.3...v2.18.4
