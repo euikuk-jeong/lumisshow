@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.21.0] - 2026-10-24
+
+### Added
+- **Admin 앨범 목록 조회수 순 정렬**: 날짜 모드 드롭다운(전체 기간 / 년 / 년·월 / 기간 지정)에
+  "조회수 순"을 추가. 선택하면 옆에 `DESC (많은 순)` / `ASC (적은 순)` 선택이 나타나며 기본은 DESC.
+  조회수가 같으면 최신 생성 앨범이 먼저 나오고, 검색어와는 함께 적용됨(날짜 필터와는 같은
+  드롭다운이라 동시에 쓸 수 없음). 정렬 상태는 URL 쿼리(`mode=views`, ASC일 때 `dir=asc`)로
+  유지되어 상세 화면에서 뒤로 오면 복원됨
+- `GET /api/admin/albums`에 `sort_by`(`created_at` | `view_count`), `sort_dir`(`asc` | `desc`)
+  파라미터 추가. 허용 값 외에는 422이며 생략하면 기존과 동일하게 최신 생성순
+
 ## [2.20.1] - 2026-10-22
 
 ### Fixed
@@ -1626,7 +1637,8 @@ Phase 2 — AI 얼굴 인식 스마트 앨범. NAS 로컬 AI(InsightFace)로 사
 - ZIP 다운로드 (앨범 전체 스트리밍)
 - Docker 단일 컨테이너 구성 (FastAPI + Vanilla JS)
 
-[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v2.20.1...HEAD
+[Unreleased]: https://github.com/euikuk-jeong/lumisshow/compare/v2.21.0...HEAD
+[2.21.0]: https://github.com/euikuk-jeong/lumisshow/compare/v2.20.1...v2.21.0
 [2.20.1]: https://github.com/euikuk-jeong/lumisshow/compare/v2.20.0...v2.20.1
 [2.20.0]: https://github.com/euikuk-jeong/lumisshow/compare/v2.19.0...v2.20.0
 [2.19.0]: https://github.com/euikuk-jeong/lumisshow/compare/v2.18.4...v2.19.0
