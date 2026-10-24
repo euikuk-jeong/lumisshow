@@ -10,6 +10,11 @@ const DATE_MODES = [
   { id: 'year',  label: '년' },
   { id: 'month', label: '년·월' },
   { id: 'range', label: '기간 지정' },
+  { id: 'views', label: '조회수 순' },
+];
+const VIEW_DIRS = [
+  { id: 'desc', label: 'DESC (많은 순)' },
+  { id: 'asc',  label: 'ASC (적은 순)' },
 ];
 
 // 목록 응답 캐시 — 키: API 쿼리스트링. 재방문 시 즉시 표시 후 갱신
@@ -64,6 +69,7 @@ function _stateFromUrl() {
     m: p.get('m') ? parseInt(p.get('m'), 10) || null : null,
     from: p.get('from') ?? '',
     to: p.get('to') ?? '',
+    dir: p.get('dir') === 'asc' ? 'asc' : 'desc',
     page: Math.max(1, parseInt(p.get('page'), 10) || 1),
   };
 }
@@ -79,6 +85,7 @@ function _syncUrl() {
     if (s.from) p.set('from', s.from);
     if (s.to) p.set('to', s.to);
   }
+  if (s.mode === 'views' && s.dir === 'asc') p.set('dir', s.dir);
   if (s.page > 1) p.set('page', s.page);
   const qs = p.toString();
   // replaceState: 입력마다 히스토리를 쌓지 않되, 상세 화면에서 뒤로 오면 이 상태로 복원
@@ -140,7 +147,7 @@ function _bindToolbar() {
 
   document.getElementById('album-search-reset').addEventListener('click', () => {
     clearTimeout(timer);
-    _state = { q: '', mode: 'all', y: null, m: null, from: '', to: '', page: 1 };
+    _state = { q: '', mode: 'all', y: null, m: null, from: '', to: '', dir: 'desc', page: 1 };
     qInput.value = '';
     document.getElementById('album-date-mode').value = 'all';
     _renderDateInputs();
@@ -198,6 +205,15 @@ function _renderDateInputs() {
     };
     fromEl.addEventListener('change', onChange);
     toEl.addEventListener('change', onChange);
+  } else if (s.mode === 'views') {
+    el.innerHTML = `<select id="album-view-dir" class="form-select">
+      ${VIEW_DIRS.map(d => `<option value="${d.id}" ${d.id === s.dir ? 'selected' : ''}>${d.label}</option>`).join('')}
+    </select>`;
+    document.getElementById('album-view-dir').addEventListener('change', e => {
+      _state.dir = e.target.value === 'asc' ? 'asc' : 'desc';
+      _state.page = 1;
+      _loadAlbums();
+    });
   } else {
     el.innerHTML = '';
   }
@@ -230,6 +246,10 @@ async function _loadAlbums() {
   if (_state.q.trim()) p.set('q', _state.q.trim());
   if (from) p.set('date_from', from);
   if (to) p.set('date_to', to);
+  if (_state.mode === 'views') {
+    p.set('sort_by', 'view_count');
+    p.set('sort_dir', _state.dir);
+  }
   const key = p.toString();
 
   const seq = ++_listSeq;

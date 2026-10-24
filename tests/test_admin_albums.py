@@ -963,6 +963,73 @@ async def test_list_albums_extreme_dates_do_not_500(admin_client):
     assert _names(r) == ["A"]
 
 
+async def _set_views(album_id, views):
+    import aiosqlite
+    from backend.models.database import _db_path
+
+    async with aiosqlite.connect(_db_path()) as db:
+        await db.execute("UPDATE albums SET view_count = ? WHERE id = ?", (views, album_id))
+        await db.commit()
+
+
+async def _make_viewed_albums(admin_client):
+    for name, created, views in [
+        ("low", "2026-01-01 00:00:00", 1),
+        ("high", "2026-01-02 00:00:00", 50),
+        ("mid", "2026-01-03 00:00:00", 10),
+    ]:
+        await _set_views(await _make_album(admin_client, name, created), views)
+
+
+async def test_list_albums_sort_by_views_desc(admin_client):
+    await _make_viewed_albums(admin_client)
+    r = await admin_client.get("/api/admin/albums", params={"sort_by": "view_count", "sort_dir": "desc"})
+    assert _names(r) == ["high", "mid", "low"]
+
+
+async def test_list_albums_sort_by_views_asc(admin_client):
+    await _make_viewed_albums(admin_client)
+    r = await admin_client.get("/api/admin/albums", params={"sort_by": "view_count", "sort_dir": "asc"})
+    assert _names(r) == ["low", "mid", "high"]
+
+
+async def test_list_albums_sort_by_views_defaults_desc(admin_client):
+    await _make_viewed_albums(admin_client)
+    r = await admin_client.get("/api/admin/albums", params={"sort_by": "view_count"})
+    assert _names(r) == ["high", "mid", "low"]
+
+
+async def test_list_albums_sort_by_views_ties_newest_first(admin_client):
+    await _make_album(admin_client, "old", "2026-01-01 00:00:00")
+    await _make_album(admin_client, "new", "2026-01-02 00:00:00")
+    for d in ("desc", "asc"):
+        r = await admin_client.get("/api/admin/albums", params={"sort_by": "view_count", "sort_dir": d})
+        assert _names(r) == ["new", "old"]
+
+
+async def test_list_albums_sort_by_views_paginates_in_order(admin_client):
+    await _make_viewed_albums(admin_client)
+    p1 = await admin_client.get("/api/admin/albums", params={"sort_by": "view_count", "page": 1, "size": 2})
+    p2 = await admin_client.get("/api/admin/albums", params={"sort_by": "view_count", "page": 2, "size": 2})
+    assert _names(p1) == ["high", "mid"]
+    assert _names(p2) == ["low"]
+
+
+async def test_list_albums_sort_by_views_with_search(admin_client):
+    await _set_views(await _make_album(admin_client, "trip A", "2026-01-01 00:00:00"), 5)
+    await _set_views(await _make_album(admin_client, "trip B", "2026-01-02 00:00:00"), 9)
+    await _set_views(await _make_album(admin_client, "other", "2026-01-03 00:00:00"), 99)
+    r = await admin_client.get("/api/admin/albums", params={"q": "trip", "sort_by": "view_count"})
+    assert _names(r) == ["trip B", "trip A"]
+
+
+async def test_list_albums_sort_created_at_asc(admin_client):
+    await _make_album(admin_client, "old", "2026-01-01 00:00:00")
+    await _make_album(admin_client, "new", "2026-01-02 00:00:00")
+    r = await admin_client.get("/api/admin/albums", params={"sort_dir": "asc"})
+    assert _names(r) == ["old", "new"]
+
+
 @pytest.mark.parametrize("params", [
     {"page": 0},
     {"page": 10**18},
@@ -971,6 +1038,9 @@ async def test_list_albums_extreme_dates_do_not_500(admin_client):
     {"date_from": "2026-13-01"},
     {"date_to": "not-a-date"},
     {"date_from": "2026-10-02", "date_to": "2026-10-01"},
+    {"sort_by": "name"},
+    {"sort_by": "view_count; DROP TABLE albums"},
+    {"sort_dir": "up"},
 ])
 async def test_list_albums_invalid_params_422(admin_client, params):
     r = await admin_client.get("/api/admin/albums", params=params)
