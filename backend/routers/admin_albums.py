@@ -2,7 +2,7 @@ import asyncio
 import json
 import os
 from datetime import date, datetime, time, timedelta
-from typing import Optional
+from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
@@ -187,11 +187,22 @@ def _local_midnight_to_utc(d: date, add_days: int, tz_offset: int) -> Optional[s
         return None
 
 
+def _album_order_sql(sort_by: str, sort_dir: str) -> str:
+    """ORDER BY 절 — 값은 Literal로 검증된 화이트리스트에서만 조립(사용자 입력 직접 삽입 없음).
+    동점은 항상 최신 생성순으로 정렬해 페이지 경계에서 순서가 흔들리지 않게 한다."""
+    direction = "ASC" if sort_dir == "asc" else "DESC"
+    if sort_by == "view_count":
+        return f"a.view_count {direction}, a.created_at DESC, a.id DESC"
+    return f"a.created_at {direction}, a.id {direction}"
+
+
 @router.get("", response_model=AlbumListResponse)
 async def list_albums(
     q: Optional[str] = Query(None, max_length=200),
     date_from: Optional[date] = None,
     date_to: Optional[date] = None,
+    sort_by: Literal["created_at", "view_count"] = "created_at",
+    sort_dir: Literal["asc", "desc"] = "desc",
     page: int = Query(1, ge=1, le=100_000),  # 상한 없으면 OFFSET이 SQLite INTEGER 범위를 넘어 500
     size: int = Query(24, ge=1, le=100),
     _: str = Depends(get_current_admin),
@@ -201,6 +212,7 @@ async def list_albums(
         raise HTTPException(status_code=422, detail="date_from must be on or before date_to")
     tz_offset = (await get_settings(db))["timezone_offset"]
     where, params = _album_filter_sql(q, date_from, date_to, tz_offset)
+    order = _album_order_sql(sort_by, sort_dir)
 
     async with db.execute(f"SELECT COUNT(*) FROM albums a{where}", params) as cur:
         total = (await cur.fetchone())[0]
@@ -210,7 +222,7 @@ async def list_albums(
         f"""
         WITH page_ids AS (
           SELECT a.id FROM albums a{where}
-          ORDER BY a.created_at DESC, a.id DESC LIMIT ? OFFSET ?
+          ORDER BY {order} LIMIT ? OFFSET ?
         )
         SELECT a.*,
           COALESCE(SUM(CASE WHEN p.id IS NULL OR p.media_type = 'video' THEN 0 ELSE 1 END), 0) AS photo_count,
@@ -222,7 +234,7 @@ async def list_albums(
              AND sl.expires_at IS NOT NULL AND sl.expires_at > datetime('now')) AS next_expires_at
         FROM page_ids JOIN albums a ON a.id = page_ids.id
         LEFT JOIN album_photos p ON p.album_id = a.id
-        GROUP BY a.id ORDER BY a.created_at DESC, a.id DESC
+        GROUP BY a.id ORDER BY {order}
         """,
         [*params, size, (page - 1) * size],
     ) as cur:
